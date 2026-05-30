@@ -1691,7 +1691,7 @@ Rules:
   );
 }
 
-function TripDetail({trip, onBack, onUpdateTrip}) {
+function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
   const [activeTab, setActiveTab] = React.useState('overview');
   const [activeDay, setActiveDay] = React.useState(trip.days?.[0]?.id || null);
   const [showShare, setShowShare] = React.useState(false);
@@ -1755,6 +1755,7 @@ function TripDetail({trip, onBack, onUpdateTrip}) {
             </div>
             <div style={{display:'flex',gap:8}}>
               <button onClick={()=>generateTripPDF(trip)} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>↓ PDF</button>
+              <button onClick={()=>{ if(window.confirm(`Delete "${trip.title}"? This can't be undone.`)) onDelete(trip.id); }} style={{background:'rgba(255,80,80,.25)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>🗑 Delete</button>
               <button onClick={()=>setShowShare(true)} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>Share</button>
             </div>
           </div>
@@ -2028,6 +2029,11 @@ function App() {
     saveAndSet(updated);
   };
 
+  const handleDeleteTrip = (id) => {
+    saveAndSet(trips.filter(t=>t.id!==id));
+    setView('dashboard');
+  };
+
   const handleAcceptSharedTrip = (trip) => {
     const fresh = {...normalizeTrip(trip), id: uuid()};
     const updated = [...trips, fresh];
@@ -2072,7 +2078,7 @@ function App() {
         <Dashboard trips={trips} onSelectTrip={(id)=>{setActiveTripId(id);setView('detail');}} onNewTrip={()=>setShowNew(true)}/>
       )}
       {view==='detail' && activeTrip && (
-        <TripDetail trip={activeTrip} onBack={()=>setView('dashboard')} onUpdateTrip={handleUpdateTrip}/>
+        <TripDetail trip={activeTrip} onBack={()=>setView('dashboard')} onUpdateTrip={handleUpdateTrip} onDelete={handleDeleteTrip}/>
       )}
       {showNew && <NewTripSheet onClose={()=>setShowNew(false)} onSave={handleNewTrip}/>}
     </div>
