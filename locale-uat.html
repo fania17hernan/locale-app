@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Locale Beta — Tester Checklist</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;background:#F5F2EC;color:#1A1714;min-height:100vh;padding:0 0 60px}
+
+  .hero{background:linear-gradient(135deg,#1C4A56,#2B5F6E,#3D5A7A);color:#fff;padding:40px 24px 32px;text-align:center}
+  .hero-word{font-family:'Cormorant Garamond',serif;font-size:13px;letter-spacing:.15em;opacity:.7;margin-bottom:8px}
+  .hero-title{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;margin-bottom:8px}
+  .hero-sub{font-size:13px;opacity:.75;line-height:1.6;max-width:360px;margin:0 auto 20px}
+  .hero-link{display:inline-block;background:rgba(255,255,255,.2);border-radius:20px;padding:10px 20px;color:#fff;text-decoration:none;font-size:13px;font-weight:500;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.25)}
+  .hero-link:active{opacity:.8}
+
+  .section{padding:24px 20px 0}
+  .section-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8A8784;margin-bottom:12px}
+
+  .info-box{background:#fff;border-radius:14px;padding:16px 18px;border:1px solid #DDD9D1;margin-bottom:16px;font-size:13px;line-height:1.6;color:#3A3735}
+  .info-box strong{color:#1A1714}
+  .info-box .note{font-size:11px;color:#8A8784;margin-top:6px}
+
+  .task-group{margin-bottom:8px}
+  .task-group-label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#2B5F6E;padding:14px 20px 6px;background:#EDE9E1}
+
+  .task{display:flex;align-items:flex-start;gap:14px;padding:14px 20px;background:#fff;border-bottom:1px solid #F0EDE7;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .1s}
+  .task:active{background:#F5F2EC}
+  .task:last-child{border-bottom:none}
+  .task.done .task-text{text-decoration:line-through;color:#B0ADA8}
+  .task.done .task-title{color:#B0ADA8}
+
+  .cb{width:22px;height:22px;border-radius:6px;border:2px solid #C8C5C0;background:#fff;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all .15s}
+  .task.done .cb{background:#2B5F6E;border-color:#2B5F6E}
+  .cb-check{width:6px;height:10px;border:2px solid #fff;border-top:none;border-left:none;transform:rotate(45deg) translateY(-1px);display:none}
+  .task.done .cb-check{display:block}
+
+  .task-body{flex:1;min-width:0}
+  .task-title{font-size:14px;font-weight:500;margin-bottom:2px;color:#1A1714}
+  .task-desc{font-size:12px;color:#8A8784;line-height:1.5}
+  .task-tag{display:inline-block;font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;margin-top:5px}
+  .tag-required{background:#FEF3E2;color:#B45309}
+  .tag-optional{background:#EAF3F5;color:#2B5F6E}
+  .tag-bug{background:#FEE2E2;color:#B91C1C}
+
+  .progress-wrap{background:#fff;border-radius:14px;padding:16px 18px;border:1px solid #DDD9D1;margin:0 20px 20px}
+  .progress-label{display:flex;justify-content:space-between;font-size:12px;color:#8A8784;margin-bottom:8px}
+  .progress-bar{height:6px;border-radius:3px;background:#EDE9E1;overflow:hidden}
+  .progress-fill{height:100%;background:#2B5F6E;border-radius:3px;transition:width .4s ease}
+
+  .feedback-box{margin:0 20px;background:#fff;border-radius:14px;padding:18px;border:1px solid #DDD9D1}
+  .feedback-box h3{font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;margin-bottom:6px}
+  .feedback-box p{font-size:12px;color:#8A8784;margin-bottom:12px;line-height:1.5}
+  textarea{width:100%;border:1px solid #DDD9D1;border-radius:10px;padding:12px;font-family:'DM Sans',sans-serif;font-size:13px;color:#1A1714;background:#FAF8F4;resize:none;outline:none;line-height:1.5}
+  textarea:focus{border-color:#2B5F6E}
+  .send-btn{display:block;width:100%;margin-top:10px;background:#2B5F6E;color:#fff;border:none;border-radius:10px;padding:13px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;text-align:center}
+  .send-btn:active{opacity:.85}
+
+  .card-group{background:#fff;border-radius:14px;border:1px solid #DDD9D1;overflow:hidden;margin-bottom:4px}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-word">Locale Beta</div>
+  <div class="hero-title">Help us test! 🧪</div>
+  <div class="hero-sub">Stephanie is building a trip planning app and needs your feedback. Try it out and check off what works!</div>
+  <a class="hero-link" href="https://fania17hernan.github.io/locale-app/locale.html" target="_blank">Open Locale ↗</a>
+</div>
+
+<div class="section">
+  <div class="section-label">Before you start</div>
+  <div class="info-box">
+    <strong>What is Locale?</strong> A travel planning app where you can create trips, build itineraries with AI, check off prep tasks, and share plans with your group.<br><br>
+    <strong>What we need from you:</strong> Try each task below on your phone. Check it off if it works, skip it if you get stuck, and leave a note at the bottom.
+    <div class="note">⏱ Takes about 5–10 minutes. No account needed.</div>
+  </div>
+</div>
+
+<div class="section" style="padding-bottom:12px">
+  <div class="section-label">Your progress</div>
+  <div class="progress-wrap">
+    <div class="progress-label"><span>Tasks completed</span><span id="prog-text">0 of 12</span></div>
+    <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
+  </div>
+</div>
+
+<!-- Group 1 -->
+<div class="task-group">
+  <div class="task-group-label">Getting started</div>
+  <div class="card-group">
+    <div class="task" data-id="t1" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Open the app</div>
+        <div class="task-desc">Tap the "Open Locale" button above. It should load a home screen with trip cards.</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="t2" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Add to home screen</div>
+        <div class="task-desc">iPhone: tap the Share icon → "Add to Home Screen." Android: tap ⋮ → "Add to Home Screen." Try opening from your home screen.</div>
+        <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group 2 -->
+<div class="task-group">
+  <div class="task-group-label">Create a trip</div>
+  <div class="card-group">
+    <div class="task" data-id="t3" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Tap the + button and create a new trip</div>
+        <div class="task-desc">Fill in trip name, destination, dates, and occasion. Hit Create.</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="t4" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Your trip appears on the home screen</div>
+        <div class="task-desc">After creating, you should land inside the trip. Hit ← Back and confirm the card shows on the dashboard.</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="t5" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Change the trip color</div>
+        <div class="task-desc">Open your trip → Overview tab → tap a color swatch. Does the card color update on the dashboard?</div>
+        <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group 3 -->
+<div class="task-group">
+  <div class="task-group-label">Checklist & Days</div>
+  <div class="card-group">
+    <div class="task" data-id="t6" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Check off items in the Checklist tab</div>
+        <div class="task-desc">Open your trip → Checklist tab. Tap a few items to check them off. Do the checkboxes fill in and the progress bar update?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="t7" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">View the Days tab</div>
+        <div class="task-desc">Tap the Days tab. If there's an itinerary, tap each day to see activities and restaurants.</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group 4 -->
+<div class="task-group">
+  <div class="task-group-label">Sharing</div>
+  <div class="card-group">
+    <div class="task" data-id="t8" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Tap 🔗 Share Trip and send the link to yourself</div>
+        <div class="task-desc">Inside a trip, tap the Share Trip button. Send the link to your own phone via iMessage or copy it. Does the link work?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="t9" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Open the shared link — does the invite banner appear?</div>
+        <div class="task-desc">Opening the link should show a bottom sheet: "You're invited! Add to my trips?" Tap "Add to my trips."</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group 5 -->
+<div class="task-group">
+  <div class="task-group-label">PDF & Delete</div>
+  <div class="card-group">
+    <div class="task" data-id="t10" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Download the PDF</div>
+        <div class="task-desc">Tap ↓ PDF in the trip header. A new tab should open with a nicely styled itinerary. Does it look good?</div>
+        <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+    <div class="task" data-id="t11" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Delete a trip</div>
+        <div class="task-desc">Tap 🗑 Delete on a trip. Confirm the dialog. Does it go back to the dashboard and remove the card?</div>
+        <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group 6 -->
+<div class="task-group">
+  <div class="task-group-label">Overall feel</div>
+  <div class="card-group">
+    <div class="task" data-id="t12" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Would you actually use this for a trip?</div>
+        <div class="task-desc">Honest gut check — does it feel like something you'd open when planning a trip with friends or family?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding-top:20px;padding-bottom:16px">
+  <div class="section-label">Leave feedback</div>
+  <div class="feedback-box">
+    <h3>What did you think?</h3>
+    <p>Anything broken, confusing, or that you loved? Drop your notes here and send them to Stephanie.</p>
+    <textarea id="feedback" rows="5" placeholder="e.g. The checklist didn't save when I closed the app... The share link worked perfectly... I wish I could edit activity names..."></textarea>
+    <button class="send-btn" onclick="sendFeedback()">📨 Send feedback to Stephanie</button>
+  </div>
+</div>
+
+<script>
+  const TOTAL = 12;
+
+  function toggle(el) {
+    el.classList.toggle('done');
+    updateProgress();
+    save();
+  }
+
+  function updateProgress() {
+    const done = document.querySelectorAll('.task.done').length;
+    document.getElementById('prog-text').textContent = `${done} of ${TOTAL}`;
+    document.getElementById('prog-fill').style.width = `${Math.round(done/TOTAL*100)}%`;
+  }
+
+  function save() {
+    const state = {};
+    document.querySelectorAll('.task').forEach(t => {
+      state[t.dataset.id] = t.classList.contains('done');
+    });
+    localStorage.setItem('locale_uat', JSON.stringify(state));
+  }
+
+  function load() {
+    try {
+      const state = JSON.parse(localStorage.getItem('locale_uat')||'{}');
+      document.querySelectorAll('.task').forEach(t => {
+        if(state[t.dataset.id]) t.classList.add('done');
+      });
+    } catch(e){}
+    updateProgress();
+  }
+
+  function sendFeedback() {
+    const text = document.getElementById('feedback').value.trim();
+    if(!text){ alert('Please add a note before sending!'); return; }
+    const done = document.querySelectorAll('.task.done').length;
+    const subject = encodeURIComponent('Locale Beta Feedback');
+    const body = encodeURIComponent(`Hi Stephanie!\n\nHere's my feedback on Locale:\n\n${text}\n\n---\nCompleted ${done} of ${TOTAL} tasks.`);
+    window.location.href = `mailto:s.borboa9@gmail.com?subject=${subject}&body=${body}`;
+  }
+
+  load();
+</script>
+</body>
+</html>

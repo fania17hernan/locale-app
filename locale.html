@@ -523,7 +523,7 @@ function generateChecklist(trip){
 // ── MOCK TRIPS ─────────────────────────────────────────────────────────────────
 const RAW_MOCK_TRIPS=[
  {
-  id:'mock-lp',name:'London → Paris ✨',coverGradient:'gradient-london',
+  id:'mock-lp',name:'London → Paris ✨',coverGradient:'gradient-london',isDemo:true,
   occasion:'leisure',honoree:null,
   travelPeriod:{depart:'2026-09-17',return:'2026-09-26'},
   travelerPassportCountry:'US',
@@ -598,6 +598,7 @@ const RAW_MOCK_TRIPS=[
   id:'mock-cali-disney',
   name:'Cali Disney 2026 🎢',
   title:'Cali Disney 2026 🎢',
+  isDemo:true,
   coverGradient:'gradient-generic',
   occasion:'family',
   emoji:'🎢',
@@ -1153,6 +1154,12 @@ function TripCard({trip, onClick, animDelay=0}) {
         </div>
       </div>
       <div className="trip-card-body">
+        {trip.isDemo && (
+          <div style={{display:'flex',alignItems:'center',gap:6,background:'#FEF3E2',border:'1px solid #F5D9A0',borderRadius:8,padding:'6px 10px',marginBottom:10}}>
+            <span style={{fontSize:'.7rem'}}>🧪</span>
+            <span style={{fontSize:'.72rem',fontWeight:500,color:'#92610A'}}>Demo trip — explore freely, then create your own</span>
+          </div>
+        )}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:flags.length>0||total>0?10:0}}>
           <AvatarStack collaborators={collaborators}/>
           <CountdownChip departDate={startDate}/>
@@ -1792,6 +1799,17 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
         </div>
       </div>
 
+      {/* Demo banner */}
+      {trip.isDemo && (
+        <div style={{background:'#FEF9ED',borderBottom:'1px solid #F5D9A0',padding:'12px 20px',display:'flex',alignItems:'center',gap:10}}>
+          <span style={{fontSize:'1.1rem'}}>🧪</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:'.82rem',fontWeight:600,color:'#92610A',marginBottom:1}}>This is a demo trip</div>
+            <div style={{fontSize:'.75rem',color:'#A07820',lineHeight:1.4}}>Feel free to explore — tap around, check things off, try the tabs. When ready, create your own trip with the + button.</div>
+          </div>
+          <button onClick={()=>onDelete&&onDelete(trip.id)} style={{background:'#F5D9A0',border:'none',borderRadius:8,padding:'6px 10px',fontSize:'.72rem',fontWeight:500,color:'#92610A',cursor:'pointer',whiteSpace:'nowrap'}}>Remove demo</button>
+        </div>
+      )}
       {/* Tab Content */}
       <div style={{maxWidth:1100,margin:'0 auto',padding:'24px 28px 80px'}}>
         {activeTab==='overview' && (
@@ -1912,6 +1930,16 @@ function Dashboard({trips, onSelectTrip, onNewTrip}) {
         </div>
       </div>
       <div style={{maxWidth:720,margin:'0 auto',padding:'24px 20px 80px'}}>
+        {/* Welcome banner — only shown when all trips are demo trips */}
+        {trips.length > 0 && trips.every(t=>t.isDemo) && (
+          <div style={{background:'linear-gradient(135deg,#FEF9ED,#FEF3E2)',border:'1px solid #F5D9A0',borderRadius:14,padding:'16px 18px',marginBottom:20,display:'flex',gap:12,alignItems:'flex-start'}}>
+            <span style={{fontSize:'1.4rem',lineHeight:1}}>👋</span>
+            <div>
+              <div style={{fontFamily:'var(--font-display)',fontSize:'1rem',fontWeight:600,color:'#92610A',marginBottom:3}}>Welcome to Locale!</div>
+              <div style={{fontSize:'.8rem',color:'#A07820',lineHeight:1.5}}>These are <strong>demo trips</strong> so you can explore the app. Tap one to see how it works, then hit <strong>+ New trip</strong> to start planning your own.</div>
+            </div>
+          </div>
+        )}
         {trips.length===0 ? (
           <div style={{textAlign:'center',padding:'80px 20px'}}>
             <div style={{fontSize:'4rem',marginBottom:16}}>🌍</div>
