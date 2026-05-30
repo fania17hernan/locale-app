@@ -1,0 +1,2053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Locale">
+<meta name="theme-color" content="#2B5F6E">
+<title>Locale — Your trips, beautifully kept.</title>
+<link id="manifest-link" rel="manifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --color-cream:       #F5F2EC;
+  --color-cream-dark:  #EDE9E1;
+  --color-ink:         #1A1714;
+  --color-ink-light:   #4A4743;
+  --color-ink-muted:   #8A8784;
+  --color-accent:      #2B5F6E;
+  --color-accent-warm: #7FB5BF;
+  --color-accent-soft: #EEF5F7;
+  --color-surface:     #FFFFFF;
+  --color-border:      #D8D5CF;
+  --color-success:     #3A6B4A;
+  --color-warning:     #C4892A;
+  --color-flag:        #8B3A2A;
+  --font-display:      'Cormorant Garamond', Georgia, serif;
+  --font-body:         'DM Sans', system-ui, sans-serif;
+  --radius:            14px;
+}
+
+html { background: var(--color-cream); color: var(--color-ink); font-family: var(--font-body); font-size: 16px; }
+body { min-height: 100vh; }
+#root { min-height: 100vh; }
+
+/* ── Reset & base ── */
+button { font-family: var(--font-body); cursor: pointer; }
+input, select, textarea { font-family: var(--font-body); }
+a { color: inherit; text-decoration: none; }
+img { max-width: 100%; }
+
+/* ── Typography helpers ── */
+.font-display { font-family: var(--font-display); }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 18px; border-radius: 8px; font-size: .875rem; font-weight: 500;
+  border: 1px solid transparent; transition: all .2s ease; white-space: nowrap;
+}
+.btn-primary { background: var(--color-accent); color: var(--color-cream); border-color: var(--color-accent); }
+.btn-primary:hover { background: #245260; border-color: #245260; }
+.btn-secondary { background: transparent; color: var(--color-accent); border-color: var(--color-accent); }
+.btn-secondary:hover { background: var(--color-accent-soft); }
+.btn-ghost { background: transparent; color: var(--color-ink-light); border-color: var(--color-border); }
+.btn-ghost:hover { background: var(--color-cream-dark); }
+.btn-sm { padding: 6px 12px; font-size: .8rem; }
+
+/* ── Pills ── */
+.pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 20px; font-size: .75rem; font-weight: 500;
+}
+.pill-accent { background: var(--color-accent); color: var(--color-cream); }
+.pill-muted { background: var(--color-cream-dark); color: var(--color-ink-light); border: 1px solid var(--color-border); }
+.pill-neutral { background: var(--color-cream-dark); color: var(--color-ink-muted); }
+.pill-flag { background: #FDF0EE; color: var(--color-flag); border: 1px solid #E8C0B8; }
+.badge-must { background: #FDF0EE; color: var(--color-flag); border: 1px solid #E8C0B8; border-radius: 6px; padding: 2px 8px; font-size: .72rem; font-weight: 500; }
+.badge-nice { background: var(--color-accent-soft); color: var(--color-accent); border: 1px solid #B8D8DF; border-radius: 6px; padding: 2px 8px; font-size: .72rem; font-weight: 500; }
+
+/* ── Cards ── */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+/* ── Inputs ── */
+.input, .input-field {
+  width: 100%; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid var(--color-border); background: var(--color-surface);
+  font-size: .875rem; color: var(--color-ink);
+  transition: border-color .2s;
+  -webkit-appearance: none;
+}
+.input:focus, .input-field:focus { outline: none; border-color: var(--color-accent); }
+.input-error { border-color: var(--color-flag); }
+select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234A4743' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+
+/* ── Labels ── */
+.section-label { display: block; font-size: .72rem; font-weight: 500; letter-spacing: .07em; text-transform: uppercase; color: var(--color-ink-muted); margin-bottom: 6px; }
+
+/* ── Overlay & Sheet ── */
+.overlay { position: fixed; inset: 0; background: rgba(26,23,20,.55); z-index: 200; display: flex; align-items: flex-end; justify-content: center; padding: 0; }
+@media(min-width:600px){ .overlay { align-items: center; padding: 20px; } }
+.sheet { background: var(--color-surface); border-radius: 20px 20px 0 0; width: 100%; padding: 24px 20px; max-height: 92vh; overflow-y: auto; }
+@media(min-width:600px){ .sheet { border-radius: 20px; } }
+.sheet-handle { width: 36px; height: 4px; background: var(--color-border); border-radius: 2px; margin: 0 auto 20px; }
+
+/* ── Trip Card ── */
+.trip-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media(min-width:600px){ .trip-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); } }
+@media(min-width:1100px){ .trip-grid { grid-template-columns: repeat(3, 1fr); gap: 20px; } }
+
+.trip-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform .25s ease, box-shadow .25s ease;
+  animation: cardReveal .4s ease both;
+  box-shadow: 0 1px 3px rgba(26,23,20,.06);
+}
+.trip-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(26,23,20,.12); }
+
+.trip-card-header { padding: 20px 18px 16px; position: relative; min-height: 130px; display: flex; flex-direction: column; justify-content: flex-end; }
+.trip-card-header::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,.05) 0%, rgba(0,0,0,.45) 100%); pointer-events: none; border-radius: 0; }
+.trip-card-top-row { position: absolute; top: 14px; left: 16px; right: 16px; display: flex; align-items: center; justify-content: space-between; z-index: 2; }
+.trip-card-emoji-sm { font-size: 1.6rem; filter: drop-shadow(0 1px 3px rgba(0,0,0,.4)); }
+.trip-card-meta { position: relative; z-index: 2; }
+.trip-card-title { font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; color: #fff; line-height: 1.2; margin-bottom: 3px; text-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.trip-card-dates { font-size: .72rem; color: rgba(255,255,255,.75); letter-spacing: .02em; margin-bottom: 7px; }
+.trip-card-dest-strip { display: flex; gap: 5px; flex-wrap: wrap; }
+.trip-card-dest-chip { background: rgba(255,255,255,.2); backdrop-filter: blur(6px); border-radius: 20px; padding: 2px 8px; font-size: .68rem; color: rgba(255,255,255,.95); font-weight: 500; border: 1px solid rgba(255,255,255,.18); }
+.trip-card-body { padding: 12px 16px 14px; }
+
+/* ── Dashboard header ── */
+.dashboard-header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 52px 20px 18px;
+  position: sticky; top: 0; z-index: 100;
+}
+.dashboard-wordmark {
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  letter-spacing: -.02em;
+  line-height: 1;
+}
+.dashboard-wordmark span { color: var(--color-accent); }
+
+/* ── Occasion pill ── */
+.occasion-pill { font-size: .7rem; font-weight: 500; padding: 3px 8px; border-radius: 12px; background: rgba(255,255,255,.18); color: rgba(255,255,255,.9); white-space: nowrap; flex-shrink: 0; }
+
+/* ── Trip header (detail view) ── */
+.trip-header { position: relative; overflow: hidden; }
+
+/* ── Destination gradients ── */
+.gradient-london  { background: linear-gradient(135deg, #1C4A56 0%, #2B5F6E 50%, #1E3D4A 100%); }
+.gradient-paris   { background: linear-gradient(135deg, #2A3F5F 0%, #3D5A7A 50%, #253352 100%); }
+.gradient-miami   { background: linear-gradient(135deg, #2E5C4A 0%, #4A7268 50%, #1F4035 100%); }
+.gradient-generic { background: linear-gradient(135deg, #1C4A56 0%, #2B5F6E 50%, #3D5A7A 100%); }
+.gradient-sunset  { background: linear-gradient(135deg, #5C3020 0%, #7A5240 50%, #9A6B50 100%); }
+.gradient-forest  { background: linear-gradient(135deg, #243D2E 0%, #3A5C48 50%, #2E4A3A 100%); }
+
+/* ── Checklist ── */
+.progress-bar-track { height: 6px; border-radius: 3px; background: var(--color-cream-dark); overflow: hidden; }
+.progress-bar-fill { height: 100%; border-radius: 3px; background: var(--color-accent); transition: width .4s ease; }
+.item-label { font-size: .875rem; color: var(--color-ink); line-height: 1.4; }
+.checklist-item { display: flex; align-items: flex-start; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--color-border); cursor: pointer; transition: background .15s; }
+.checklist-item:last-child { border-bottom: none; }
+.checklist-item:hover { background: var(--color-cream); }
+.checklist-item.completed .item-label { text-decoration: line-through; color: var(--color-ink-muted); }
+.checkbox { flex-shrink: 0; width: 20px; height: 20px; border-radius: 5px; border: 2px solid var(--color-border); background: var(--color-surface); display: flex; align-items: center; justify-content: center; transition: all .15s; margin-top: 1px; }
+.checkbox.checked { background: var(--color-accent); border-color: var(--color-accent); }
+.checkbox.checked::after { content: ''; display: block; width: 5px; height: 9px; border: 2px solid #fff; border-top: none; border-left: none; transform: rotate(45deg) translateY(-1px); }
+
+/* ── Consider block ── */
+.consider-block { background: var(--color-accent-soft); border-left: 3px solid var(--color-accent); padding: 10px 14px; border-radius: 0 8px 8px 0; margin-top: 8px; font-size: .8rem; color: var(--color-ink-light); line-height: 1.5; }
+
+/* ── Weather strip ── */
+.weather-strip { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--color-accent-soft); border-radius: 10px; margin-bottom: 16px; font-size: .85rem; color: var(--color-accent); border: 1px solid #B8D8DF; }
+
+/* ── Currency ── */
+.currency-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--color-cream-dark); }
+.currency-input { width: 110px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--color-border); font-size: .9rem; text-align: right; }
+
+/* ── City tidbits ── */
+.tidbit-section { border-bottom: 1px solid var(--color-cream-dark); }
+.tidbit-toggle { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 0; background: none; border: none; font-size: .875rem; font-weight: 500; color: var(--color-ink); cursor: pointer; }
+
+/* ── Celebration band ── */
+.celebration-band { position: absolute; top: 0; left: 0; right: 0; height: 6px; display: flex; overflow: hidden; z-index: 2; }
+.celebration-band span { flex: 1; text-align: center; font-size: 10px; line-height: 6px; animation: shimmer 3s infinite; }
+
+/* ── Step dots (new trip flow) ── */
+.step-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .75rem; font-weight: 500; background: var(--color-cream-dark); color: var(--color-ink-muted); border: 1px solid var(--color-border); flex-shrink: 0; transition: all .2s; }
+.step-dot.active { background: var(--color-accent); color: var(--color-cream); border-color: var(--color-accent); }
+.step-dot.done { background: var(--color-success); color: #fff; border-color: var(--color-success); }
+
+/* ── Avatar ── */
+.avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 600; color: #fff; border: 2px solid var(--color-surface); margin-left: -8px; flex-shrink: 0; }
+.avatar:first-child { margin-left: 0; }
+
+/* ── FAB ── */
+.fab { position: fixed; bottom: 28px; right: 24px; width: 52px; height: 52px; border-radius: 50%; background: var(--color-accent); color: var(--color-cream); font-size: 1.6rem; border: none; display: flex; align-items: center; justify-content: center; z-index: 100; transition: transform .2s ease; box-shadow: 0 2px 12px rgba(43,95,110,.35); }
+.fab:hover { transform: scale(1.08); }
+
+/* ── Banners ── */
+.offline-banner { background: var(--color-ink); color: var(--color-cream); text-align: center; padding: 10px 20px; font-size: .8rem; position: sticky; top: 0; z-index: 300; }
+.install-banner { background: var(--color-accent-soft); border-bottom: 1px solid #B8D8DF; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: .85rem; color: var(--color-accent); }
+
+/* ── Keyframes ── */
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+@keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes cardReveal { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+@keyframes checkPop { 0%{transform:scale(0)} 70%{transform:scale(1.2)} 100%{transform:scale(1)} }
+@keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:1} }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ── CONSTANTS & DATA ──────────────────────────────────────────────────────────
+const OCCASION_OPTIONS = [
+  {value:'leisure',label:'Leisure',emoji:'🧳'},{value:'birthday',label:'Birthday',emoji:'🎂'},
+  {value:'bachelorette',label:'Bachelorette',emoji:'👰'},{value:'bachelor',label:'Bachelor',emoji:'🥂'},
+  {value:'anniversary',label:'Anniversary',emoji:'💑'},{value:'honeymoon',label:'Honeymoon',emoji:'🍾'},
+  {value:'family',label:'Family',emoji:'👨‍👩‍👧'},{value:'wedding',label:'Wedding',emoji:'💒'},
+  {value:'corporate',label:'Corporate',emoji:'💼'},{value:'other',label:'Other',emoji:'✨'},
+];
+const AVATAR_COLORS=['#2B5F6E','#4A7C59','#6B5B95','#C4892A','#2E6B9E','#8B4060'];
+const SCHENGEN=['FR','DE','IT','ES','NL','BE','AT','PT','GR','CH','SE','DK','NO','FI','PL','CZ','HU','SK','SI','EE','LV','LT','LU','MT','IS'];
+
+const CURRENCY_INFO={
+  GB:{code:'GBP',symbol:'£',name:'British Pound',rate:0.79,flag:'🇬🇧'},
+  FR:{code:'EUR',symbol:'€',name:'Euro',rate:0.92,flag:'🇪🇺'},
+  DE:{code:'EUR',symbol:'€',name:'Euro',rate:0.92,flag:'🇪🇺'},
+  IT:{code:'EUR',symbol:'€',name:'Euro',rate:0.92,flag:'🇪🇺'},
+  ES:{code:'EUR',symbol:'€',name:'Euro',rate:0.92,flag:'🇪🇺'},
+  JP:{code:'JPY',symbol:'¥',name:'Japanese Yen',rate:157,flag:'🇯🇵'},
+  AU:{code:'AUD',symbol:'A$',name:'Australian Dollar',rate:1.54,flag:'🇦🇺'},
+  CA:{code:'CAD',symbol:'C$',name:'Canadian Dollar',rate:1.36,flag:'🇨🇦'},
+  MX:{code:'MXN',symbol:'$',name:'Mexican Peso',rate:17.8,flag:'🇲🇽'},
+};
+
+const CITY_DATA={
+  GB:{
+    transport:"Use Oyster card or contactless on the Tube and buses. Heathrow Express to Paddington ~15 min, £37. Black cabs metered; Uber widely available.",
+    tipping:"Not obligatory but appreciated — 10-12% at sit-down restaurants if service not included. Round up at pubs.",
+    customs:"Queue religiously. Stand on the right on escalators. 'Cheers' casually means thank you.",
+    simCard:"EE, Vodafone, Three all have good coverage. Three tourist SIMs are great value. eSIM: Airalo or Holafly.",
+    power:"🔌 Type G plug (3 rectangular pins). 230V / 50Hz. US devices need an adapter.",
+    emergency:"999 — Police / Ambulance / Fire  ·  Non-emergency: 101",
+    bestAreas:"Shoreditch & Hackney for bars and street art. South Bank for museums and river views. Notting Hill for charm. Mayfair for luxury.",
+    phrases:[],
+    tips:["Contactless accepted nearly everywhere — carry minimal cash.","Most major museums are free (V&A, Natural History, National Gallery, Tate Modern).","Sunday trading hours restricted — many shops open 11am–5pm only.","The Tube stops ~12:30am — plan for Uber or night buses after late nights."],
+  },
+  FR:{
+    transport:"Paris Métro is excellent — get a Navigo Easy card (tap-and-go). Vélib bikes great for short hops. Taxis from CDG are fixed rate (~€55 central Paris).",
+    tipping:"Service is legally included (service compris). Leaving a couple euros extra is kind but never expected.",
+    customs:"Always say Bonjour when entering a shop. Dress modestly at churches. Dinner starts late — restaurants fill 8–9pm.",
+    simCard:"Orange and SFR have best coverage. Free Mobile is cheap and solid in cities. eSIM: Airalo.",
+    power:"🔌 Type E plug (2 round pins + hole). 230V / 50Hz. US devices need an adapter.",
+    emergency:"17 Police · 15 Medical (SAMU) · 18 Fire (Pompiers) · 112 EU Emergency",
+    bestAreas:"Le Marais for history and boutiques. Saint-Germain for cafés. Montmartre for views. Canal Saint-Martin for a local feel.",
+    phrases:[
+      {phrase:"Bonjour",translation:"Hello / Good morning (bohn-ZHOOR)"},
+      {phrase:"Merci",translation:"Thank you (mair-SEE)"},
+      {phrase:"S'il vous plaît",translation:"Please (seel voo PLAY)"},
+      {phrase:"Excusez-moi",translation:"Excuse me (ex-kyoo-ZAY mwah)"},
+      {phrase:"Où est...?",translation:"Where is...? (oo AY)"},
+      {phrase:"L'addition, s'il vous plaît",translation:"The bill, please (lah-dee-SYOHN)"},
+      {phrase:"Parlez-vous anglais?",translation:"Do you speak English? (par-lay voo ahn-GLAY)"},
+    ],
+    tips:["Most patisseries close Monday.","Book Eiffel Tower summit tickets 3+ weeks ahead.","The Marché d'Aligre is Paris's best budget market.","Picnic in the Jardins du Palais Royal — a local secret."],
+  },
+  US:{
+    transport:"Ride-share (Uber/Lyft) is ubiquitous. Major cities have solid transit. Miami: Brightline train connects Miami–Fort Lauderdale–West Palm.",
+    tipping:"18–22% at restaurants is the norm. $1–2 per drink at bars. Tipping is a major part of service workers' income.",
+    customs:"Sales tax added at register (not on price tags). Portions are large — splitting meals is normal.",
+    simCard:"T-Mobile, AT&T, Verizon all have widespread coverage.",
+    power:"🔌 Type A/B (2 flat pins). 120V / 60Hz.",
+    emergency:"911 — Police / Ambulance / Fire",
+    bestAreas:"Varies by city. Miami: South Beach, Wynwood, Brickell.",
+    phrases:[],
+    tips:["Budget ~30% on top of menu prices for tax and tip.","Water is free and refillable at restaurants."],
+  },
+};
+
+// City-specific local tips keyed by city name (lowercase)
+const CITY_LOCAL_TIPS={
+  'anaheim':{
+    nearby:[
+      {name:'GRAMMY Museum',emoji:'🎵',desc:'15 min drive to downtown LA — world-class music history. Great if you have a free afternoon.',address:'800 W Olympic Blvd, Los Angeles, CA'},
+      {name:'Knott\'s Berry Farm',emoji:'🎡',desc:'Just 10 min from Disneyland. Less crowded, classic SoCal theme park. Great for thrill rides.',address:'8039 Beach Blvd, Buena Park, CA'},
+      {name:'Old Town Orange',emoji:'🏛️',desc:'Charming antique district 10 min away. Great for a slow morning coffee walk and vintage shopping.',address:'Old Towne Orange, Orange, CA'},
+      {name:'Crystal Cove State Park',emoji:'🌊',desc:'Beautiful beach 30 min from Anaheim. Historic beach cottages, tide pools, great for a half-day escape.',address:'8471 N Coast Hwy, Laguna Beach, CA'},
+      {name:'Olvera Street & Union Station',emoji:'🌮',desc:'The birthplace of LA — 20 min drive. Great tacos, mariachis, and the stunning Union Station building.',address:'Olvera St, Los Angeles, CA'},
+    ],
+    food:[
+      {name:'Norms Restaurant',emoji:'🍳',desc:'24/7 classic American diner steps from the parks. Great for late-night after closing or early breakfast.',address:'1151 W Katella Ave, Anaheim'},
+      {name:'Goofy\'s Kitchen — Disneyland Hotel',emoji:'🧇',desc:'Character breakfast at the Disneyland Hotel. Book ahead — magical for families.',address:'1150 Magic Way, Anaheim'},
+      {name:'The Anaheim Packing House',emoji:'🏬',desc:'Artisan food hall in a historic 1919 packing house. Local vendors, craft beer, great bites. 5 min drive.',address:'440 S Anaheim Blvd, Anaheim'},
+      {name:'La Palma Chicken Pie Shop',emoji:'🥧',desc:'Anaheim institution since 1946. Chicken pot pies and comfort food. Cash only, worth it.',address:'567 N Western Ave, Anaheim'},
+    ],
+    tips:[
+      'Disney parking is $35–45/day — the hotel walk is better than paying for parking.',
+      'Target on Harbor Blvd is the locals\' hack — cheap sunscreen, snacks, and anything you forgot.',
+      'July is peak season: parks hit capacity by mid-morning on weekends. Rope drop is essential.',
+      'The ART (Anaheim Resort Transit) shuttle runs between hotels and parks for ~$5/day.',
+      'Disneyland Main Street Confectionery opens before the park — great for morning treats.',
+    ],
+  },
+  'london':{
+    nearby:[
+      {name:'Columbia Road Flower Market',emoji:'🌸',desc:'Sunday morning only — one of London\'s most beautiful and atmospheric markets. Arrive by 9am.',address:'Columbia Rd, London E2'},
+      {name:'Greenwich & the Meridian Line',emoji:'🌍',desc:'Half-day trip by Uber Boat on the Thames. Royal Observatory, Cutty Sark, and great park views of the city.',address:'Greenwich, London SE10'},
+      {name:'Maltby Street Market',emoji:'🧀',desc:'Saturday and Sunday — Bermondsey\'s artisan food market. Less touristy than Borough Market, same quality.',address:'Maltby St, London SE1'},
+      {name:'Little Venice',emoji:'⛵',desc:'Canals in London — surprisingly lovely. Rent a narrowboat or walk the towpath to Camden.',address:'Little Venice, London W9'},
+    ],
+    food:[
+      {name:'Dishoom',emoji:'🍛',desc:'The best Indian food in London, full stop. Bacon naniis at breakfast are legendary. Book ahead.',address:'12 Upper St Martin\'s Ln, London WC2H'},
+      {name:'Padella',emoji:'🍝',desc:'Handmade pasta near Borough Market. No reservations — queue is worth it. Lunch only on weekdays.',address:'6 Southwark St, London SE1'},
+    ],
+    tips:[
+      'Tap your contactless bank card directly on the Tube reader — no Oyster card needed.',
+      'Most West End shows release day tickets at the box office from 10am — huge savings.',
+      'Borough Market is best Thursday–Saturday. Avoid Sunday — tourist crowds only.',
+      'The Walkie Talkie building (20 Fenchurch St) has a free rooftop Sky Garden with stunning views.',
+    ],
+  },
+  'paris':{
+    nearby:[
+      {name:'Château de Fontainebleau',emoji:'🏰',desc:'45 min by train from Gare de Lyon. More intimate than Versailles, often crowd-free. Stunning forest.',address:'Fontainebleau, France'},
+      {name:'Marché des Enfants Rouges',emoji:'🥗',desc:'Paris\'s oldest covered market (1615). Amazing international food stalls — Moroccan, Japanese, Italian.',address:'39 Rue de Bretagne, Paris 75003'},
+      {name:'Parc des Buttes-Chaumont',emoji:'🌿',desc:'The most beautiful park in Paris that tourists never visit. Rocky cliffs, a lake, and a temple on an island.',address:'Parc des Buttes-Chaumont, Paris 75019'},
+    ],
+    food:[
+      {name:'Breizh Café',emoji:'🥞',desc:'The best crêpes in Paris, made with buckwheat and quality fillings. Le Marais location is most accessible.',address:'109 Rue Vieille du Temple, Paris 75003'},
+      {name:'L\'As du Fallafel',emoji:'🧆',desc:'Legendary falafel in Le Marais. Long line but moves fast. Get the special with everything.',address:'34 Rue des Rosiers, Paris 75004'},
+    ],
+    tips:[
+      'Book museum tickets online before you go — most have timed entry and sell out days ahead.',
+      'Free first Sunday of each month at most national museums — Louvre, Musée d\'Orsay, etc.',
+      'Dinner before 7:30pm marks you as a tourist — kitchens are fully warm at 8pm.',
+      'Vélib\' bike-share is easy to use with a credit card and covers the whole city cheaply.',
+    ],
+  },
+};
+
+// ── AI KEY STORAGE ─────────────────────────────────────────────────────────────
+const AI_KEY_SK = 'locale_ai_key';
+function getAIKey(){try{return localStorage.getItem(AI_KEY_SK)||'';}catch(e){return '';}}
+function setAIKey(k){try{localStorage.setItem(AI_KEY_SK,k);}catch(e){}}
+
+// ── UTILS ──────────────────────────────────────────────────────────────────────
+function uuid(){return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16)})}
+function formatDate(iso){if(!iso)return'';return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+function formatDateShort(iso){if(!iso)return'';return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+function getOccasionEmoji(o){return OCCASION_OPTIONS.find(x=>x.value===o)?.emoji||'✨'}
+function getOccasionLabel(o){return OCCASION_OPTIONS.find(x=>x.value===o)?.label||'Trip'}
+function getFlightAwareUrl(fn){if(!fn)return null;return `https://www.flightaware.com/live/flight/${fn.replace(/\s+/g,'')}`}
+function getCountdownInfo(d){
+  if(!d)return{label:'',cls:'',days:9999,urgent:false};
+  const today=new Date();today.setHours(0,0,0,0);
+  const dep=new Date(d+'T00:00:00');
+  const diff=Math.round((dep-today)/86400000);
+  if(diff>30)return{label:`✈️ ${diff} days to go`,cls:'countdown-far',days:diff,urgent:false};
+  if(diff>7)return{label:`🗓️ ${diff} days — start packing!`,cls:'countdown-mid',days:diff,urgent:false};
+  if(diff>1)return{label:`🎉 Almost time! ${diff} days`,cls:'countdown-soon',days:diff,urgent:true};
+  if(diff===1)return{label:'🌅 Tomorrow! Final check!',cls:'countdown-soon',days:1,urgent:true};
+  if(diff===0)return{label:"✈️ Today's the day!",cls:'countdown-today',days:0,urgent:true};
+  return{label:`📸 ${new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'})}`,cls:'countdown-past',days:diff,urgent:false};
+}
+function getIntlFlags(trip){
+  const flags=[];
+  (trip.destinations||[]).filter(d=>d.isInternational).forEach(dest=>{
+    if(SCHENGEN.includes(dest.countryCode)&&trip.travelerPassportCountry==='US')
+      flags.push({severity:'critical',emoji:'🚨',label:'EES Registration Required',
+        desc:`Required for all non-EU nationals entering Schengen Area (${dest.city}). Register before travel.`,
+        url:'https://eu-entry.europa.eu'});
+    if(dest.countryCode==='GB'&&trip.travelerPassportCountry==='US')
+      flags.push({severity:'info',emoji:'ℹ️',label:'UK Entry — No Visa Required',
+        desc:'US passport holders can visit the UK for up to 6 months without a visa. Ensure passport is valid.',url:null});
+    if(dest.countryCode==='AU'&&trip.travelerPassportCountry==='US')
+      flags.push({severity:'warning',emoji:'⚠️',label:'Australia eTA Required',
+        desc:'Electronic Travel Authority required before departure. Apply online — typically instant.',
+        url:'https://eta.homeaffairs.gov.au'});
+  });
+  return flags;
+}
+
+// ── CHECKLIST GENERATOR ────────────────────────────────────────────────────────
+function generateChecklist(trip){
+  const items=[];
+  const isIntl=trip.destinations.some(d=>d.isInternational||(d.countryCode&&d.countryCode!=='US'));
+  const add=(label,emoji,cat,days,notes=null)=>items.push({id:uuid(),label,emoji,category:cat,completed:false,daysBeforeTrip:days,isAutoGenerated:true,notes});
+
+  // ── Documents ──
+  if(isIntl){
+    add('Passport valid 6+ months beyond return date','📕','documents',60);
+    add('Passport photocopies saved (digital + physical)','📄','documents',30);
+  } else {
+    add('Photo ID / driver\'s license packed','🪪','documents',1);
+  }
+  trip.destinations.filter(d=>d.isInternational||(d.countryCode&&d.countryCode!=='US')).forEach(dest=>{
+    if(SCHENGEN.includes(dest.countryCode))
+      add(`EES registration completed for Schengen (${dest.city})`,'🚨','documents',30,'Register at eu-entry.europa.eu');
+    if(dest.countryCode==='AU') add('eTA obtained for Australia','🇦🇺','documents',30,'Apply at eta.homeaffairs.gov.au');
+    if(dest.countryCode==='IN') add('India e-Visa obtained','🇮🇳','documents',45,'Apply at indianvisaonline.gov.in — allow 3-5 days');
+  });
+  if(isIntl) add('Travel insurance policy saved','🛡️','documents',14);
+
+  // ── Bookings — pulled from actual itinerary ──
+  const allItems=(trip.days||[]).flatMap(day=>[...(day.activities||[]),...(day.restaurants||[])]);
+
+  // Flights
+  if((trip.flights||[]).length>0){
+    trip.flights.forEach(fl=>{
+      add(`Online check-in for ${fl.flightNumber}`,'✈️','bookings',1,`Check in opens 24hrs before departure`);
+    });
+  } else {
+    add('Flights confirmed — online check-in opens 24hrs prior','✈️','bookings',1);
+  }
+
+  // Lodging
+  if((trip.lodging||[]).length>0){
+    trip.lodging.forEach(l=>{
+      add(`${l.name} — confirmation saved`,'🏨','bookings',14,l.address||null);
+    });
+  } else {
+    add('Hotel/lodging confirmations saved','🏨','bookings',14);
+  }
+
+  // Activities that need booking
+  allItems.filter(i=>i.bookingRequired&&i.bucket==='must-do').forEach(item=>{
+    add(`${item.name} — tickets/booking confirmed`,item.emoji||'🎟️','bookings',30,
+      item.bookingUrl?`Book at: ${item.bookingUrl}`:item.notes||null);
+  });
+  // Restaurants that need reservations
+  allItems.filter(i=>i.reservationRequired).forEach(item=>{
+    add(`${item.name} — reservation confirmed`,item.emoji||'🍽️','bookings',21,
+      item.bookingUrl?`Reserve at: ${item.bookingUrl}`:item.notes||null);
+  });
+  // Nice-to-have bookings
+  allItems.filter(i=>i.bookingRequired&&i.bucket!=='must-do').forEach(item=>{
+    add(`${item.name} — check availability`,item.emoji||'📌','bookings',14,null);
+  });
+
+  // ── Finance ──
+  add('Notify bank/credit cards of travel dates','💳','finance',7);
+  if(isIntl) add('Local currency obtained or fee-free travel card ready','💰','finance',7);
+  add('Cash for tips & emergencies packed','💵','finance',1);
+
+  // ── Tech ──
+  add('Offline maps downloaded (Google Maps / Apple Maps)','🗺️','tech',3,'Download destination areas before you leave');
+  add('Airline app downloaded + boarding pass saved offline','📲','tech',1);
+  if(isIntl) add('International data plan or local SIM arranged','📱','tech',7);
+
+  // Park/venue apps if Disney trip detected
+  const hasDisney=allItems.some(i=>i.name&&i.name.toLowerCase().includes('disney'));
+  if(hasDisney){
+    add('Disneyland app downloaded + Genie+ purchased','🏰','tech',3,'Buy Genie+ in the app the morning of your visit');
+    add('Lightning Lane selections planned for must-do rides','⚡','tech',1,'Open app at 7am on park day to snag top rides');
+  }
+
+  // ── Health ──
+  add('Prescriptions packed (+ 3 extra days supply)','💊','health',1);
+  add('Travel health kit packed','🩺','health',1,'Pain reliever, antacid, bandages, antihistamine, sunscreen');
+
+  // ── Packing ──
+  add('Luggage within airline weight limits checked','🧳','packing',1);
+  if(isIntl) add('Power adapter packed for destination','🔌','packing',1);
+  add('Weather-appropriate clothing packed','👗','packing',1,'Check the forecast 2–3 days before');
+  add('Comfortable walking shoes packed','👟','packing',3);
+
+  // ── Occasion-specific ──
+  if(trip.occasion==='bachelorette'){
+    add('Bachelorette activity/dinner booked','👰','bookings',30);
+    add('Sashes, accessories & decorations packed','🎀','packing',1);
+  }
+  if(trip.occasion==='birthday'){
+    add('Birthday dinner reservation confirmed','🎂','bookings',30);
+    add('Birthday cake / dessert arranged','🎂','bookings',7);
+  }
+  if(trip.occasion==='wedding'){
+    add('RSVP confirmed','💒','bookings',30);
+    add('Wedding gift arranged / shipped','🎁','bookings',14);
+    add('Wedding attire packed + steamed','👗','packing',1);
+  }
+  return items;
+}
+
+// ── MOCK TRIPS ─────────────────────────────────────────────────────────────────
+const RAW_MOCK_TRIPS=[
+ {
+  id:'mock-lp',name:'London → Paris ✨',coverGradient:'gradient-london',
+  occasion:'leisure',honoree:null,
+  travelPeriod:{depart:'2026-09-17',return:'2026-09-26'},
+  travelerPassportCountry:'US',
+  destinations:[
+   {id:'d2',city:'London',country:'United Kingdom',countryCode:'GB',isInternational:true,arrivalDate:'2026-09-17',departureDate:'2026-09-21'},
+   {id:'d3',city:'Paris',country:'France',countryCode:'FR',isInternational:true,arrivalDate:'2026-09-21',departureDate:'2026-09-26'},
+  ],
+  flights:[
+   {id:'f1',direction:'outbound',airline:'Delta',flightNumber:'DL5996',departureAirport:'JFK',arrivalAirport:'LHR',departureTime:'2026-09-17T08:15:00',arrivalTime:'2026-09-17T20:10:00',confirmationNumber:null,notes:''},
+   {id:'f2',direction:'connecting',airline:'Eurostar',flightNumber:'ES9108',departureAirport:'London St Pancras',arrivalAirport:'Paris Gare du Nord',departureTime:'2026-09-21T09:24:00',arrivalTime:'2026-09-21T13:02:00',confirmationNumber:null,notes:'Book in advance — fills up fast'},
+   {id:'f3',direction:'return',airline:'Delta',flightNumber:'DL83',departureAirport:'CDG',arrivalAirport:'JFK',departureTime:'2026-09-26T09:25:00',arrivalTime:'2026-09-26T12:30:00',confirmationNumber:null,notes:'Leave hotel 6:30am'},
+  ],
+  lodging:[
+   {id:'l2',name:'The Hoxton, Shoreditch',address:'81 Great Eastern St, London EC2A 3HU',checkIn:'2026-09-17',checkOut:'2026-09-21'},
+   {id:'l3',name:'Hôtel du Petit Moulin',address:'29/31 Rue de Poitou, 75003 Paris',checkIn:'2026-09-21',checkOut:'2026-09-26'},
+  ],
+  collaborators:[
+   {id:'c4',name:'Stephanie',email:'s.borboa9@gmail.com',role:'owner',avatarColor:AVATAR_COLORS[3]},
+   {id:'c5',name:'Alex M.',email:'alex@example.com',role:'editor',avatarColor:AVATAR_COLORS[4]},
+  ],
+  days:[
+   {id:'lp-1',date:'2026-09-17',label:'Day 1 — London Arrival',destinationId:'d2',
+    activities:[
+     {id:'la1',name:'Heathrow Express to Paddington',emoji:'🚂',address:'Heathrow Express, Terminal 5',neighborhood:'Heathrow',bucket:'must-do',category:'transport',bookingRequired:false,notes:'15 min, ~£37 one-way',thingsToConsider:['Buy online in advance to save','Oyster cards available at the airport for onward Tube travel'],sortOrder:0},
+     {id:'la2',name:'Check in — The Hoxton Shoreditch',emoji:'🏨',address:'81 Great Eastern St, London EC2A 3HU',neighborhood:'Shoreditch',bucket:'must-do',category:'other',bookingRequired:false,notes:'',thingsToConsider:[],sortOrder:1},
+     {id:'la3',name:'Borough Market Explore',emoji:'🧀',address:'8 Southwark St, London SE1 1TL',neighborhood:'London Bridge',bucket:'nice-to-have',category:'outdoor',bookingRequired:false,notes:'Best food market in London',thingsToConsider:['Open Thu–Sun only — check dates before going'],sortOrder:2},
+    ],
+    restaurants:[
+     {id:'lr1',name:'Dishoom Shoreditch',emoji:'🍛',address:'7 Boundary St, London E2 7JE',neighborhood:'Shoreditch',bucket:'must-do',cuisine:'Indian',mealType:'dinner',reservationRequired:true,priceRange:'$$',notes:"London's most-loved restaurant. The black daal is worth the trip alone.",thingsToConsider:['Reservations open 8 weeks out — book immediately','Walk-in queue typically 45–60 min but moves fast'],sortOrder:0},
+    ],
+    notes:''},
+   {id:'lp-2',date:'2026-09-19',label:'Day 3 — Wembley 🏈',destinationId:'d2',
+    activities:[
+     {id:'la4',name:'Tower of London',emoji:'🏰',address:'Tower of London, London EC3N 4AB',neighborhood:'Tower Hill',bucket:'must-do',category:'museum',bookingRequired:true,bookingUrl:'https://www.hrp.org.uk/tower-of-london/',notes:'Crown Jewels, Beefeaters, 1,000 years of history',thingsToConsider:['Book online — saves queuing','Allow 2–3 hours minimum'],sortOrder:0},
+     {id:'la5',name:'ASU vs Kansas @ Wembley 🏈',emoji:'🏈',address:'Wembley Stadium, London HA9 0WS',neighborhood:'Wembley',bucket:'must-do',category:'entertainment',bookingRequired:true,notes:'Union Jack Classic — first FBS college football game ever at Wembley!',thingsToConsider:['Arrive 90 min early for atmosphere','Tube: Wembley Park (Metropolitan/Jubilee)','Sun Devil gear strongly recommended 🔱'],sortOrder:1},
+    ],
+    restaurants:[],
+    notes:'FORK EM DEVILS 🔱'},
+   {id:'lp-3',date:'2026-09-21',label:'Day 5 — Eurostar to Paris 🚄',destinationId:'d3',
+    activities:[
+     {id:'la6',name:'Eurostar — St Pancras to Gare du Nord',emoji:'🚄',address:"London St. Pancras International, London N1C 4QP",neighborhood:"King's Cross",bucket:'must-do',category:'transport',bookingRequired:true,bookingUrl:'https://www.eurostar.com',notes:'Departs 09:24 London, arrives 13:02 Paris',thingsToConsider:['Arrive 45 min early for passport control','Book early for best prices','Seats on the left side (facing forward) for the tunnel'],sortOrder:0},
+     {id:'la7',name:'Check in — Hôtel du Petit Moulin',emoji:'🏨',address:'29/31 Rue de Poitou, 75003 Paris',neighborhood:'Le Marais',bucket:'must-do',category:'other',bookingRequired:false,notes:'Boutique hotel designed by Christian Lacroix',thingsToConsider:[],sortOrder:1},
+     {id:'la8',name:'Eiffel Tower at Sunset 🗼',emoji:'🗼',address:'Champ de Mars, 5 Av. Anatole France, 75007 Paris',neighborhood:'7th Arrondissement',bucket:'must-do',category:'outdoor',bookingRequired:true,bookingUrl:'https://ticket.toureiffel.paris/en',notes:'Book the summit — golden hour views are unreal',thingsToConsider:['Tickets sell out 3–4 weeks ahead','Arrive at Trocadéro first for the classic photo angle','Go at sunset — arrive 30 min before for ideal timing'],sortOrder:2},
+    ],
+    restaurants:[
+     {id:'pr1',name:'Café de Flore',emoji:'☕',address:'172 Bd Saint-Germain, 75006 Paris',neighborhood:'Saint-Germain',bucket:'nice-to-have',cuisine:'French Café',mealType:'breakfast',reservationRequired:false,priceRange:'$$',notes:"Historic literary café — Sartre's old haunt",thingsToConsider:[],sortOrder:0},
+    ],
+    notes:''},
+   {id:'lp-4',date:'2026-09-22',label:'Day 6 — Louvre & Latin Quarter',destinationId:'d3',
+    activities:[
+     {id:'la9',name:'Louvre Museum',emoji:'🖼️',address:'Rue de Rivoli, 75001 Paris',neighborhood:'1st Arrondissement',bucket:'must-do',category:'museum',bookingRequired:true,bookingUrl:'https://www.louvre.fr/en/visit/tickets',notes:'Mona Lisa, Venus de Milo, Winged Victory — the big three',thingsToConsider:['Book timed entry in advance — sold out daily','Come first thing — very crowded by 11am','Allow at least 3 hours'],sortOrder:0},
+     {id:'la10',name:'Versailles Day Trip 👑',emoji:'👑',address:"Place d'Armes, 78000 Versailles",neighborhood:'Versailles',bucket:'nice-to-have',category:'outdoor',bookingRequired:true,bookingUrl:'https://en.chateauversailles.fr/visit',notes:'Worth every minute if you have time',thingsToConsider:['Book skip-the-line tickets weeks ahead — they sell out','RER C from Saint-Michel Notre-Dame (~35 min)','Bring a picnic for the gardens'],sortOrder:1},
+    ],
+    restaurants:[
+     {id:'pr2',name:'Angelina Paris',emoji:'🍫',address:'226 Rue de Rivoli, 75001 Paris',neighborhood:'Tuileries',bucket:'must-do',cuisine:'French Tearoom',mealType:'lunch',reservationRequired:false,priceRange:'$$',notes:'The original hot chocolate in Paris. Non-negotiable.',thingsToConsider:['Queue can be 30+ min — go before noon','The Mont-Blanc pastry + hot chocolate is THE order'],sortOrder:0},
+    ],
+    notes:''},
+   {id:'lp-5',date:'2026-09-24',label:'Day 8 — Montmartre & Seine',destinationId:'d3',
+    activities:[
+     {id:'la11',name:'Montmartre & Sacré-Cœur',emoji:'⛪',address:'35 Rue du Chevalier de la Barre, 75018 Paris',neighborhood:'Montmartre',bucket:'must-do',category:'outdoor',bookingRequired:false,notes:'Best views in Paris — arrive early to beat crowds',thingsToConsider:['Walk up via Rue Lepic for the Amélie trail','Sunday morning feels like a village'],sortOrder:0},
+     {id:'la12',name:'Seine River Cruise',emoji:'🛥️',address:"Port de la Bourdonnais, 75007 Paris",neighborhood:'7th Arrondissement',bucket:'must-do',category:'tour',bookingRequired:true,bookingUrl:'https://www.bateauxparisiens.com',notes:'1hr Bateaux Parisiens cruise — see the city from the water',thingsToConsider:['Book evening departure for illuminated landmarks'],sortOrder:1},
+    ],
+    restaurants:[
+     {id:'pr3',name:"Marché des Enfants Rouges",emoji:'🥗',address:'39 Rue de Bretagne, 75003 Paris',neighborhood:'Le Marais',bucket:'must-do',cuisine:'Market',mealType:'lunch',reservationRequired:false,priceRange:'$$',notes:"Paris's oldest covered market — incredible food stalls",thingsToConsider:["Arrive early — some stalls run out by 1pm","Japanese and Moroccan stalls are both excellent"],sortOrder:0},
+    ],
+    notes:''},
+  ],
+  checklist:[],celebrationNotes:'',groupNotes:'',
+  createdAt:'2026-04-01T00:00:00Z',updatedAt:'2026-04-01T00:00:00Z',
+ },
+ {
+  id:'mock-cali-disney',
+  name:'Cali Disney 2026 🎢',
+  title:'Cali Disney 2026 🎢',
+  coverGradient:'gradient-generic',
+  occasion:'family',
+  emoji:'🎢',
+  travelPeriod:{depart:'2026-06-12',return:'2026-06-14'},
+  startDate:'2026-06-12',endDate:'2026-06-14',
+  travelerPassportCountry:'US',
+  travelerCount:2,
+  destinations:[{id:'cd1',city:'Anaheim',country:'United States',countryCode:'US',isInternational:false,arrivalDate:'2026-06-12',departureDate:'2026-06-14'}],
+  flights:[
+    {id:'f1',flightNumber:'SW4915',origin:'Origin',destination:'SNA',departureDate:'2026-06-12',notes:'Arriving June 12'},
+    {id:'f2',flightNumber:'SW2476',origin:'SNA',destination:'Home',departureDate:'2026-06-14',notes:'Departing Monday'},
+  ],
+  lodging:[{id:'cl1',name:'Hotel Indigo Anaheim',address:'435 W Katella Ave, Anaheim, CA 92802'}],
+  collaborators:[
+    {id:'cc1',name:'Stephanie',email:'s.borboa9@gmail.com',role:'owner',avatarColor:AVATAR_COLORS[0]},
+  ],
+  days:[
+   {
+    id:'cd-day1',date:'2026-06-12',label:'Day 1 — Arrival & Downtown Disney',destinationId:'cd1',
+    activities:[
+     {id:'cda1',name:'Land at John Wayne Airport (SNA) — SW4915',emoji:'✈️',address:'18601 Airport Way, Santa Ana, CA 92707',neighborhood:'Santa Ana',bucket:'must-do',category:'other',bookingRequired:false,notes:'Pick up rental car or rideshare to Hotel Indigo (~20 min)',thingsToConsider:['Grab snacks for the room at a nearby Trader Joe\'s on the way','Check-in is typically 3pm — ask for early if arriving earlier'],sortOrder:0},
+     {id:'cda2',name:'Check in — Hotel Indigo Anaheim',emoji:'🏨',address:'435 W Katella Ave, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'other',bookingRequired:false,notes:'Steps from the Disneyland entrance. Ask for a park-view room if available.',thingsToConsider:['Download the Disneyland app tonight and buy Genie+ in advance','Set an alarm — rope drop tomorrow is worth it'],sortOrder:1},
+     {id:'cda3',name:'Downtown Disney District — Evening stroll',emoji:'🌟',address:'1580 Disneyland Dr, Anaheim, CA 92802',neighborhood:'Downtown Disney',bucket:'must-do',category:'entertainment',bookingRequired:false,notes:'Free to enter — shops, live music, and great people-watching. Good way to get your bearings before the parks tomorrow.',thingsToConsider:['World of Disney store is here if you need any park gear','Check for live entertainment schedule'],sortOrder:2},
+    ],
+    restaurants:[
+     {id:'cdr1',name:'Ballast Point Brewing — Downtown Disney',emoji:'🍺',address:'1530 Disneyland Dr, Anaheim, CA 92802',neighborhood:'Downtown Disney',bucket:'must-do',cuisine:'American/Craft Beer',mealType:'dinner',reservationRequired:false,priceRange:'$$',notes:'Great casual dinner spot right at Downtown Disney. Good burgers, fish tacos, and craft beers. No reservation needed.',thingsToConsider:['Patio seating is fun for people watching','Happy hour deals if you arrive early'],sortOrder:0},
+    ],
+    notes:'Arrival day — take it easy, get oriented, prep for big park days ahead.'},
+   {
+    id:'cd-day2',date:'2026-06-13',label:'Day 2 — Disneyland Park (Day 1 Hopper)',destinationId:'cd1',
+    activities:[
+     {id:'cda4',name:'Disneyland Park — Rope Drop',emoji:'🏰',address:'1313 Disneyland Dr, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'entertainment',bookingRequired:true,bookingUrl:'https://disneyland.disney.go.com/tickets/',notes:'Arrive 30 min before opening for rope drop. Head straight to Indiana Jones Adventure or Pirates of the Caribbean before crowds build.',thingsToConsider:['Buy 2-Day Park Hopper tickets in advance online — cheaper than at gate','Download Disneyland app for Lightning Lane and wait times','Genie+ is $30–35/person — worth it on a busy summer Saturday'],sortOrder:0},
+     {id:'cda5',name:'New Orleans Square & Haunted Mansion',emoji:'👻',address:'Disneyland Park, New Orleans Square',neighborhood:'Disneyland',bucket:'must-do',category:'entertainment',bookingRequired:false,notes:'One of the most iconic areas of Disneyland. Haunted Mansion, Pirates of the Caribbean, and the Blue Bayou restaurant are all here.',thingsToConsider:['Blue Bayou is a lovely sit-down lunch spot inside the park — reserve in advance','Evening is magical here with the lights and ambiance'],sortOrder:1},
+     {id:'cda6',name:'Matterhorn Bobsleds & Tomorrowland',emoji:'🎿',address:'Disneyland Park, Fantasyland/Tomorrowland',neighborhood:'Disneyland',bucket:'must-do',category:'entertainment',bookingRequired:false,notes:'Hit the Matterhorn early — lines grow fast by mid-morning. Space Mountain and Star Wars: Galaxy\'s Edge are nearby.',thingsToConsider:['Galaxy\'s Edge is a must — try building a lightsaber at Savi\'s Workshop (extra $$$, reserve in advance)','Fantasmic! evening show is incredible — check schedule'],sortOrder:2},
+    ],
+    restaurants:[
+     {id:'cdr2',name:'Din Tai Fung — Dinner with Morgan 🥟',emoji:'🥟',address:'400 S Baldwin Ave, Arcadia, CA 91007',neighborhood:'Arcadia (San Gabriel Valley)',bucket:'must-do',cuisine:'Taiwanese/Dim Sum',mealType:'dinner',reservationRequired:true,bookingUrl:'https://dintaifungusa.com/location/arcadia/',priceRange:'$$$',notes:'MUST reserve — this location is the most popular in SoCal. Their soup dumplings (xiao long bao), truffle fried rice, and shrimp & pork wontons are legendary. About 30 min drive from Anaheim.',thingsToConsider:['Reserve on Yelp or Resy — book as soon as possible, fills up weeks out','Best dishes: XLB (soup dumplings), truffle fried rice, cucumber salad, wontons in chili oil','The Americana at Brand location in Glendale is closer if Arcadia is full'],sortOrder:0},
+    ],
+    notes:'Big park day — pace yourselves and stay hydrated. July in Anaheim is hot (85–95°F). Take a mid-afternoon break at the hotel pool if needed.'},
+   {
+    id:'cd-day3',date:'2026-06-13',label:'Day 2 Evening — Disney California Adventure',destinationId:'cd1',
+    activities:[
+     {id:'cda7',name:'Disney California Adventure — Evening Hop',emoji:'🎡',address:'1313 Disneyland Dr, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'entertainment',bookingRequired:true,bookingUrl:'https://disneyland.disney.go.com/tickets/',notes:'Use your Park Hopper to jump to DCA in the afternoon/evening. Don\'t miss Guardians of the Galaxy: Mission Breakout and Radiator Springs Racers.',thingsToConsider:['World of Color water/light show at night is stunning — grab a spot 30 min early','Pixar Pier is beautiful at dusk'],sortOrder:0},
+     {id:'cda8',name:'Guardians of the Galaxy: Mission Breakout',emoji:'🚀',address:'Disney California Adventure, Hollywood Land',neighborhood:'DCA',bucket:'must-do',category:'entertainment',bookingRequired:false,notes:'Best ride at DCA. Drop-style thrill ride with a great soundtrack. Use Lightning Lane if the wait is over 45 min.',thingsToConsider:['Gets very busy — go first thing after hopping or grab Lightning Lane','Random music tracks play each ride — try to ride twice for different songs'],sortOrder:1},
+     {id:'cda9',name:'Radiator Springs Racers — Cars Land',emoji:'🏎️',address:'Disney California Adventure, Cars Land',neighborhood:'DCA',bucket:'must-do',category:'entertainment',bookingRequired:false,notes:'Cars Land is one of the most immersive themed areas in any Disney park. The racers ride is excellent. Beautiful at night with the neon lights.',thingsToConsider:['One of the highest-demand rides — use Lightning Lane or go right at rope drop','Cozy Cone Motel nearby has great churros and snacks'],sortOrder:2},
+    ],
+    restaurants:[
+     {id:'cdr3',name:'Carthay Circle Restaurant — DCA',emoji:'🍽️',address:'Disney California Adventure, Buena Vista St',neighborhood:'DCA',bucket:'nice-to-have',cuisine:'American',mealType:'lunch',reservationRequired:true,bookingUrl:'https://disneyland.disney.go.com/dining/disney-california-adventure/carthay-circle-restaurant/',priceRange:'$$$',notes:'The most beautiful restaurant at DCA — gorgeous 1920s Hollywood theming. Great for a special sit-down lunch before evening activities.',thingsToConsider:['Reserve via Disney dining — popular spot','The upstairs lounge has a more casual menu and no reservation needed'],sortOrder:0},
+    ],
+    notes:''},
+   {
+    id:'cd-day4',date:'2026-06-14',label:'Day 3 — Checkout & Departure',destinationId:'cd1',
+    activities:[
+     {id:'cda10',name:'Hotel checkout — Hotel Indigo',emoji:'🏨',address:'435 W Katella Ave, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'other',bookingRequired:false,notes:'Check-out is 11am. Store luggage with concierge if your flight is later.',thingsToConsider:['Ask about late checkout if your flight is afternoon or later','Grab coffee from the hotel or nearby Starbucks on Harbor Blvd'],sortOrder:0},
+     {id:'cda11',name:'Breakfast at The Original Pancake House',emoji:'🥞',address:'1418 E Lincoln Ave, Anaheim, CA 92805',neighborhood:'Anaheim',bucket:'must-do',category:'food',bookingRequired:false,notes:'Anaheim institution. Their Dutch Baby and apple pancake are massive and incredible. Cash-friendly, quick service.',thingsToConsider:['Arrives hot and fast — good for a pre-flight meal','Only a 15 min drive to SNA airport'],sortOrder:1},
+     {id:'cda12',name:'John Wayne Airport (SNA) — Depart SW2476',emoji:'✈️',address:'18601 Airport Way, Santa Ana, CA 92707',neighborhood:'Santa Ana',bucket:'must-do',category:'other',bookingRequired:false,notes:'SNA is a small, easy airport. Southwest check-in opens 24hrs before departure — check in online to get a good boarding position.',thingsToConsider:['Allow 60–75 min from Anaheim to clear security — it\'s quick but traffic on the 55 can be tricky','Southwest bag policy: 2 free checked bags'],sortOrder:2},
+    ],
+    restaurants:[],
+    notes:'Fly home full of magic. ✨'},
+  ],
+  checklist:[],celebrationNotes:'',groupNotes:'',
+  createdAt:'2026-05-01T00:00:00Z',updatedAt:'2026-05-01T00:00:00Z',
+ }
+];
+// Normalize a trip so it always has title, startDate, endDate regardless of legacy shape
+function normalizeTrip(t){
+  const title = t.title || t.name || 'My Trip';
+  const startDate = t.startDate || t.travelPeriod?.depart || '';
+  const endDate = t.endDate || t.travelPeriod?.return || '';
+  const collaborators = (t.collaborators||[]).map(c=>({...c, avatarColor: c.avatarColor||c.color||'var(--color-accent)'}));
+  const checklist = (t.checklist||[]).length ? t.checklist : generateChecklist({...t, startDate, endDate, title});
+  return {...t, title, startDate, endDate, collaborators, checklist};
+}
+const MOCK_TRIPS=RAW_MOCK_TRIPS.map(t=>normalizeTrip(t));
+
+// ── STORAGE ────────────────────────────────────────────────────────────────────
+const SK='locale_v4';
+function loadTrips(){
+  try{
+    const r=localStorage.getItem(SK);
+    if(r){
+      const parsed=JSON.parse(r);
+      return parsed.map(normalizeTrip);
+    }
+  }catch(e){}
+  localStorage.setItem(SK,JSON.stringify(MOCK_TRIPS));
+  return MOCK_TRIPS;
+}
+function saveTrips(trips){try{localStorage.setItem(SK,JSON.stringify(trips));}catch(e){}}
+
+// ── SHARED COMPONENTS ──────────────────────────────────────────────────────────
+function AvatarStack({collaborators,max=4}){
+  const shown=collaborators.slice(0,max),extra=collaborators.length-max;
+  return(<div style={{display:'flex',alignItems:'center'}}>
+    {shown.map(c=><div key={c.id} className="avatar" style={{background:c.avatarColor}}>{c.name.charAt(0)}</div>)}
+    {extra>0&&<div className="avatar" style={{background:'var(--color-ink-light)'}}>+{extra}</div>}
+  </div>);
+}
+function CountdownChip({departDate}){
+  const info=getCountdownInfo(departDate);
+  if(!info)return null;
+  return <span className={`pill ${info.cls}`} style={{fontSize:'.75rem'}}>{info.label}</span>;
+}
+
+
+// ── CURRENCY CONVERTER ────────────────────────────────────────────────────────
+function CurrencyConverter({destinations}){
+  const seen=new Set();
+  const dests=(destinations||[]).filter(d=>{
+    if(!d.isInternational||!CURRENCY_INFO[d.countryCode])return false;
+    if(seen.has(d.countryCode))return false;
+    seen.add(d.countryCode);return true;
+  });
+  const [usd,setUsd]=useState('100');
+  const [locals,setLocals]=useState({});
+  function fromUSD(v){
+    setUsd(v);
+    const n=parseFloat(v)||0;
+    const nl={};dests.forEach(d=>{nl[d.countryCode]=(n*CURRENCY_INFO[d.countryCode].rate).toFixed(2);});
+    setLocals(nl);
+  }
+  function fromLocal(cc,v){
+    const rate=CURRENCY_INFO[cc].rate;
+    const usdVal=((parseFloat(v)||0)/rate).toFixed(2);
+    setUsd(usdVal);
+    const nl={};dests.forEach(d=>{nl[d.countryCode]=((parseFloat(usdVal)||0)*CURRENCY_INFO[d.countryCode].rate).toFixed(2);});
+    nl[cc]=v;setLocals(nl);
+  }
+  useEffect(()=>{fromUSD('100');},[]);
+  if(!dests.length)return null;
+  return(
+    <div className="card" style={{padding:'16px',marginBottom:'12px'}}>
+      <p className="section-label">💱 Currency Converter</p>
+      <div className="currency-row">
+        <span style={{fontSize:'1.1rem',flexShrink:0}}>🇺🇸</span>
+        <span style={{width:36,fontSize:'.8rem',fontWeight:600,color:'var(--color-ink-light)',flexShrink:0}}>USD</span>
+        <input className="currency-input" type="number" value={usd} onChange={e=>fromUSD(e.target.value)} placeholder="0"/>
+      </div>
+      {dests.map(d=>{
+        const c=CURRENCY_INFO[d.countryCode];
+        return(<div key={d.countryCode} className="currency-row">
+          <span style={{fontSize:'1.1rem',flexShrink:0}}>{c.flag}</span>
+          <span style={{width:36,fontSize:'.8rem',fontWeight:600,color:'var(--color-ink-light)',flexShrink:0}}>{c.code}</span>
+          <input className="currency-input" type="number" value={locals[d.countryCode]||''} onChange={e=>fromLocal(d.countryCode,e.target.value)} placeholder="0"/>
+        </div>);
+      })}
+      <p style={{fontSize:'.7rem',color:'var(--color-ink-light)',marginTop:8,textAlign:'right'}}>Approximate mid-2026 rates · For reference only</p>
+    </div>
+  );
+}
+
+// ── CITY TIDBITS ──────────────────────────────────────────────────────────────
+function CityTidbits({destinations}){
+  const [open,setOpen]=useState({});
+  const toggle=k=>setOpen(o=>({...o,[k]:!o[k]}));
+
+  const dests=(destinations||[]).filter(d=>{
+    const cityKey=(d.city||'').toLowerCase();
+    const hasLocal=!!CITY_LOCAL_TIPS[cityKey];
+    const hasIntl=CITY_DATA[d.countryCode];
+    return hasLocal||hasIntl;
+  });
+
+  if(!dests.length) return(
+    <div style={{padding:'40px 20px',textAlign:'center',color:'var(--color-ink-light)'}}>
+      <p style={{fontSize:'1.5rem',marginBottom:8}}>💡</p>
+      <p style={{fontFamily:'var(--font-display)',fontSize:'1rem'}}>City tips coming soon</p>
+      <p style={{fontSize:'.83rem',marginTop:4}}>Add destinations to your trip to see local tips and nearby ideas.</p>
+    </div>
+  );
+
+  return(
+    <div style={{padding:'0 0 32px'}}>
+      {dests.map(dest=>{
+        const cityKey=(dest.city||'').toLowerCase();
+        const localData=CITY_LOCAL_TIPS[cityKey];
+        const intlData=CITY_DATA[dest.countryCode];
+        const sections=[];
+
+        // Nearby — not in your plans
+        if(localData?.nearby?.length) sections.push({icon:'🗺️',label:'Nearby — Worth a Detour',type:'places',items:localData.nearby});
+        // Local food picks
+        if(localData?.food?.length) sections.push({icon:'🍴',label:'Local Food Picks',type:'places',items:localData.food});
+        // Insider tips
+        if(localData?.tips?.length) sections.push({icon:'💡',label:'Insider Tips',type:'tips',items:localData.tips});
+        // International sections
+        if(intlData){
+          sections.push({icon:'🚇',label:'Getting Around',type:'body',body:intlData.transport});
+          sections.push({icon:'💳',label:'Tipping & Money',type:'body',body:intlData.tipping});
+          if(intlData.customs) sections.push({icon:'🛂',label:'Local Customs',type:'body',body:intlData.customs});
+          if(intlData.phrases?.length) sections.push({icon:'💬',label:'Key Phrases',type:'phrases',items:intlData.phrases});
+          sections.push({icon:'🆘',label:'Emergency Numbers',type:'body',body:intlData.emergency});
+        }
+
+        return(
+          <div key={dest.id}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,paddingTop:4}}>
+              <span style={{fontSize:'1.2rem'}}>{dest.countryCode==='US'?'📍':'🌍'}</span>
+              <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600}}>{dest.city}</h3>
+            </div>
+            {sections.map((s,i)=>{
+              const k=`${dest.id}-${i}`;
+              return(
+                <div key={i} className="card" style={{marginBottom:8,overflow:'hidden'}}>
+                  <button className="tidbit-toggle" onClick={()=>toggle(k)} style={{width:'100%',padding:'13px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',background:'none',border:'none',cursor:'pointer'}}>
+                    <span style={{fontWeight:600,fontSize:'.875rem'}}>{s.icon} {s.label}</span>
+                    <span style={{color:'var(--color-ink-light)',fontSize:'.7rem'}}>{open[k]?'▲':'▼'}</span>
+                  </button>
+                  {open[k]&&(
+                    <div style={{padding:'0 16px 14px',borderTop:'1px solid var(--color-border)'}}>
+                      {s.type==='body'&&<p style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.65,paddingTop:10}}>{s.body}</p>}
+                      {s.type==='tips'&&s.items.map((t,j)=>(
+                        <p key={j} style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.55,marginTop:8,paddingLeft:4,borderLeft:'2px solid var(--color-accent-warm)'}}>  {t}</p>
+                      ))}
+                      {s.type==='places'&&s.items.map((p,j)=>(
+                        <div key={j} style={{marginTop:10,paddingTop:j>0?10:0,borderTop:j>0?'1px solid var(--color-border)':'none'}}>
+                          <div style={{display:'flex',alignItems:'baseline',gap:8,marginBottom:3}}>
+                            <span style={{fontSize:'1rem'}}>{p.emoji}</span>
+                            <span style={{fontWeight:600,fontSize:'.875rem'}}>{p.name}</span>
+                          </div>
+                          <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.55,marginLeft:24}}>{p.desc}</p>
+                          {p.address&&<p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',marginTop:2,marginLeft:24}}>📍 {p.address}</p>}
+                        </div>
+                      ))}
+                      {s.type==='phrases'&&s.items.map((p,j)=>(
+                        <div key={j} style={{marginTop:8,display:'flex',gap:8,flexWrap:'wrap'}}>
+                          <span style={{fontWeight:600,fontSize:'.875rem',minWidth:130}}>{p.phrase}</span>
+                          <span style={{fontSize:'.875rem',color:'var(--color-ink-light)',flex:1}}>{p.translation}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── CHECKLIST VIEW ─────────────────────────────────────────────────────────────
+function ChecklistView({trip,onUpdate}){
+  const checklist=trip.checklist||[];
+  const [collapsed,setCollapsed]=useState({});
+  const [newItem,setNewItem]=useState('');
+  const catLabels={documents:'📄 Documents',bookings:'✈️ Bookings',finance:'💰 Finance',tech:'📱 Tech',health:'🏥 Health',packing:'🧳 Packing',custom:'⭐ Custom'};
+  const catOrder=['documents','bookings','finance','tech','health','packing','custom'];
+  const done=checklist.filter(i=>i.completed).length,total=checklist.length;
+  const pct=total>0?Math.round((done/total)*100):0;
+  function toggle(id){onUpdate(checklist.map(i=>i.id===id?{...i,completed:!i.completed}:i));}
+  function addCustom(){
+    if(!newItem.trim())return;
+    onUpdate([...checklist,{id:uuid(),label:newItem.trim(),emoji:'⭐',category:'custom',completed:false,daysBeforeTrip:null,isAutoGenerated:false,notes:null}]);
+    setNewItem('');
+  }
+  const grouped=catOrder.reduce((acc,cat)=>{const items=checklist.filter(i=>i.category===cat);if(items.length)acc[cat]=items;return acc;},{});
+  return(
+    <div style={{padding:'0 16px 32px'}}>
+      <div className="card" style={{padding:'16px',marginBottom:'16px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+          <span style={{fontWeight:600,fontSize:'.9rem'}}>Trip Readiness</span>
+          <span style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{done}/{total} {pct===100?'🎯':'complete'}</span>
+        </div>
+        <div className="progress-bar-track"><div className="progress-bar-fill" style={{width:`${pct}%`}}/></div>
+        {pct===100&&<p style={{color:'var(--color-success)',fontSize:'.85rem',fontWeight:500,marginTop:8}}>✅ All set — have an amazing trip!</p>}
+      </div>
+      {Object.entries(grouped).map(([cat,items])=>(
+        <div key={cat} className="card" style={{marginBottom:10,overflow:'hidden'}}>
+          <button onClick={()=>setCollapsed(c=>({...c,[cat]:!c[cat]}))}
+            style={{width:'100%',padding:'13px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',background:'none',border:'none',cursor:'pointer',borderBottom:collapsed[cat]?'none':'1px solid var(--color-border)'}}>
+            <span style={{fontWeight:600,fontSize:'.875rem'}}>{catLabels[cat]}</span>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <span className="pill pill-neutral" style={{padding:'2px 8px',fontSize:'.7rem'}}>{items.filter(i=>i.completed).length}/{items.length}</span>
+              <span style={{color:'var(--color-ink-light)',fontSize:'.7rem'}}>{collapsed[cat]?'▼':'▲'}</span>
+            </div>
+          </button>
+          {!collapsed[cat]&&(
+            <div style={{padding:'0 16px'}}>
+              {items.map(item=>(
+                <div key={item.id} className={`checklist-item ${item.completed?'completed':''}`} onClick={()=>toggle(item.id)}>
+                  <div className={`checkbox ${item.completed?'checked':''}`}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                      <span style={{fontSize:'.875rem'}}>{item.emoji}</span>
+                      <span className="item-label" style={{fontSize:'.875rem'}}>{item.label}</span>
+                    </div>
+                    {item.notes&&!item.completed&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginTop:2}}>{item.notes}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+      <div className="card" style={{padding:'16px'}}>
+        <p className="section-label">Add Custom Item</p>
+        <div style={{display:'flex',gap:8}}>
+          <input className="input-field" placeholder="e.g. Pick up euros at airport..." value={newItem} onChange={e=>setNewItem(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addCustom()} style={{flex:1}}/>
+          <button className="btn btn-primary" onClick={addCustom} style={{flexShrink:0}}>Add</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ACTIVITY CARD ──────────────────────────────────────────────────────────────
+function ActivityCard({item,type}){
+  const [exp,setExp]=useState(false);
+  const mapsUrl=`https://maps.google.com/?q=${encodeURIComponent(item.address||item.name)}`;
+  return(
+    <div className="card" style={{marginBottom:10,overflow:'hidden'}}>
+      <button onClick={()=>setExp(e=>!e)}
+        style={{width:'100%',padding:'13px 16px',display:'flex',alignItems:'flex-start',gap:12,background:'none',border:'none',cursor:'pointer',textAlign:'left'}}>
+        <span style={{fontSize:'1.2rem',lineHeight:1,flexShrink:0,marginTop:2}}>{item.emoji}</span>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:3}}>
+            <span style={{fontWeight:600,fontSize:'.9375rem'}}>{item.name}</span>
+            {item.bucket==='must-do'&&<span className="badge-must">★ Must Do</span>}
+            {item.bucket==='nice-to-have'&&<span className="badge-nice">✨ Nice</span>}
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+            {item.neighborhood&&<span style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>{item.neighborhood}</span>}
+            {type==='restaurant'&&item.cuisine&&<span className="pill pill-neutral" style={{padding:'1px 6px',fontSize:'.7rem'}}>{item.cuisine}</span>}
+            {type==='restaurant'&&item.priceRange&&<span style={{color:'var(--color-success)',fontSize:'.75rem',fontWeight:600}}>{item.priceRange}</span>}
+            {(item.bookingRequired||item.reservationRequired)&&<span className="pill pill-flag" style={{padding:'1px 6px',fontSize:'.7rem'}}>Booking req.</span>}
+          </div>
+        </div>
+        <span style={{color:'var(--color-ink-light)',fontSize:'.75rem',flexShrink:0,marginTop:2}}>{exp?'▲':'▼'}</span>
+      </button>
+      {exp&&(
+        <div style={{padding:'0 16px 16px',borderTop:'1px solid var(--color-border)'}}>
+          {item.address&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)',margin:'10px 0 4px'}}>📍 {item.address}</p>}
+          {item.hours&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>🕐 {item.hours}</p>}
+          {item.cost&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>💵 {item.cost}</p>}
+          {item.notes&&<p style={{fontSize:'.875rem',lineHeight:1.6,margin:'8px 0'}}>{item.notes}</p>}
+          {item.thingsToConsider?.length>0&&(
+            <div className="consider-block">
+              <p style={{fontSize:'.75rem',fontWeight:600,color:'var(--color-warning)',marginBottom:4}}>⚠️ Things to Consider</p>
+              {item.thingsToConsider.map((t,i)=><p key={i} style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginTop:4}}>• {t}</p>)}
+            </div>
+          )}
+          <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
+            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">🗺️ Maps</a>
+            {(item.bookingUrl||item.reservationUrl)&&<a href={item.bookingUrl||item.reservationUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">Book Now →</a>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── DAY VIEW ───────────────────────────────────────────────────────────────────
+function DayView({trip,day,onUpdateTrip}){
+  const [notes,setNotes]=useState(day.notes||'');
+  const [filter,setFilter]=useState('all');
+  const [copied,setCopied]=useState(false);
+  const dest=trip.destinations.find(d=>d.id===day.destinationId);
+  const acts=(day.activities||[]).filter(a=>filter==='all'||a.bucket===filter);
+  const rests=(day.restaurants||[]).filter(r=>filter==='all'||r.bucket===filter);
+  const hotel=trip.lodging?.find(l=>!l.destinationId||l.destinationId===day.destinationId);
+  const wxMap={GB:{icon:'🌤',cond:'Partly Cloudy',hi:17,lo:12,unit:'C',rain:30},FR:{icon:'☀️',cond:'Mild & Sunny',hi:20,lo:14,unit:'C',rain:10},US:{icon:'☀️',cond:'Sunny',hi:30,lo:24,unit:'F',rain:5}};
+  const wx=dest?wxMap[dest.countryCode]||null:null;
+  function saveNotes(v){onUpdateTrip({...trip,days:trip.days.map(d=>d.id===day.id?{...d,notes:v}:d)});}
+  function copyNotes(){navigator.clipboard?.writeText(notes).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1500)});}
+  return(
+    <div style={{padding:'0 16px 32px'}}>
+      <div style={{marginBottom:16}}>
+        <h2 className="font-display" style={{fontSize:'1.5rem',fontWeight:600,lineHeight:1.2,marginBottom:4}}>{day.label}</h2>
+        <p style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{formatDate(day.date)}{dest?` · ${dest.city}`:''}</p>
+      </div>
+      {wx&&(
+        <div className="weather-strip" style={{marginBottom:16}}>
+          <span style={{fontSize:'1.5rem'}}>{wx.icon}</span>
+          <div style={{flex:1}}>
+            <p style={{fontWeight:500,fontSize:'.9rem'}}>{wx.cond}</p>
+            <p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>High {wx.hi}°{wx.unit} · Low {wx.lo}°{wx.unit} · 🌧 {wx.rain}% rain</p>
+          </div>
+        </div>
+      )}
+      {hotel&&(
+        <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:'rgba(184,92,56,.05)',borderRadius:10,border:'1px solid rgba(184,92,56,.12)',marginBottom:16}}>
+          <span style={{fontSize:'1.1rem'}}>🏨</span>
+          <div>
+            <p style={{fontWeight:600,fontSize:'.875rem'}}>{hotel.name}</p>
+            <p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>{hotel.address}</p>
+          </div>
+        </div>
+      )}
+      <div style={{display:'flex',gap:8,marginBottom:16}}>
+        {['all','must-do','nice-to-have'].map(f=>(
+          <button key={f} className={`pill ${filter===f?'pill-accent':'pill-neutral'}`} style={{cursor:'pointer',border:'none'}} onClick={()=>setFilter(f)}>
+            {f==='all'?'All':f==='must-do'?'★ Must Do':'✨ Nice'}
+          </button>
+        ))}
+      </div>
+      {acts.length>0&&<div style={{marginBottom:16}}><p className="section-label">Activities</p>{acts.map(a=><ActivityCard key={a.id} item={a} type="activity"/>)}</div>}
+      {rests.length>0&&<div style={{marginBottom:16}}><p className="section-label">Food & Drinks</p>{rests.map(r=><ActivityCard key={r.id} item={r} type="restaurant"/>)}</div>}
+      {acts.length===0&&rests.length===0&&(
+        <div style={{textAlign:'center',padding:'32px 0',color:'var(--color-ink-light)'}}>
+          <p style={{fontSize:'1.5rem',marginBottom:8}}>🗺️</p>
+          <p style={{fontSize:'.9rem'}}>No activities planned for this day yet.</p>
+        </div>
+      )}
+      <div className="card" style={{padding:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+          <p className="section-label" style={{marginBottom:0}}>📝 Group Notes</p>
+          {notes&&<button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'4px 8px'}} onClick={copyNotes}>{copied?'✅ Copied':'📋 Copy'}</button>}
+        </div>
+        <textarea className="input-field" placeholder="Meet times, reminders, who's doing what..."
+          value={notes} onChange={e=>setNotes(e.target.value)} onBlur={()=>saveNotes(notes)}
+          style={{minHeight:80,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem'}}/>
+      </div>
+    </div>
+  );
+}
+
+// ── AT A GLANCE ────────────────────────────────────────────────────────────────
+function AtAGlance({trip}){
+  const allCount=trip.days.reduce((n,d)=>n+(d.activities||[]).length+(d.restaurants||[]).length,0);
+  return(
+    <div style={{padding:'0 16px 32px'}}>
+      <div className="card" style={{padding:16,marginBottom:16}}>
+        <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:4}}>{trip.days.length} days · {allCount} stops planned</p>
+        <p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {formatDateShort(trip.startDate)} – {formatDateShort(trip.endDate)}</p>
+      </div>
+      {trip.days.filter(d=>(d.activities||[]).length+(d.restaurants||[]).length>0).map(day=>{
+        const items=[...(day.activities||[]).map(a=>({...a,_t:'activity'})),...(day.restaurants||[]).map(r=>({...r,_t:'restaurant'}))];
+        return(
+          <div key={day.id} style={{marginBottom:10}}>
+            <p style={{fontSize:'.75rem',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-ink-light)',marginBottom:6,paddingLeft:4}}>{day.label} · {formatDateShort(day.date)}</p>
+            <div className="card" style={{overflow:'hidden'}}>
+              {items.map((item,i)=>(
+                <div key={item.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 16px',borderBottom:i<items.length-1?'1px solid var(--color-border)':'none'}}>
+                  <span style={{fontSize:'1.1rem',flexShrink:0}}>{item.emoji}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontWeight:500,fontSize:'.875rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{item.name}</p>
+                    {item.neighborhood&&<p style={{fontSize:'.75rem',color:'var(--color-ink-light)'}}>{item.neighborhood}</p>}
+                  </div>
+                  {item.bucket==='must-do'&&<span className="badge-must" style={{flexShrink:0}}>★</span>}
+                  {(item.bookingRequired||item.reservationRequired)&&<span style={{fontSize:'.7rem',color:'var(--color-flag)',flexShrink:0}}>📌</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── CELEBRATION SECTION ────────────────────────────────────────────────────────
+function CelebrationSection({trip,onUpdateTrip}){
+  const [notes,setNotes]=useState(trip.celebrationNotes||'');
+  const emoji=getOccasionEmoji(trip.occasion);
+  const sections=[
+    {label:'Venue & Event Details',ph:'Restaurant name, reservation time, dress code...'},
+    {label:'Surprise Logistics',ph:'What needs to happen before the honoree arrives...'},
+    {label:'Gift Coordination',ph:'Who\'s buying what, budget, delivery details...'},
+    {label:'Honoree Preferences',ph:'Dietary restrictions, things to avoid, special requests...'},
+  ];
+  return(
+    <div style={{padding:'0 16px 32px'}}>
+      <div className="card" style={{padding:16,marginBottom:12,borderLeft:'4px solid var(--color-accent-warm)'}}>
+        <p style={{fontWeight:700,fontSize:'1rem',marginBottom:4}}>{emoji} Celebrating {trip.honoree||getOccasionLabel(trip.occasion)}</p>
+        <p style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>Surprise logistics and event details. Only visible to editors.</p>
+      </div>
+      {sections.map((s,i)=>(
+        <div key={i} className="card" style={{padding:16,marginBottom:10}}>
+          <p className="section-label">{s.label}</p>
+          <textarea className="input-field" placeholder={s.ph} style={{minHeight:72,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem'}}/>
+        </div>
+      ))}
+      <div className="card" style={{padding:16}}>
+        <p className="section-label">General Celebration Notes</p>
+        <textarea className="input-field" placeholder="Anything else for the group..."
+          value={notes} onChange={e=>setNotes(e.target.value)}
+          onBlur={()=>onUpdateTrip({...trip,celebrationNotes:notes})}
+          style={{minHeight:80,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem'}}/>
+      </div>
+    </div>
+  );
+}
+
+// ── SHARE SHEET ────────────────────────────────────────────────────────────────
+function ShareSheet({trip,onClose}){
+  const [copied,setCopied]=useState(false);
+  const text=`📍 ${trip.title}\n✈️ ${trip.destinations.map(d=>d.city).join(' → ')}\n📅 ${formatDateShort(trip.startDate)} – ${formatDateShort(trip.endDate)}\n\nPlanned with Locale ✨`;
+  function copy(){navigator.clipboard?.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000)});}
+  function share(){if(navigator.share){navigator.share({title:trip.title,text}).catch(()=>{});}else copy();}
+  return(
+    <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet">
+        <div className="sheet-handle"/>
+        <div style={{padding:'16px 24px 8px',borderBottom:'1px solid var(--color-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <h2 className="font-display" style={{fontSize:'1.25rem',fontWeight:600}}>Share Trip</h2>
+          <button className="btn btn-ghost" onClick={onClose}>✕</button>
+        </div>
+        <div style={{padding:'20px 24px 32px'}}>
+          <div className={trip.coverGradient||'gradient-generic'} style={{height:120,marginBottom:20,borderRadius:'var(--radius)',overflow:'hidden',position:'relative'}}>
+            <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(28,28,26,.85) 0%,transparent 70%)'}}/>
+            <div style={{position:'absolute',bottom:0,left:0,right:0,padding:14}}>
+              <p className="font-display" style={{color:'white',fontSize:'1.1rem',fontWeight:600}}>{trip.title}</p>
+              <p style={{color:'rgba(255,255,255,.7)',fontSize:'.8rem'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {formatDateShort(trip.startDate)}</p>
+            </div>
+          </div>
+          <p className="section-label">Share with your group</p>
+          <div style={{background:'var(--color-cream)',border:'1.5px solid var(--color-border)',borderRadius:10,padding:'10px 14px',fontSize:'.8rem',color:'var(--color-ink-light)',whiteSpace:'pre-line',marginBottom:16}}>{text}</div>
+          <div style={{display:'flex',gap:8,marginBottom:20}}>
+            <button className="btn btn-primary" style={{flex:2}} onClick={share}>{navigator.share?'📤 Share':'📋 Copy Summary'}</button>
+            <button className="btn btn-secondary" style={{flex:1}} onClick={copy}>{copied?'✅ Copied':'Copy'}</button>
+          </div>
+          <div style={{height:1,background:'var(--color-border)',margin:'16px 0'}}/>
+          <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',textAlign:'center',lineHeight:1.5}}>Real-time collaborative sharing coming in a future update. For now, share this file via AirDrop, iCloud Drive, or Google Drive. 🚀</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function TripCard({trip, onClick, animDelay=0}) {
+  const {title, emoji, destinations, startDate, endDate, collaborators, occasion} = trip;
+  const {label: countLabel, urgent} = getCountdownInfo(startDate);
+  const firstDest = destinations[0];
+  const gradKey = firstDest?.countryCode === 'GB' ? 'london' : firstDest?.countryCode === 'FR' ? 'paris' : firstDest?.city?.toLowerCase().includes('miami') ? 'miami' : 'generic';
+  const gradClass = `gradient-${gradKey}`;
+  const flags = getIntlFlags(trip);
+  const checklist = trip.checklist || [];
+  const done = checklist.filter(i => i.checked).length;
+  const total = checklist.length;
+  const pct = total > 0 ? Math.round(done/total*100) : 0;
+  const nightCount = startDate && endDate ? Math.round((new Date(endDate)-new Date(startDate))/86400000) : null;
+  return (
+    <div className="trip-card" onClick={onClick} style={{animationDelay:`${animDelay}ms`}}>
+      <div className={`trip-card-header ${gradClass}`}>
+        <div className="trip-card-top-row">
+          <span className="trip-card-emoji-sm">{emoji || '✈️'}</span>
+          <span className="occasion-pill">{getOccasionEmoji(occasion)} {getOccasionLabel(occasion)}</span>
+        </div>
+        <div className="trip-card-meta">
+          <div className="trip-card-title">{title || 'My Trip'}</div>
+          <div className="trip-card-dates">
+            {formatDateShort(startDate)} – {formatDateShort(endDate)}
+            {nightCount ? ` · ${nightCount} nights` : ''}
+          </div>
+          <div className="trip-card-dest-strip">
+            {destinations.map(d=>(
+              <span key={d.id} className="trip-card-dest-chip">📍 {d.city}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="trip-card-body">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:flags.length>0||total>0?10:0}}>
+          <AvatarStack collaborators={collaborators}/>
+          <CountdownChip departDate={startDate}/>
+        </div>
+        {flags.length > 0 && (
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
+            {flags.map((f,i)=>(
+              <span key={i} className={`pill badge-${f.severity==='critical'?'must':'nice'}`} style={{fontSize:'.7rem'}}>{f.emoji} {f.label}</span>
+            ))}
+          </div>
+        )}
+        {total > 0 && (
+          <div style={{marginTop:8}}>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:'.72rem',color:'var(--color-ink-muted)',marginBottom:5}}>
+              <span style={{fontWeight:500,color:'var(--color-ink-light)'}}>Trip prep</span>
+              <span style={{color:pct===100?'var(--color-success)':'var(--color-ink-muted)'}}>{done}/{total}{pct===100?' ✓':''}</span>
+            </div>
+            <div style={{height:5,borderRadius:3,background:'var(--color-cream-dark)',overflow:'hidden'}}>
+              <div style={{height:'100%',width:`${pct}%`,background:pct===100?'var(--color-success)':'var(--color-accent)',borderRadius:3,transition:'width .5s ease'}}/>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NewTripSheet({onClose, onSave}) {
+  const [step, setStep] = React.useState(1);
+  const [form, setForm] = React.useState({
+    title:'', emoji:'✈️', occasion:'leisure', travelerCount:2, travelerPassportCountry:'US',
+    startDate:'', endDate:'',
+    destinations:[{id:uuid(), city:'', countryCode:'US', arrivalDate:'', departureDate:''}],
+    collaborators:[{id:uuid(), name:'Me', avatar:'M', color:AVATAR_COLORS[0]}],
+    flights:[], lodging:[]
+  });
+  const [errors, setErrors] = React.useState({});
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const setDest = (i,k,v) => setForm(f=>{const d=[...f.destinations];d[i]={...d[i],[k]:v};return {...f,destinations:d};});
+  const addDest = () => setForm(f=>({...f,destinations:[...f.destinations,{id:uuid(),city:'',countryCode:'US',arrivalDate:'',departureDate:''}]}));
+  const removeDest = (i) => setForm(f=>({...f,destinations:f.destinations.filter((_,idx)=>idx!==i)}));
+  const validate1 = () => {
+    const e={};
+    if(!form.title.trim()) e.title='Trip name is required';
+    setErrors(e);
+    return Object.keys(e).length===0;
+  };
+  const validate2 = () => {
+    const e={};
+    if(!form.startDate) e.startDate='Start date required';
+    if(!form.endDate) e.endDate='End date required';
+    if(form.destinations.some(d=>!d.city.trim())) e.destinations='All destinations need a city';
+    setErrors(e);
+    return Object.keys(e).length===0;
+  };
+  const handleCreate = () => {
+    try {
+      const checklist = generateChecklist(form);
+      const newTrip = {...form, id:uuid(), checklist, days:[], createdAt:new Date().toISOString()};
+      onSave(newTrip);
+    } catch(err) {
+      alert('Create failed: ' + err.message);
+      console.error('handleCreate error:', err);
+    }
+  };
+  const EMOJIS = ['✈️','🏖️','🏔️','🌍','🎉','💍','🎓','🌺','🗺️','🏛️'];
+  const PASSPORTS = [{code:'US',label:'🇺🇸 US'},{code:'GB',label:'🇬🇧 UK'},{code:'CA',label:'🇨🇦 Canada'},{code:'AU',label:'🇦🇺 Australia'},{code:'EU',label:'🇪🇺 EU/Schengen'},{code:'IN',label:'🇮🇳 India'}];
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={e=>e.stopPropagation()} style={{maxWidth:520,width:'100%',maxHeight:'92vh',overflowY:'auto'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+          <h2 style={{fontFamily:'var(--font-display)',fontSize:'1.5rem',fontWeight:600}}>New trip</h2>
+          <button className="btn btn-ghost" onClick={onClose} style={{fontSize:'1.2rem',padding:'4px 10px'}}>✕</button>
+        </div>
+        <div style={{display:'flex',gap:8,marginBottom:24}}>
+          {[1,2,3].map(s=>(
+            <div key={s} style={{display:'flex',alignItems:'center',gap:4}}>
+              <div className={`step-dot ${step===s?'active':step>s?'done':''}`}>{step>s?'✓':s}</div>
+              {s<3&&<div style={{flex:1,height:2,width:40,background:step>s?'var(--color-accent)':'var(--color-border)',borderRadius:1}}/>}
+            </div>
+          ))}
+          <span style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginLeft:8}}>{step===1?'Basics':step===2?'When & Where':'Preview'}</span>
+        </div>
+
+        {step===1 && (
+          <div style={{display:'flex',flexDirection:'column',gap:16}}>
+            <div>
+              <label className="section-label">Trip Name *</label>
+              <input className={`input ${errors.title?'input-error':''}`} value={form.title} onChange={e=>set('title',e.target.value)} placeholder="e.g. London & Paris 2026"/>
+              {errors.title&&<p style={{color:'var(--color-flag)',fontSize:'.75rem',marginTop:4}}>{errors.title}</p>}
+            </div>
+            <div>
+              <label className="section-label">Emoji</label>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                {EMOJIS.map(em=>(
+                  <button key={em} onClick={()=>set('emoji',em)} style={{fontSize:'1.5rem',padding:'6px 8px',borderRadius:8,border:form.emoji===em?'2px solid var(--color-accent)':'2px solid transparent',background:form.emoji===em?'var(--color-accent-soft)':'transparent',cursor:'pointer'}}>{em}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="section-label">Occasion</label>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                {OCCASION_OPTIONS.map(o=>(
+                  <button key={o.value} onClick={()=>set('occasion',o.value)} className={`pill ${form.occasion===o.value?'pill-accent':'pill-muted'}`} style={{cursor:'pointer'}}>{o.emoji} {o.label}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div>
+                <label className="section-label">Travelers</label>
+                <input className="input" type="number" min={1} max={20} value={form.travelerCount} onChange={e=>set('travelerCount',parseInt(e.target.value)||1)}/>
+              </div>
+              <div>
+                <label className="section-label">Passport Country</label>
+                <select className="input" value={form.travelerPassportCountry} onChange={e=>set('travelerPassportCountry',e.target.value)}>
+                  {PASSPORTS.map(p=><option key={p.code} value={p.code}>{p.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <button className="btn btn-primary" style={{marginTop:8}} onClick={()=>{if(validate1())setStep(2);}}>Next: When & Where →</button>
+          </div>
+        )}
+
+        {step===2 && (
+          <div style={{display:'flex',flexDirection:'column',gap:16}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div>
+                <label className="section-label">Start Date *</label>
+                <input className={`input ${errors.startDate?'input-error':''}`} type="date" value={form.startDate} onChange={e=>set('startDate',e.target.value)}/>
+                {errors.startDate&&<p style={{color:'var(--color-flag)',fontSize:'.75rem',marginTop:4}}>{errors.startDate}</p>}
+              </div>
+              <div>
+                <label className="section-label">End Date *</label>
+                <input className={`input ${errors.endDate?'input-error':''}`} type="date" value={form.endDate} onChange={e=>set('endDate',e.target.value)}/>
+                {errors.endDate&&<p style={{color:'var(--color-flag)',fontSize:'.75rem',marginTop:4}}>{errors.endDate}</p>}
+              </div>
+            </div>
+            <div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                <label className="section-label" style={{margin:0}}>Destinations *</label>
+                <button className="btn btn-ghost" style={{fontSize:'.8rem',padding:'4px 10px'}} onClick={addDest}>+ Add Stop</button>
+              </div>
+              {errors.destinations&&<p style={{color:'var(--color-flag)',fontSize:'.75rem',marginBottom:8}}>{errors.destinations}</p>}
+              {form.destinations.map((d,i)=>(
+                <div key={d.id} style={{border:'1px solid var(--color-border)',borderRadius:12,padding:12,marginBottom:8,background:'var(--color-cream)'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+                    <span style={{fontSize:'.8rem',fontWeight:600,color:'var(--color-ink-light)'}}>Stop {i+1}</span>
+                    {form.destinations.length>1&&<button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'2px 8px',color:'var(--color-flag)'}} onClick={()=>removeDest(i)}>Remove</button>}
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8,marginBottom:8}}>
+                    <input className="input" placeholder="City (e.g. Paris)" value={d.city} onChange={e=>setDest(i,'city',e.target.value)}/>
+                    <input className="input" placeholder="Code (FR)" value={d.countryCode} onChange={e=>setDest(i,'countryCode',e.target.value.toUpperCase().slice(0,2))} maxLength={2}/>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                    <div><label style={{fontSize:'.7rem',color:'var(--color-ink-light)'}}>Arrival</label><input className="input" type="date" value={d.arrivalDate} onChange={e=>setDest(i,'arrivalDate',e.target.value)}/></div>
+                    <div><label style={{fontSize:'.7rem',color:'var(--color-ink-light)'}}>Departure</label><input className="input" type="date" value={d.departureDate} onChange={e=>setDest(i,'departureDate',e.target.value)}/></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:8,marginTop:8}}>
+              <button className="btn btn-secondary" style={{flex:1}} onClick={()=>setStep(1)}>← Back</button>
+              <button className="btn btn-primary" style={{flex:1}} onClick={()=>{if(validate2())setStep(3);}}>Preview →</button>
+            </div>
+          </div>
+        )}
+
+        {step===3 && (
+          <div>
+            <div style={{border:'1px solid var(--color-border)',borderRadius:16,overflow:'hidden',marginBottom:20}}>
+              <div className={`trip-card-header gradient-${form.destinations[0]?.countryCode==='GB'?'london':form.destinations[0]?.countryCode==='FR'?'paris':form.destinations[0]?.city?.toLowerCase().includes('miami')?'miami':'generic'}`} style={{padding:'20px 16px'}}>
+                <div style={{fontSize:'2rem'}}>{form.emoji}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:700,color:'#fff'}}>{form.title||'Your Trip'}</div>
+                  <div style={{fontSize:'.8rem',color:'rgba(255,255,255,.8)'}}>{formatDateShort(form.startDate)} – {formatDateShort(form.endDate)}</div>
+                </div>
+              </div>
+              <div style={{padding:16}}>
+                <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:12}}>Destinations: {form.destinations.filter(d=>d.city).map(d=>d.city).join(' → ')}</p>
+                <p style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>Auto-checklist will be generated ({form.destinations.some(d=>d.countryCode!=='US')?'international':'domestic'} trip · {getOccasionLabel(form.occasion)})</p>
+                {getIntlFlags(form).length>0&&(
+                  <div style={{marginTop:12,display:'flex',gap:8,flexWrap:'wrap'}}>
+                    {getIntlFlags(form).map((f,i)=><span key={i} className="pill badge-must" style={{fontSize:'.75rem'}}>{f.emoji} {f.label}</span>)}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn btn-secondary" style={{flex:1}} onClick={()=>setStep(2)}>← Back</button>
+              <button className="btn btn-primary" style={{flex:1}} onClick={handleCreate}>✨ Create trip</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function generateTripPDF(trip) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, margin = 18, col = W - margin * 2;
+  let y = 0;
+
+  // ── Helpers ──
+  const ink   = [26,  23,  20];
+  const ocean = [43,  95, 110];
+  const muted = [138,135,132];
+  const cream = [245,242,236];
+
+  function setFont(size, style='normal', color=ink) {
+    doc.setFontSize(size); doc.setFont('helvetica', style);
+    doc.setTextColor(...color);
+  }
+  function line(col=[200,198,195], x1=margin, x2=W-margin) {
+    doc.setDrawColor(...col); doc.setLineWidth(0.3);
+    doc.line(x1, y, x2, y); y += 5;
+  }
+  function wrap(text, x, maxW, lineH=5) {
+    const lines = doc.splitTextToSize(String(text||''), maxW);
+    doc.text(lines, x, y); y += lines.length * lineH;
+    return lines.length;
+  }
+  function pageCheck(needed=20) {
+    if (y + needed > 275) { doc.addPage(); y = 18; }
+  }
+
+  // ── Cover header ──
+  doc.setFillColor(...ocean);
+  doc.rect(0, 0, W, 42, 'F');
+  doc.setFontSize(22); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  doc.text(trip.title || 'Trip Itinerary', margin, 18);
+  doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(200,228,233);
+  const dateStr = `${formatDate(trip.startDate)} – ${formatDate(trip.endDate)}`;
+  doc.text(dateStr, margin, 27);
+  const destStr = (trip.destinations||[]).map(d=>d.city).join(' → ');
+  doc.text(destStr, margin, 34);
+  // Locale wordmark top-right
+  doc.setFontSize(11); doc.setFont('helvetica','italic'); doc.setTextColor(255,255,255);
+  doc.text('Locale', W - margin, 12, {align:'right'});
+  y = 52;
+
+  // ── Travelers ──
+  if ((trip.collaborators||[]).length > 0) {
+    setFont(9, 'bold', muted);
+    doc.text('TRAVELERS', margin, y); y += 5;
+    setFont(10, 'normal', ink);
+    doc.text(trip.collaborators.map(c=>c.name).join(', '), margin, y); y += 8;
+    line();
+  }
+
+  // ── Destinations ──
+  setFont(9,'bold',muted); doc.text('DESTINATIONS', margin, y); y += 5;
+  (trip.destinations||[]).forEach(d => {
+    setFont(10,'bold',ocean);
+    doc.text(`${d.city}`, margin, y);
+    if (d.arrivalDate) {
+      setFont(9,'normal',muted);
+      doc.text(`${formatDateShort(d.arrivalDate)} – ${formatDateShort(d.departureDate)}`, margin + 40, y);
+    }
+    y += 6;
+  });
+  y += 2; line();
+
+  // ── Checklist summary ──
+  const checklist = trip.checklist || [];
+  if (checklist.length > 0) {
+    pageCheck(30);
+    setFont(9,'bold',muted); doc.text('CHECKLIST', margin, y); y += 5;
+    const checked = checklist.filter(i=>i.checked).length;
+    setFont(9,'normal',ink);
+    doc.text(`${checked} of ${checklist.length} items complete`, margin, y); y += 6;
+    // Group by category
+    const cats = [...new Set(checklist.map(i=>i.category))];
+    cats.forEach(cat => {
+      pageCheck(20);
+      setFont(8,'bold',[80,80,80]); doc.text(cat.toUpperCase(), margin, y); y += 4;
+      checklist.filter(i=>i.category===cat).forEach(item => {
+        const mark = item.checked ? '☑' : '☐';
+        setFont(8,'normal', item.checked ? muted : ink);
+        doc.text(`${mark}  ${item.label}`, margin + 3, y); y += 5;
+        pageCheck(10);
+      });
+      y += 2;
+    });
+    line();
+  }
+
+  // ── Days ──
+  (trip.days||[]).forEach(day => {
+    pageCheck(30);
+    // Day header
+    doc.setFillColor(...cream);
+    doc.rect(margin - 2, y - 4, col + 4, 10, 'F');
+    setFont(11,'bold',ocean);
+    doc.text(day.label || formatDate(day.date), margin, y + 2); y += 10;
+
+    // Activities
+    (day.activities||[]).forEach(a => {
+      pageCheck(16);
+      setFont(9,'bold',ink);
+      doc.text(`${a.emoji||'•'}  ${a.name}`, margin + 2, y); y += 5;
+      if (a.address) { setFont(8,'normal',muted); wrap(a.address, margin + 6, col - 6); }
+      if (a.notes)   { setFont(8,'normal',ink);   wrap(a.notes,   margin + 6, col - 6); }
+      y += 2; pageCheck(10);
+    });
+
+    // Restaurants
+    (day.restaurants||[]).forEach(r => {
+      pageCheck(14);
+      setFont(9,'bold',ink);
+      doc.text(`${r.emoji||'🍽️'}  ${r.name}`, margin + 2, y); y += 5;
+      if (r.notes) { setFont(8,'normal',ink); wrap(r.notes, margin + 6, col - 6); }
+      y += 2; pageCheck(10);
+    });
+
+    // Day notes
+    if (day.notes) {
+      pageCheck(12);
+      setFont(8,'italic',[100,100,100]);
+      wrap(`Notes: ${day.notes}`, margin + 2, col - 4);
+    }
+    y += 4; line([220,218,214]);
+  });
+
+  // ── Footer on last page ──
+  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...muted);
+  doc.text(`Generated by Locale · ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`, W/2, 290, {align:'center'});
+
+  // Save
+  const filename = `${(trip.title||'trip').toLowerCase().replace(/[^a-z0-9]+/g,'-')}-locale.pdf`;
+  doc.save(filename);
+}
+
+// ── AI ITINERARY PLANNER ───────────────────────────────────────────────────────
+function ItineraryAIPlanner({trip, onUpdateTrip}) {
+  const [apiKey, setApiKeyState] = React.useState(getAIKey);
+  const [showKeyInput, setShowKeyInput] = React.useState(!getAIKey());
+  const [prompt, setPrompt] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [streamText, setStreamText] = React.useState('');
+
+  const nightCount = trip.startDate && trip.endDate
+    ? Math.round((new Date(trip.endDate) - new Date(trip.startDate)) / 86400000)
+    : null;
+
+  const saveKey = (k) => { setAIKey(k.trim()); setApiKeyState(k.trim()); setShowKeyInput(false); };
+
+  const buildSystemPrompt = () => `You are a travel itinerary planner. Given a trip description, generate a detailed day-by-day itinerary as a JSON array.
+
+Trip context:
+- Name: ${trip.title}
+- Destinations: ${trip.destinations.map(d=>`${d.city} (${d.countryCode})`).join(', ')}
+- Dates: ${trip.startDate} to ${trip.endDate} (${nightCount} nights)
+- Occasion: ${trip.occasion}
+- Travelers: ${trip.travelerCount || 2}
+${trip.lodging?.length ? `- Staying at: ${trip.lodging.map(l=>l.name+' in '+(l.address||'')).join('; ')}` : ''}
+
+Return ONLY a valid JSON array of day objects. No markdown, no explanation — just the raw JSON array starting with [ and ending with ].
+
+Each day object must follow this exact shape:
+{
+  "id": "day-1",
+  "date": "YYYY-MM-DD",
+  "label": "Day 1 — Arrival & Disneyland",
+  "destinationId": "${trip.destinations[0]?.id || 'd1'}",
+  "notes": "",
+  "activities": [
+    {
+      "id": "a1",
+      "name": "Disneyland Park",
+      "emoji": "🎢",
+      "address": "1313 Disneyland Dr, Anaheim, CA 92802",
+      "neighborhood": "Anaheim",
+      "bucket": "must-do",
+      "category": "entertainment",
+      "bookingRequired": true,
+      "bookingUrl": "https://disneyland.disney.go.com/tickets/",
+      "notes": "Buy tickets in advance. Arrive at rope drop (8am) for shorter lines.",
+      "thingsToConsider": ["Download Disneyland app for wait times", "Book Genie+ for popular rides"],
+      "sortOrder": 0
+    }
+  ],
+  "restaurants": [
+    {
+      "id": "r1",
+      "name": "Ralph Brennan's Jazz Kitchen",
+      "emoji": "🍽️",
+      "address": "1590 S Disneyland Dr, Anaheim, CA",
+      "neighborhood": "Downtown Disney",
+      "bucket": "must-do",
+      "cuisine": "Cajun/Creole",
+      "mealType": "dinner",
+      "reservationRequired": true,
+      "priceRange": "$$$",
+      "notes": "Great atmosphere, book ahead.",
+      "thingsToConsider": [],
+      "sortOrder": 0
+    }
+  ]
+}
+
+Rules:
+- Generate one day object per day of the trip (from startDate to endDate inclusive)
+- Include 2–4 activities and 1–2 restaurants per day
+- Spread activities logically by geography — cluster nearby things on the same day
+- First day: arrival + light activities. Last day: checkout + departure-friendly spots.
+- Use real, specific venue names and addresses
+- Emojis should match the activity type
+- bucket is "must-do", "nice-to-have", or "if-time"
+- category is one of: sightseeing, food, outdoor, shopping, entertainment, culture, tour, other
+- mealType is one of: breakfast, lunch, dinner, cafe, drinks`;
+
+  const generate = async () => {
+    if (!apiKey) { setShowKeyInput(true); return; }
+    if (!prompt.trim()) { setError('Tell me what you want to do on this trip first.'); return; }
+    setLoading(true); setError(''); setStreamText('');
+
+    try {
+      const fullPrompt = buildSystemPrompt() + '\n\nUser request: ' + prompt;
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: fullPrompt }] }],
+            generationConfig: { maxOutputTokens: 8000, temperature: 0.7 },
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `API error ${res.status}`);
+      }
+
+      const data = await res.json();
+      const full = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (!full) throw new Error('Empty response from Gemini. Please try again.');
+      setStreamText(full);
+
+      // Parse the JSON from the response
+      const jsonMatch = full.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error('No valid JSON array found in response. Try again.');
+      const days = JSON.parse(jsonMatch[0]);
+
+      // Assign proper IDs and link destinations
+      const destId = trip.destinations[0]?.id || 'd1';
+      const tripStart = new Date(trip.startDate + 'T12:00:00');
+      const normalizedDays = days.map((day, i) => {
+        const date = new Date(tripStart);
+        date.setDate(date.getDate() + i);
+        const dateStr = date.toISOString().slice(0, 10);
+        return {
+          ...day,
+          id: uuid(),
+          date: day.date || dateStr,
+          destinationId: day.destinationId || destId,
+          activities: (day.activities || []).map((a, j) => ({...a, id: uuid(), sortOrder: j})),
+          restaurants: (day.restaurants || []).map((r, j) => ({...r, id: uuid(), sortOrder: j})),
+        };
+      });
+
+      onUpdateTrip({...trip, days: normalizedDays});
+      setStreamText('');
+    } catch(e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (showKeyInput) return (
+    <div style={{padding:'40px 20px',maxWidth:480,margin:'0 auto'}}>
+      <div style={{background:'var(--color-surface)',borderRadius:16,padding:24,border:'1px solid var(--color-border)'}}>
+        <div style={{fontSize:'1.8rem',marginBottom:12,textAlign:'center'}}>🔑</div>
+        <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600,marginBottom:8,textAlign:'center'}}>Add your Gemini API key</h3>
+        <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',marginBottom:16,textAlign:'center',lineHeight:1.5}}>
+          Locale uses Google Gemini to generate your itinerary. <strong>Free tier available</strong> — no credit card required.
+          Your key is stored on this device only and only sent to Google's API.
+          <br/><br/>
+          Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" style={{color:'var(--color-accent)'}}>aistudio.google.com/apikey</a>
+        </p>
+        <input
+          className="input"
+          type="password"
+          placeholder="AIza..."
+          defaultValue={apiKey}
+          id="ai-key-input"
+          style={{marginBottom:12}}
+        />
+        <div style={{display:'flex',gap:8}}>
+          {apiKey && <button className="btn btn-secondary" style={{flex:1}} onClick={()=>setShowKeyInput(false)}>Cancel</button>}
+          <button className="btn btn-primary" style={{flex:2}} onClick={()=>saveKey(document.getElementById('ai-key-input').value)}>
+            Save key & continue
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{padding:'0 0 40px'}}>
+      {/* Header */}
+      <div style={{background:'linear-gradient(135deg,var(--color-accent) 0%,#1a3d47 100%)',borderRadius:16,padding:'24px 20px',marginBottom:20,position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',top:-20,right:-20,fontSize:'6rem',opacity:.08,transform:'rotate(-15deg)'}}>✨</div>
+        <div style={{position:'relative'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+            <div>
+              <p style={{color:'rgba(255,255,255,.7)',fontSize:'.75rem',letterSpacing:'.08em',textTransform:'uppercase',marginBottom:4}}>AI Itinerary Planner</p>
+              <h3 style={{fontFamily:'var(--font-display)',color:'#fff',fontSize:'1.4rem',fontWeight:600,marginBottom:4}}>{trip.title}</h3>
+              <p style={{color:'rgba(255,255,255,.75)',fontSize:'.83rem'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {nightCount} nights</p>
+            </div>
+            <button onClick={()=>setShowKeyInput(true)} style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 10px',color:'rgba(255,255,255,.8)',fontSize:'.72rem',cursor:'pointer'}}>🔑 API Key</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Prompt area */}
+      <div style={{marginBottom:16}}>
+        <label className="section-label">What do you want to do?</label>
+        <textarea
+          className="input"
+          rows={5}
+          placeholder={`Describe your trip plans in plain English. For example:\n\n"We're staying at the Disneyland Hotel. Day 1 we want to do Disneyland park — hit all the classic rides. Day 2 we want to explore Downtown LA: walk around Grand Central Market, visit LACMA, dinner in Little Tokyo. Day 3 we'll head to Santa Monica pier, Venice Beach, then fly home."`}
+          value={prompt}
+          onChange={e=>setPrompt(e.target.value)}
+          style={{minHeight:140,resize:'vertical',lineHeight:1.6,fontSize:'.875rem'}}
+        />
+      </div>
+
+      {error && <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:10,padding:'10px 14px',fontSize:'.83rem',color:'#b91c1c',marginBottom:14}}>{error}</div>}
+
+      {loading && streamText && (
+        <div style={{background:'var(--color-surface)',border:'1px solid var(--color-border)',borderRadius:10,padding:'12px 14px',marginBottom:14,maxHeight:160,overflowY:'auto'}}>
+          <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',marginBottom:6,fontWeight:600,letterSpacing:'.05em',textTransform:'uppercase'}}>✨ Generating your itinerary…</p>
+          <pre style={{fontSize:'.72rem',color:'var(--color-ink-light)',whiteSpace:'pre-wrap',wordBreak:'break-all',fontFamily:'monospace',margin:0}}>{streamText.slice(-600)}</pre>
+        </div>
+      )}
+
+      <button
+        className="btn btn-primary"
+        style={{width:'100%',padding:'14px',fontSize:'1rem',opacity:loading?0.7:1}}
+        onClick={generate}
+        disabled={loading}
+      >
+        {loading ? '✨ Building your itinerary…' : '✨ Generate itinerary with AI'}
+      </button>
+
+      <p style={{textAlign:'center',fontSize:'.75rem',color:'var(--color-ink-muted)',marginTop:10,lineHeight:1.5}}>
+        Powered by Gemini (free tier) · Takes about 10–20 seconds · You can edit everything after
+      </p>
+    </div>
+  );
+}
+
+function TripDetail({trip, onBack, onUpdateTrip}) {
+  const [activeTab, setActiveTab] = React.useState('overview');
+  const [activeDay, setActiveDay] = React.useState(trip.days?.[0]?.id || null);
+  const [showShare, setShowShare] = React.useState(false);
+  const flags = getIntlFlags(trip);
+  const {label:countdown} = getCountdownInfo(trip.startDate);
+  const firstDest = trip.destinations?.[0];
+  const gradKey = firstDest?.countryCode==='GB'?'london':firstDest?.countryCode==='FR'?'paris':firstDest?.city?.toLowerCase().includes('miami')?'miami':'generic';
+
+  const TABS = [
+    {id:'overview',label:'Overview',icon:'🗺️'},
+    {id:'days',label:'Days',icon:'📅'},
+    {id:'checklist',label:'Checklist',icon:'✅'},
+    {id:'tidbits',label:'City Tips',icon:'💡'},
+  ];
+  if(['bachelorette','birthday','anniversary','honeymoon','celebration'].includes(trip.occasion)) TABS.push({id:'celebrate',label:'Celebrate',icon:'🎉'});
+
+  const handleChecklistUpdate = (updatedChecklist) => {
+    const updatedTrip = {...trip, checklist: updatedChecklist};
+    onUpdateTrip(updatedTrip);
+  };
+
+  return (
+    <div style={{minHeight:'100vh',background:'var(--color-cream)'}}>
+      {/* Header */}
+      <div className={`trip-header gradient-${gradKey}`} style={{position:'relative',overflow:'hidden'}}>
+        {['bachelorette','birthday','celebration'].includes(trip.occasion) && (
+          <div className="celebration-band">
+            {Array(20).fill(null).map((_,i)=><span key={i} style={{animationDelay:`${i*.15}s`}}>{['✨','🎉','🥂','💫','🎊'][i%5]}</span>)}
+          </div>
+        )}
+        <div style={{position:'relative',zIndex:1,padding:'60px 20px 24px',maxWidth:720,margin:'0 auto'}}>
+          <button onClick={onBack} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',marginBottom:16,backdropFilter:'blur(4px)'}}>← Back</button>
+          <div style={{display:'flex',alignItems:'flex-start',gap:16}}>
+            <span style={{fontSize:'2.5rem'}}>{trip.emoji}</span>
+            <div style={{flex:1}}>
+              <h1 style={{fontFamily:'var(--font-display)',fontSize:'2rem',fontWeight:700,color:'#fff',lineHeight:1.2,marginBottom:4}}>{trip.title}</h1>
+              <p style={{color:'rgba(255,255,255,.85)',fontSize:'.9rem'}}>{formatDate(trip.startDate)} – {formatDate(trip.endDate)} · {countdown}</p>
+              <div style={{marginTop:10,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+                <AvatarStack collaborators={trip.collaborators}/>
+                <span className="occasion-pill">{getOccasionEmoji(trip.occasion)} {getOccasionLabel(trip.occasion)}</span>
+              </div>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={()=>generateTripPDF(trip)} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>↓ PDF</button>
+              <button onClick={()=>setShowShare(true)} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>Share</button>
+            </div>
+          </div>
+          {flags.length>0&&(
+            <div style={{marginTop:16,display:'flex',gap:8,flexWrap:'wrap'}}>
+              {flags.map((f,i)=>(
+                <div key={i} style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)'}}>
+                  <span style={{color:'#fff',fontSize:'.8rem'}}>{f.emoji} <strong>{f.label}</strong> · {f.desc}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Flights strip */}
+          {trip.flights?.length>0&&(
+            <div style={{marginTop:16,display:'flex',gap:8,overflowX:'auto',paddingBottom:4}}>
+              {trip.flights.map(fl=>(
+                <a key={fl.id} href={getFlightAwareUrl(fl.flightNumber)} target="_blank" rel="noopener" style={{background:'rgba(255,255,255,.15)',borderRadius:10,padding:'8px 12px',textDecoration:'none',color:'#fff',fontSize:'.78rem',whiteSpace:'nowrap',backdropFilter:'blur(4px)',flexShrink:0}}>
+                  ✈ {fl.flightNumber} · {fl.origin}→{fl.destination} · {formatDateShort(fl.departureDate)}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Sticky Pill Nav */}
+      <div style={{position:'sticky',top:0,zIndex:100,background:'var(--color-surface)',borderBottom:'1px solid var(--color-border)',padding:'12px 20px',overflowX:'auto',whiteSpace:'nowrap'}}>
+        <div style={{display:'inline-flex',gap:8,maxWidth:720,margin:'0 auto'}}>
+          {TABS.map(t=>(
+            <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`pill ${activeTab===t.id?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      <div style={{maxWidth:1100,margin:'0 auto',padding:'24px 28px 80px'}}>
+        {activeTab==='overview' && (
+          <div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:24}}>
+              {trip.destinations.map(d=>(
+                <div key={d.id} style={{background:'var(--color-surface)',borderRadius:12,padding:16,border:'1px solid var(--color-border)',textAlign:'center'}}>
+                  <div style={{fontSize:'1.5rem',marginBottom:4}}>{d.countryCode==='US'?'🇺🇸':d.countryCode==='GB'?'🇬🇧':d.countryCode==='FR'?'🇫🇷':d.countryCode==='IT'?'🇮🇹':d.countryCode==='JP'?'🇯🇵':'📍'}</div>
+                  <div style={{fontFamily:'var(--font-display)',fontSize:'1rem',fontWeight:600}}>{d.city}</div>
+                  {d.arrivalDate&&<div style={{fontSize:'.72rem',color:'var(--color-ink-light)',marginTop:4}}>{formatDateShort(d.arrivalDate)} – {formatDateShort(d.departureDate)}</div>}
+                </div>
+              ))}
+            </div>
+            <AtAGlance trip={trip}/>
+            <CurrencyConverter destinations={trip.destinations}/>
+          </div>
+        )}
+        {activeTab==='days' && (
+          <div>
+            {(trip.days||[]).length > 0 ? (
+              <>
+                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:20,alignItems:'center'}}>
+                  {(trip.days||[]).map(day=>(
+                    <button key={day.id} onClick={()=>setActiveDay(day.id)} className={`pill ${activeDay===day.id?'pill-accent':'pill-muted'}`} style={{cursor:'pointer'}}>{formatDateShort(day.date)}</button>
+                  ))}
+                  <button
+                    onClick={()=>{ if(window.confirm('Regenerate itinerary? This will replace all current days.')) onUpdateTrip({...trip,days:[]}); }}
+                    style={{marginLeft:'auto',background:'none',border:'1px solid var(--color-border)',borderRadius:20,padding:'4px 12px',fontSize:'.75rem',color:'var(--color-ink-muted)',cursor:'pointer'}}
+                  >✨ Regenerate</button>
+                </div>
+                {activeDay && <DayView trip={trip} day={(trip.days||[]).find(d=>d.id===activeDay)} onUpdateTrip={onUpdateTrip}/>}
+              </>
+            ) : (
+              <ItineraryAIPlanner trip={trip} onUpdateTrip={(updated)=>{ onUpdateTrip(updated); setActiveDay(updated.days?.[0]?.id||null); }}/>
+            )}
+          </div>
+        )}
+        {activeTab==='checklist' && <ChecklistView trip={trip} onUpdate={handleChecklistUpdate}/>}
+        {activeTab==='tidbits' && <CityTidbits destinations={trip.destinations}/>}
+        {activeTab==='celebrate' && <CelebrationSection trip={trip} onUpdateTrip={onUpdateTrip}/>}
+      </div>
+
+      {showShare && <ShareSheet trip={trip} onClose={()=>setShowShare(false)}/>}
+    </div>
+  );
+}
+
+function Dashboard({trips, onSelectTrip, onNewTrip}) {
+  const [sort, setSort] = React.useState('date');
+  const sorted = [...trips].sort((a,b)=>{
+    if(sort==='date') return new Date(a.startDate)-new Date(b.startDate);
+    if(sort==='name') return a.title.localeCompare(b.title);
+    if(sort==='countdown') return getCountdownInfo(a.startDate).days - getCountdownInfo(b.startDate).days;
+    return 0;
+  });
+  return (
+    <div style={{minHeight:'100vh',background:'var(--color-cream)'}}>
+      <div className="dashboard-header">
+        <div style={{maxWidth:1100,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div>
+            <h1 className="dashboard-wordmark">Loc<span>a</span>le</h1>
+            <p style={{fontSize:'.78rem',color:'var(--color-ink-muted)',marginTop:3,fontStyle:'italic',fontFamily:'var(--font-display)'}}>Your trips, beautifully kept.</p>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <select className="input" style={{padding:'6px 10px',fontSize:'.8rem',width:'auto'}} value={sort} onChange={e=>setSort(e.target.value)}>
+              <option value="date">Sort: Date</option>
+              <option value="name">Sort: Name</option>
+              <option value="countdown">Sort: Soonest</option>
+            </select>
+            <button className="btn btn-primary" onClick={onNewTrip} style={{whiteSpace:'nowrap'}}>+ New trip</button>
+          </div>
+        </div>
+      </div>
+      <div style={{maxWidth:720,margin:'0 auto',padding:'24px 20px 80px'}}>
+        {trips.length===0 ? (
+          <div style={{textAlign:'center',padding:'80px 20px'}}>
+            <div style={{fontSize:'4rem',marginBottom:16}}>🌍</div>
+            <h2 style={{fontFamily:'var(--font-display)',fontSize:'1.8rem',fontWeight:600,color:'var(--color-ink)',marginBottom:8}}>No trips yet</h2>
+            <p style={{color:'var(--color-ink-light)',marginBottom:24}}>Every great trip starts here. Add your first destination, build your checklist, and bring the crew.</p>
+            <button className="btn btn-primary" style={{fontSize:'1rem',padding:'14px 28px'}} onClick={onNewTrip}>✨ Plan your first trip</button>
+          </div>
+        ) : (
+          <div className="trip-grid">
+            {sorted.map((trip,i)=>(
+              <TripCard key={trip.id} trip={trip} onClick={()=>onSelectTrip(trip.id)} animDelay={i*80}/>
+            ))}
+          </div>
+        )}
+      </div>
+      <button className="fab" onClick={onNewTrip} title="New trip">+</button>
+    </div>
+  );
+}
+
+function App() {
+  const [trips, setTrips] = React.useState(()=>loadTrips());
+  const [view, setView] = React.useState('dashboard');
+  const [activeTripId, setActiveTripId] = React.useState(null);
+  const [showNew, setShowNew] = React.useState(false);
+  const [offline, setOffline] = React.useState(!navigator.onLine);
+  const [installPrompt, setInstallPrompt] = React.useState(null);
+  const [showInstall, setShowInstall] = React.useState(false);
+
+  React.useEffect(()=>{
+    const goOffline = ()=>setOffline(true);
+    const goOnline = ()=>setOffline(false);
+    window.addEventListener('offline',goOffline);
+    window.addEventListener('online',goOnline);
+    const handler = e=>{e.preventDefault();setInstallPrompt(e);setShowInstall(true);};
+    window.addEventListener('beforeinstallprompt',handler);
+    return ()=>{
+      window.removeEventListener('offline',goOffline);
+      window.removeEventListener('online',goOnline);
+      window.removeEventListener('beforeinstallprompt',handler);
+    };
+  },[]);
+
+  const saveAndSet = (newTrips) => { setTrips(newTrips); saveTrips(newTrips); };
+
+  const handleNewTrip = (trip) => {
+    try {
+      const normalized = normalizeTrip(trip);
+      const updated = [...trips, normalized];
+      saveAndSet(updated);
+      setShowNew(false);
+      setActiveTripId(normalized.id);
+      setView('detail');
+    } catch(err) {
+      alert('Save failed: ' + err.message);
+      console.error('handleNewTrip error:', err);
+    }
+  };
+
+  const handleUpdateTrip = (updatedTrip) => {
+    const updated = trips.map(t=>t.id===updatedTrip.id?updatedTrip:t);
+    saveAndSet(updated);
+  };
+
+  const handleInstall = async () => {
+    if(!installPrompt) return;
+    installPrompt.prompt();
+    const {outcome} = await installPrompt.userChoice;
+    if(outcome==='accepted') setShowInstall(false);
+  };
+
+  const activeTrip = trips.find(t=>t.id===activeTripId);
+
+  return (
+    <div>
+      {offline && (
+        <div className="offline-banner">📡 Offline — your trips are saved and fully accessible</div>
+      )}
+      {showInstall && (
+        <div className="install-banner">
+          <span>📲 Add Locale to your home screen for the best experience</span>
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn btn-primary" style={{padding:'6px 14px',fontSize:'.8rem'}} onClick={handleInstall}>Install</button>
+            <button className="btn btn-ghost" style={{padding:'6px 14px',fontSize:'.8rem'}} onClick={()=>setShowInstall(false)}>Not now</button>
+          </div>
+        </div>
+      )}
+      {view==='dashboard' && (
+        <Dashboard trips={trips} onSelectTrip={(id)=>{setActiveTripId(id);setView('detail');}} onNewTrip={()=>setShowNew(true)}/>
+      )}
+      {view==='detail' && activeTrip && (
+        <TripDetail trip={activeTrip} onBack={()=>setView('dashboard')} onUpdateTrip={handleUpdateTrip}/>
+      )}
+      {showNew && <NewTripSheet onClose={()=>setShowNew(false)} onSave={handleNewTrip}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+
+</script>
+
+<script>
+// PWA Manifest via Blob URL
+const manifest = {
+  name: "Locale — Your trips, beautifully kept.",
+  short_name: "Locale",
+  description: "Your trips, beautifully kept.",
+  start_url: ".",
+  display: "standalone",
+  background_color: "#F5F2EC",
+  theme_color: "#2B5F6E",
+  orientation: "portrait-primary",
+  icons: [
+    { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232B5F6E'/><text y='.9em' font-size='70' x='15'>✈️</text></svg>", sizes: "192x192", type: "image/svg+xml" },
+    { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232B5F6E'/><text y='.9em' font-size='70' x='15'>✈️</text></svg>", sizes: "512x512", type: "image/svg+xml" }
+  ]
+};
+const manifestBlob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+const manifestUrl = URL.createObjectURL(manifestBlob);
+document.getElementById('manifest-link').href = manifestUrl;
+
+// Service Worker via Blob URL — cache-first offline strategy
+const swCode = `
+const CACHE = 'locale-v2';
+const STATIC = [
+  'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
+  'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
+];
+
+self.addEventListener('install', e => {
+  self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE).then(c => {
+      // Cache external CDN assets; ignore failures (font subsets load separately)
+      return Promise.allSettled(STATIC.map(url => c.add(url)));
+    })
+  );
+});
+
+self.addEventListener('activate', e => {
+  // Remove old cache versions
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    ).then(() => clients.claim())
+  );
+});
+
+self.addEventListener('fetch', e => {
+  const { request } = e;
+  const url = new URL(request.url);
+
+  // Navigation requests: serve the cached app shell (the single HTML file)
+  if (request.mode === 'navigate') {
+    e.respondWith(
+      caches.match(request)
+        .then(cached => cached || fetch(request).then(res => {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(request, clone));
+          return res;
+        }))
+        .catch(() => caches.match('/') || new Response('<h1>Locale</h1><p>You are offline. Open the app while connected first to enable full offline support.</p>', { headers: { 'Content-Type': 'text/html' } }))
+    );
+    return;
+  }
+
+  // CDN assets & fonts: cache-first
+  if (url.origin !== self.location.origin ||
+      url.hostname.includes('cdnjs') ||
+      url.hostname.includes('fonts.googleapis') ||
+      url.hostname.includes('fonts.gstatic')) {
+    e.respondWith(
+      caches.match(request).then(cached => {
+        if (cached) return cached;
+        return fetch(request).then(res => {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(request, clone));
+          return res;
+        }).catch(() => cached || new Response('', { status: 408 }));
+      })
+    );
+    return;
+  }
+
+  // Everything else: network with cache fallback
+  e.respondWith(
+    fetch(request)
+      .then(res => {
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(request, clone));
+        return res;
+      })
+      .catch(() => caches.match(request))
+  );
+});
+`;
+if('serviceWorker' in navigator) {
+  const swBlob = new Blob([swCode], {type:'text/javascript'});
+  const swUrl = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swUrl).catch(()=>{});
+}
+</script>
+</body>
+</html>
