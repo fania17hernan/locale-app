@@ -165,6 +165,10 @@ select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://ww
 .gradient-generic { background: linear-gradient(135deg, #1C4A56 0%, #2B5F6E 50%, #3D5A7A 100%); }
 .gradient-sunset  { background: linear-gradient(135deg, #5C3020 0%, #7A5240 50%, #9A6B50 100%); }
 .gradient-forest  { background: linear-gradient(135deg, #243D2E 0%, #3A5C48 50%, #2E4A3A 100%); }
+.gradient-desert  { background: linear-gradient(135deg, #5C4A20 0%, #7A6840 50%, #6B5530 100%); }
+.gradient-lavender{ background: linear-gradient(135deg, #3D2E5C 0%, #5A4A78 50%, #4A3868 100%); }
+.gradient-rose    { background: linear-gradient(135deg, #5C2E3A 0%, #7A4A58 50%, #6B3848 100%); }
+.gradient-slate   { background: linear-gradient(135deg, #2E3A4A 0%, #3D4D5C 50%, #2A3848 100%); }
 
 /* ── Checklist ── */
 .progress-bar-track { height: 6px; border-radius: 3px; background: var(--color-cream-dark); overflow: hidden; }
@@ -366,6 +370,26 @@ function formatDateShort(iso){if(!iso)return'';return new Date(iso+'T12:00:00').
 function getOccasionEmoji(o){return OCCASION_OPTIONS.find(x=>x.value===o)?.emoji||'✨'}
 function getOccasionLabel(o){return OCCASION_OPTIONS.find(x=>x.value===o)?.label||'Trip'}
 function getFlightAwareUrl(fn){if(!fn)return null;return `https://www.flightaware.com/live/flight/${fn.replace(/\s+/g,'')}`}
+function getAirlineCheckinUrl(fn){
+  if(!fn)return null;
+  const code=fn.replace(/\s+/g,'').toUpperCase().slice(0,2);
+  const urls={
+    SW:'https://www.southwest.com/air/check-in/',
+    WN:'https://www.southwest.com/air/check-in/',
+    DL:'https://www.delta.com/us/en/check-in/overview',
+    AA:'https://www.aa.com/checkin',
+    UA:'https://www.united.com/en/us/checkin',
+    B6:'https://www.jetblue.com/check-in',
+    AS:'https://www.alaskaair.com/check-in',
+    F9:'https://www.flyfrontier.com/travel/check-in/',
+    NK:'https://www.spirit.com/checkin',
+    WS:'https://www.westjet.com/en-ca/check-in',
+    BA:'https://www.britishairways.com/travel/checkin',
+    AF:'https://www.airfrance.com/en/information/checkin',
+    LH:'https://www.lufthansa.com/us/en/check-in',
+  };
+  return urls[code]||`https://www.flightaware.com/live/flight/${fn.replace(/\s+/g,'')}`;
+}
 function getCountdownInfo(d){
   if(!d)return{label:'',cls:'',days:9999,urgent:false};
   const today=new Date();today.setHours(0,0,0,0);
@@ -584,8 +608,8 @@ const RAW_MOCK_TRIPS=[
   travelerCount:2,
   destinations:[{id:'cd1',city:'Anaheim',country:'United States',countryCode:'US',isInternational:false,arrivalDate:'2026-06-12',departureDate:'2026-06-14'}],
   flights:[
-    {id:'f1',flightNumber:'SW4915',origin:'Origin',destination:'SNA',departureDate:'2026-06-12',notes:'Arriving June 12'},
-    {id:'f2',flightNumber:'SW2476',origin:'SNA',destination:'Home',departureDate:'2026-06-14',notes:'Departing Monday'},
+    {id:'f1',flightNumber:'SW4915',origin:'Origin',destination:'LGB',departureDate:'2026-06-12',notes:'Arriving June 12'},
+    {id:'f2',flightNumber:'SW2476',origin:'LGB',destination:'Home',departureDate:'2026-06-14',notes:'Departing Monday'},
   ],
   lodging:[{id:'cl1',name:'Hotel Indigo Anaheim',address:'435 W Katella Ave, Anaheim, CA 92802'}],
   collaborators:[
@@ -595,7 +619,7 @@ const RAW_MOCK_TRIPS=[
    {
     id:'cd-day1',date:'2026-06-12',label:'Day 1 — Arrival & Downtown Disney',destinationId:'cd1',
     activities:[
-     {id:'cda1',name:'Land at John Wayne Airport (SNA) — SW4915',emoji:'✈️',address:'18601 Airport Way, Santa Ana, CA 92707',neighborhood:'Santa Ana',bucket:'must-do',category:'other',bookingRequired:false,notes:'Pick up rental car or rideshare to Hotel Indigo (~20 min)',thingsToConsider:['Grab snacks for the room at a nearby Trader Joe\'s on the way','Check-in is typically 3pm — ask for early if arriving earlier'],sortOrder:0},
+     {id:'cda1',name:'Land at Long Beach Airport (LGB) — SW4915',emoji:'✈️',address:'4100 Donald Douglas Dr, Long Beach, CA 90808',neighborhood:'Long Beach',bucket:'must-do',category:'other',bookingRequired:false,notes:'Pick up rental car or rideshare to Hotel Indigo (~30 min)',thingsToConsider:['Grab snacks for the room at a nearby Trader Joe\'s on the way','Check-in is typically 3pm — ask for early if arriving earlier'],sortOrder:0},
      {id:'cda2',name:'Check in — Hotel Indigo Anaheim',emoji:'🏨',address:'435 W Katella Ave, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'other',bookingRequired:false,notes:'Steps from the Disneyland entrance. Ask for a park-view room if available.',thingsToConsider:['Download the Disneyland app tonight and buy Genie+ in advance','Set an alarm — rope drop tomorrow is worth it'],sortOrder:1},
      {id:'cda3',name:'Downtown Disney District — Evening stroll',emoji:'🌟',address:'1580 Disneyland Dr, Anaheim, CA 92802',neighborhood:'Downtown Disney',bucket:'must-do',category:'entertainment',bookingRequired:false,notes:'Free to enter — shops, live music, and great people-watching. Good way to get your bearings before the parks tomorrow.',thingsToConsider:['World of Disney store is here if you need any park gear','Check for live entertainment schedule'],sortOrder:2},
     ],
@@ -629,8 +653,8 @@ const RAW_MOCK_TRIPS=[
     id:'cd-day4',date:'2026-06-14',label:'Day 3 — Checkout & Departure',destinationId:'cd1',
     activities:[
      {id:'cda10',name:'Hotel checkout — Hotel Indigo',emoji:'🏨',address:'435 W Katella Ave, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'other',bookingRequired:false,notes:'Check-out is 11am. Store luggage with concierge if your flight is later.',thingsToConsider:['Ask about late checkout if your flight is afternoon or later','Grab coffee from the hotel or nearby Starbucks on Harbor Blvd'],sortOrder:0},
-     {id:'cda11',name:'Breakfast at The Original Pancake House',emoji:'🥞',address:'1418 E Lincoln Ave, Anaheim, CA 92805',neighborhood:'Anaheim',bucket:'must-do',category:'food',bookingRequired:false,notes:'Anaheim institution. Their Dutch Baby and apple pancake are massive and incredible. Cash-friendly, quick service.',thingsToConsider:['Arrives hot and fast — good for a pre-flight meal','Only a 15 min drive to SNA airport'],sortOrder:1},
-     {id:'cda12',name:'John Wayne Airport (SNA) — Depart SW2476',emoji:'✈️',address:'18601 Airport Way, Santa Ana, CA 92707',neighborhood:'Santa Ana',bucket:'must-do',category:'other',bookingRequired:false,notes:'SNA is a small, easy airport. Southwest check-in opens 24hrs before departure — check in online to get a good boarding position.',thingsToConsider:['Allow 60–75 min from Anaheim to clear security — it\'s quick but traffic on the 55 can be tricky','Southwest bag policy: 2 free checked bags'],sortOrder:2},
+     {id:'cda11',name:'Breakfast at The Original Pancake House',emoji:'🥞',address:'1418 E Lincoln Ave, Anaheim, CA 92805',neighborhood:'Anaheim',bucket:'must-do',category:'food',bookingRequired:false,notes:'Anaheim institution. Their Dutch Baby and apple pancake are massive and incredible. Cash-friendly, quick service.',thingsToConsider:['Arrives hot and fast — good for a pre-flight meal','About 25 min drive to LGB airport'],sortOrder:1},
+     {id:'cda12',name:'Long Beach Airport (LGB) — Depart SW2476',emoji:'✈️',address:'4100 Donald Douglas Dr, Long Beach, CA 90808',neighborhood:'Long Beach',bucket:'must-do',category:'other',bookingRequired:false,notes:'LGB is a small, easy airport. Southwest check-in opens 24hrs before departure — check in online to get a good boarding position.',thingsToConsider:['Allow 60–75 min from Anaheim to clear security — it\'s quick but traffic on the 405 can be slow','Southwest bag policy: 2 free checked bags'],sortOrder:2},
     ],
     restaurants:[],
     notes:'Fly home full of magic. ✨'},
@@ -1102,7 +1126,7 @@ function TripCard({trip, onClick, animDelay=0}) {
   const {label: countLabel, urgent} = getCountdownInfo(startDate);
   const firstDest = destinations[0];
   const gradKey = firstDest?.countryCode === 'GB' ? 'london' : firstDest?.countryCode === 'FR' ? 'paris' : firstDest?.city?.toLowerCase().includes('miami') ? 'miami' : 'generic';
-  const gradClass = `gradient-${gradKey}`;
+  const gradClass = trip.coverGradient || `gradient-${gradKey}`;
   const flags = getIntlFlags(trip);
   const checklist = trip.checklist || [];
   const done = checklist.filter(i => i.checked).length;
@@ -1468,7 +1492,7 @@ function generateTripPDF(trip) {
 function ItineraryAIPlanner({trip, onUpdateTrip}) {
   const [apiKey, setApiKeyState] = React.useState(getAIKey);
   const [showKeyInput, setShowKeyInput] = React.useState(!getAIKey());
-  const [prompt, setPrompt] = React.useState('');
+  const [prompt, setPrompt] = React.useState(trip._regenPrompt || '');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [streamText, setStreamText] = React.useState('');
@@ -1552,13 +1576,19 @@ Rules:
     try {
       const fullPrompt = buildSystemPrompt() + '\n\nUser request: ' + prompt;
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
+        'https://api.anthropic.com/v1/messages',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: fullPrompt }] }],
-            generationConfig: { maxOutputTokens: 8000, temperature: 0.7 },
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 8000,
+            messages: [{ role: 'user', content: fullPrompt }],
           }),
         }
       );
@@ -1569,8 +1599,8 @@ Rules:
       }
 
       const data = await res.json();
-      const full = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      if (!full) throw new Error('Empty response from Gemini. Please try again.');
+      const full = data?.content?.[0]?.text || '';
+      if (!full) throw new Error('Empty response from Claude. Please try again.');
       setStreamText(full);
 
       // Parse the JSON from the response
@@ -1608,17 +1638,16 @@ Rules:
     <div style={{padding:'40px 20px',maxWidth:480,margin:'0 auto'}}>
       <div style={{background:'var(--color-surface)',borderRadius:16,padding:24,border:'1px solid var(--color-border)'}}>
         <div style={{fontSize:'1.8rem',marginBottom:12,textAlign:'center'}}>🔑</div>
-        <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600,marginBottom:8,textAlign:'center'}}>Add your Gemini API key</h3>
+        <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600,marginBottom:8,textAlign:'center'}}>Add your Claude API key</h3>
         <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',marginBottom:16,textAlign:'center',lineHeight:1.5}}>
-          Locale uses Google Gemini to generate your itinerary. <strong>Free tier available</strong> — no credit card required.
-          Your key is stored on this device only and only sent to Google's API.
+          Locale uses Claude to generate your itinerary. Your key is stored on this device only and only sent to Anthropic's API.
           <br/><br/>
-          Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" style={{color:'var(--color-accent)'}}>aistudio.google.com/apikey</a>
+          Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" style={{color:'var(--color-accent)'}}>console.anthropic.com</a>
         </p>
         <input
           className="input"
           type="password"
-          placeholder="AIza..."
+          placeholder="sk-ant-..."
           defaultValue={apiKey}
           id="ai-key-input"
           style={{marginBottom:12}}
@@ -1682,7 +1711,7 @@ Rules:
       </button>
 
       <p style={{textAlign:'center',fontSize:'.75rem',color:'var(--color-ink-muted)',marginTop:10,lineHeight:1.5}}>
-        Powered by Gemini (free tier) · Takes about 10–20 seconds · You can edit everything after
+        Powered by Claude · Takes about 10–20 seconds · You can edit everything after
       </p>
     </div>
   );
@@ -1692,15 +1721,18 @@ function TripDetail({trip, onBack, onUpdateTrip}) {
   const [activeTab, setActiveTab] = React.useState('overview');
   const [activeDay, setActiveDay] = React.useState(trip.days?.[0]?.id || null);
   const [showShare, setShowShare] = React.useState(false);
+  const [regenPrompt, setRegenPrompt] = React.useState('');
+  const [showRegenModal, setShowRegenModal] = React.useState(false);
   const flags = getIntlFlags(trip);
   const {label:countdown} = getCountdownInfo(trip.startDate);
   const firstDest = trip.destinations?.[0];
   const gradKey = firstDest?.countryCode==='GB'?'london':firstDest?.countryCode==='FR'?'paris':firstDest?.city?.toLowerCase().includes('miami')?'miami':'generic';
+  const headerGrad = trip.coverGradient || `gradient-${gradKey}`;
 
   const TABS = [
     {id:'overview',label:'Overview',icon:'🗺️'},
-    {id:'days',label:'Days',icon:'📅'},
     {id:'checklist',label:'Checklist',icon:'✅'},
+    {id:'days',label:'Days',icon:'📅'},
     {id:'tidbits',label:'City Tips',icon:'💡'},
   ];
   if(['bachelorette','birthday','anniversary','honeymoon','celebration'].includes(trip.occasion)) TABS.push({id:'celebrate',label:'Celebrate',icon:'🎉'});
@@ -1713,14 +1745,30 @@ function TripDetail({trip, onBack, onUpdateTrip}) {
   return (
     <div style={{minHeight:'100vh',background:'var(--color-cream)'}}>
       {/* Header */}
-      <div className={`trip-header gradient-${gradKey}`} style={{position:'relative',overflow:'hidden'}}>
+      <div className={`trip-header ${headerGrad}`} style={{position:'relative',overflow:'hidden'}}>
         {['bachelorette','birthday','celebration'].includes(trip.occasion) && (
           <div className="celebration-band">
             {Array(20).fill(null).map((_,i)=><span key={i} style={{animationDelay:`${i*.15}s`}}>{['✨','🎉','🥂','💫','🎊'][i%5]}</span>)}
           </div>
         )}
         <div style={{position:'relative',zIndex:1,padding:'60px 20px 24px',maxWidth:720,margin:'0 auto'}}>
-          <button onClick={onBack} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',marginBottom:16,backdropFilter:'blur(4px)'}}>← Back</button>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+            <button onClick={onBack} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>← Back</button>
+            <button onClick={()=>{
+              const encoded = encodeTrip(trip);
+              if(!encoded){alert('Could not encode trip.');return;}
+              const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
+              if(navigator.share){
+                navigator.share({title: trip.title, text: `Join me on ${trip.title}!`, url});
+              } else {
+                navigator.clipboard.writeText(url).then(()=>alert('Link copied! Share it with your group.')).catch(()=>{
+                  prompt('Copy this link and share it:', url);
+                });
+              }
+            }} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',gap:6}}>
+              🔗 Share Trip
+            </button>
+          </div>
           <div style={{display:'flex',alignItems:'flex-start',gap:16}}>
             <span style={{fontSize:'2.5rem'}}>{trip.emoji}</span>
             <div style={{flex:1}}>
@@ -1749,8 +1797,8 @@ function TripDetail({trip, onBack, onUpdateTrip}) {
           {trip.flights?.length>0&&(
             <div style={{marginTop:16,display:'flex',gap:8,overflowX:'auto',paddingBottom:4}}>
               {trip.flights.map(fl=>(
-                <a key={fl.id} href={getFlightAwareUrl(fl.flightNumber)} target="_blank" rel="noopener" style={{background:'rgba(255,255,255,.15)',borderRadius:10,padding:'8px 12px',textDecoration:'none',color:'#fff',fontSize:'.78rem',whiteSpace:'nowrap',backdropFilter:'blur(4px)',flexShrink:0}}>
-                  ✈ {fl.flightNumber} · {fl.origin}→{fl.destination} · {formatDateShort(fl.departureDate)}
+                <a key={fl.id} href={getAirlineCheckinUrl(fl.flightNumber)} target="_blank" rel="noopener" style={{background:'rgba(255,255,255,.15)',borderRadius:10,padding:'8px 12px',textDecoration:'none',color:'#fff',fontSize:'.78rem',whiteSpace:'nowrap',backdropFilter:'blur(4px)',flexShrink:0}}>
+                  ✈ {fl.flightNumber} · {fl.origin}→{fl.destination} · {formatDateShort(fl.departureDate)} · <span style={{opacity:.8}}>Check in →</span>
                 </a>
               ))}
             </div>
@@ -1773,6 +1821,31 @@ function TripDetail({trip, onBack, onUpdateTrip}) {
       <div style={{maxWidth:1100,margin:'0 auto',padding:'24px 28px 80px'}}>
         {activeTab==='overview' && (
           <div>
+            {/* Trip Color Picker */}
+            <div style={{background:'var(--color-surface)',borderRadius:12,padding:16,border:'1px solid var(--color-border)',marginBottom:20}}>
+              <p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',marginBottom:10,fontWeight:600}}>Trip Color</p>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                {[
+                  {key:'generic',label:'Ocean',color:'#2B5F6E'},
+                  {key:'paris',label:'Navy',color:'#3D5A7A'},
+                  {key:'forest',label:'Forest',color:'#3A5C48'},
+                  {key:'sunset',label:'Rust',color:'#7A5240'},
+                  {key:'desert',label:'Desert',color:'#7A6840'},
+                  {key:'lavender',label:'Violet',color:'#5A4A78'},
+                  {key:'rose',label:'Rose',color:'#7A4A58'},
+                  {key:'slate',label:'Slate',color:'#3D4D5C'},
+                ].map(({key,label,color})=>{
+                  const current = trip.coverGradient||`gradient-${gradKey}`;
+                  const active = current===`gradient-${key}`;
+                  return (
+                    <button key={key} onClick={()=>onUpdateTrip({...trip,coverGradient:`gradient-${key}`})}
+                      title={label}
+                      style={{width:32,height:32,borderRadius:'50%',background:color,border:active?'3px solid var(--color-ink)':'3px solid transparent',cursor:'pointer',outline:'none',boxShadow:active?'0 0 0 2px var(--color-surface)':undefined,transition:'all .15s'}}
+                    />
+                  );
+                })}
+              </div>
+            </div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:24}}>
               {trip.destinations.map(d=>(
                 <div key={d.id} style={{background:'var(--color-surface)',borderRadius:12,padding:16,border:'1px solid var(--color-border)',textAlign:'center'}}>
@@ -1788,6 +1861,27 @@ function TripDetail({trip, onBack, onUpdateTrip}) {
         )}
         {activeTab==='days' && (
           <div>
+            {showRegenModal && (
+              <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,.5)',zIndex:9000,display:'flex',alignItems:'flex-end',justifyContent:'center',backdropFilter:'blur(4px)'}}>
+                <div style={{background:'var(--color-surface)',borderRadius:'20px 20px 0 0',padding:'28px 24px 40px',width:'100%',maxWidth:480}}>
+                  <div style={{width:40,height:4,background:'var(--color-border)',borderRadius:2,margin:'0 auto 20px'}}/>
+                  <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600,marginBottom:8}}>Update your itinerary</h3>
+                  <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:14}}>Tell us what changed — new ideas, different plans, or things you want to swap out. We'll regenerate around your updates.</p>
+                  <textarea
+                    className="input"
+                    rows={4}
+                    placeholder="e.g. We want to skip Knott's Berry Farm and add a beach day in Laguna instead. Also add a nice dinner on Saturday night."
+                    value={regenPrompt}
+                    onChange={e=>setRegenPrompt(e.target.value)}
+                    style={{marginBottom:12,resize:'none'}}
+                  />
+                  <div style={{display:'flex',gap:8}}>
+                    <button className="btn btn-secondary" style={{flex:1}} onClick={()=>setShowRegenModal(false)}>Cancel</button>
+                    <button className="btn btn-primary" style={{flex:2}} onClick={()=>{ setShowRegenModal(false); onUpdateTrip({...trip,days:[],_regenPrompt:regenPrompt}); setRegenPrompt(''); }}>Regenerate</button>
+                  </div>
+                </div>
+              </div>
+            )}
             {(trip.days||[]).length > 0 ? (
               <>
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:20,alignItems:'center'}}>
@@ -1795,14 +1889,14 @@ function TripDetail({trip, onBack, onUpdateTrip}) {
                     <button key={day.id} onClick={()=>setActiveDay(day.id)} className={`pill ${activeDay===day.id?'pill-accent':'pill-muted'}`} style={{cursor:'pointer'}}>{formatDateShort(day.date)}</button>
                   ))}
                   <button
-                    onClick={()=>{ if(window.confirm('Regenerate itinerary? This will replace all current days.')) onUpdateTrip({...trip,days:[]}); }}
+                    onClick={()=>setShowRegenModal(true)}
                     style={{marginLeft:'auto',background:'none',border:'1px solid var(--color-border)',borderRadius:20,padding:'4px 12px',fontSize:'.75rem',color:'var(--color-ink-muted)',cursor:'pointer'}}
-                  >✨ Regenerate</button>
+                  >✨ Update itinerary</button>
                 </div>
                 {activeDay && <DayView trip={trip} day={(trip.days||[]).find(d=>d.id===activeDay)} onUpdateTrip={onUpdateTrip}/>}
               </>
             ) : (
-              <ItineraryAIPlanner trip={trip} onUpdateTrip={(updated)=>{ onUpdateTrip(updated); setActiveDay(updated.days?.[0]?.id||null); }}/>
+              <ItineraryAIPlanner trip={trip} onUpdateTrip={(updated)=>{ onUpdateTrip({...updated,_regenPrompt:undefined}); setActiveDay(updated.days?.[0]?.id||null); }}/>
             )}
           </div>
         )}
@@ -1863,6 +1957,58 @@ function Dashboard({trips, onSelectTrip, onNewTrip}) {
   );
 }
 
+// ── Share / Import helpers ────────────────────────────────────────────────
+function encodeTrip(trip) {
+  try { return btoa(unescape(encodeURIComponent(JSON.stringify(trip)))); } catch(e) { return null; }
+}
+function decodeTrip(str) {
+  try { return JSON.parse(decodeURIComponent(escape(atob(str)))); } catch(e) { return null; }
+}
+function getSharedTripFromHash() {
+  const hash = window.location.hash;
+  const m = hash.match(/[#&]trip=([A-Za-z0-9+/=]+)/);
+  return m ? decodeTrip(m[1]) : null;
+}
+
+function SharedTripBanner({ trip, onAccept, onDismiss }) {
+  const t = normalizeTrip(trip);
+  const dest = (t.destinations||[]).map(d=>d.city).join(' → ') || 'Unknown destination';
+  return (
+    <div style={{
+      position:'fixed',top:0,left:0,right:0,bottom:0,
+      background:'rgba(0,0,0,.55)',zIndex:9999,
+      display:'flex',alignItems:'flex-end',justifyContent:'center',
+      backdropFilter:'blur(4px)'
+    }}>
+      <div style={{
+        background:'var(--color-surface)',borderRadius:'20px 20px 0 0',
+        padding:'28px 24px 40px',width:'100%',maxWidth:480,
+        boxShadow:'0 -8px 40px rgba(0,0,0,.2)'
+      }}>
+        <div style={{width:40,height:4,background:'var(--color-border)',borderRadius:2,margin:'0 auto 24px'}}/>
+        <div style={{fontSize:'2rem',textAlign:'center',marginBottom:12}}>✈️</div>
+        <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.3rem',fontWeight:600,textAlign:'center',marginBottom:6}}>
+          You're invited!
+        </h3>
+        <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',textAlign:'center',marginBottom:4}}>
+          Someone shared a trip with you:
+        </p>
+        <p style={{fontFamily:'var(--font-display)',fontSize:'1.1rem',fontWeight:600,textAlign:'center',color:'var(--color-accent)',marginBottom:20}}>
+          {t.title || 'Shared Trip'} · {dest}
+        </p>
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          <button className="btn btn-primary" style={{width:'100%',padding:'14px'}} onClick={()=>onAccept(t)}>
+            Add to my trips
+          </button>
+          <button className="btn btn-ghost" style={{width:'100%',padding:'14px'}} onClick={onDismiss}>
+            No thanks
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [trips, setTrips] = React.useState(()=>loadTrips());
   const [view, setView] = React.useState('dashboard');
@@ -1871,6 +2017,7 @@ function App() {
   const [offline, setOffline] = React.useState(!navigator.onLine);
   const [installPrompt, setInstallPrompt] = React.useState(null);
   const [showInstall, setShowInstall] = React.useState(false);
+  const [sharedTrip, setSharedTrip] = React.useState(()=>getSharedTripFromHash());
 
   React.useEffect(()=>{
     const goOffline = ()=>setOffline(true);
@@ -1907,6 +2054,16 @@ function App() {
     saveAndSet(updated);
   };
 
+  const handleAcceptSharedTrip = (trip) => {
+    const fresh = {...normalizeTrip(trip), id: uuid()};
+    const updated = [...trips, fresh];
+    saveAndSet(updated);
+    setSharedTrip(null);
+    window.location.hash = '';
+    setActiveTripId(fresh.id);
+    setView('detail');
+  };
+
   const handleInstall = async () => {
     if(!installPrompt) return;
     installPrompt.prompt();
@@ -1918,6 +2075,13 @@ function App() {
 
   return (
     <div>
+      {sharedTrip && (
+        <SharedTripBanner
+          trip={sharedTrip}
+          onAccept={handleAcceptSharedTrip}
+          onDismiss={()=>{ setSharedTrip(null); window.location.hash=''; }}
+        />
+      )}
       {offline && (
         <div className="offline-banner">📡 Offline — your trips are saved and fully accessible</div>
       )}
