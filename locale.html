@@ -15,7 +15,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
@@ -1353,139 +1352,114 @@ function NewTripSheet({onClose, onSave}) {
 }
 
 function generateTripPDF(trip) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = 210, margin = 18, col = W - margin * 2;
-  let y = 0;
+  const gradMap = {
+    'gradient-generic':  'linear-gradient(135deg,#1C4A56,#2B5F6E,#3D5A7A)',
+    'gradient-london':   'linear-gradient(135deg,#1C4A56,#2B5F6E,#1E3D4A)',
+    'gradient-paris':    'linear-gradient(135deg,#2A3F5F,#3D5A7A,#253352)',
+    'gradient-miami':    'linear-gradient(135deg,#2E5C4A,#4A7268,#1F4035)',
+    'gradient-sunset':   'linear-gradient(135deg,#5C3020,#7A5240,#9A6B50)',
+    'gradient-forest':   'linear-gradient(135deg,#243D2E,#3A5C48,#2E4A3A)',
+    'gradient-desert':   'linear-gradient(135deg,#5C4A20,#7A6840,#6B5530)',
+    'gradient-lavender': 'linear-gradient(135deg,#3D2E5C,#5A4A78,#4A3868)',
+    'gradient-rose':     'linear-gradient(135deg,#5C2E3A,#7A4A58,#6B3848)',
+    'gradient-slate':    'linear-gradient(135deg,#2E3A4A,#3D4D5C,#2A3848)',
+  };
+  const firstDest = trip.destinations?.[0];
+  const autoGrad = firstDest?.countryCode==='GB'?'gradient-london':firstDest?.countryCode==='FR'?'gradient-paris':'gradient-generic';
+  const grad = gradMap[trip.coverGradient||autoGrad] || gradMap['gradient-generic'];
 
-  // ── Helpers ──
-  const ink   = [26,  23,  20];
-  const ocean = [43,  95, 110];
-  const muted = [138,135,132];
-  const cream = [245,242,236];
-
-  function setFont(size, style='normal', color=ink) {
-    doc.setFontSize(size); doc.setFont('helvetica', style);
-    doc.setTextColor(...color);
-  }
-  function line(col=[200,198,195], x1=margin, x2=W-margin) {
-    doc.setDrawColor(...col); doc.setLineWidth(0.3);
-    doc.line(x1, y, x2, y); y += 5;
-  }
-  function wrap(text, x, maxW, lineH=5) {
-    const lines = doc.splitTextToSize(String(text||''), maxW);
-    doc.text(lines, x, y); y += lines.length * lineH;
-    return lines.length;
-  }
-  function pageCheck(needed=20) {
-    if (y + needed > 275) { doc.addPage(); y = 18; }
-  }
-
-  // ── Cover header ──
-  doc.setFillColor(...ocean);
-  doc.rect(0, 0, W, 42, 'F');
-  doc.setFontSize(22); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
-  doc.text(trip.title || 'Trip Itinerary', margin, 18);
-  doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(200,228,233);
-  const dateStr = `${formatDate(trip.startDate)} – ${formatDate(trip.endDate)}`;
-  doc.text(dateStr, margin, 27);
-  const destStr = (trip.destinations||[]).map(d=>d.city).join(' → ');
-  doc.text(destStr, margin, 34);
-  // Locale wordmark top-right
-  doc.setFontSize(11); doc.setFont('helvetica','italic'); doc.setTextColor(255,255,255);
-  doc.text('Locale', W - margin, 12, {align:'right'});
-  y = 52;
-
-  // ── Travelers ──
-  if ((trip.collaborators||[]).length > 0) {
-    setFont(9, 'bold', muted);
-    doc.text('TRAVELERS', margin, y); y += 5;
-    setFont(10, 'normal', ink);
-    doc.text(trip.collaborators.map(c=>c.name).join(', '), margin, y); y += 8;
-    line();
-  }
-
-  // ── Destinations ──
-  setFont(9,'bold',muted); doc.text('DESTINATIONS', margin, y); y += 5;
-  (trip.destinations||[]).forEach(d => {
-    setFont(10,'bold',ocean);
-    doc.text(`${d.city}`, margin, y);
-    if (d.arrivalDate) {
-      setFont(9,'normal',muted);
-      doc.text(`${formatDateShort(d.arrivalDate)} – ${formatDateShort(d.departureDate)}`, margin + 40, y);
-    }
-    y += 6;
-  });
-  y += 2; line();
-
-  // ── Checklist summary ──
   const checklist = trip.checklist || [];
-  if (checklist.length > 0) {
-    pageCheck(30);
-    setFont(9,'bold',muted); doc.text('CHECKLIST', margin, y); y += 5;
-    const checked = checklist.filter(i=>i.checked).length;
-    setFont(9,'normal',ink);
-    doc.text(`${checked} of ${checklist.length} items complete`, margin, y); y += 6;
-    // Group by category
-    const cats = [...new Set(checklist.map(i=>i.category))];
-    cats.forEach(cat => {
-      pageCheck(20);
-      setFont(8,'bold',[80,80,80]); doc.text(cat.toUpperCase(), margin, y); y += 4;
-      checklist.filter(i=>i.category===cat).forEach(item => {
-        const mark = item.checked ? '☑' : '☐';
-        setFont(8,'normal', item.checked ? muted : ink);
-        doc.text(`${mark}  ${item.label}`, margin + 3, y); y += 5;
-        pageCheck(10);
-      });
-      y += 2;
-    });
-    line();
-  }
+  const cats = [...new Set(checklist.map(i=>i.category))];
 
-  // ── Days ──
-  (trip.days||[]).forEach(day => {
-    pageCheck(30);
-    // Day header
-    doc.setFillColor(...cream);
-    doc.rect(margin - 2, y - 4, col + 4, 10, 'F');
-    setFont(11,'bold',ocean);
-    doc.text(day.label || formatDate(day.date), margin, y + 2); y += 10;
+  const checklistHTML = checklist.length === 0 ? '' : `
+    <section class="section">
+      <h2 class="section-title">Checklist</h2>
+      <p class="meta">${checklist.filter(i=>i.checked).length} of ${checklist.length} items complete</p>
+      ${cats.map(cat=>`
+        <div class="cat-label">${cat}</div>
+        ${checklist.filter(i=>i.category===cat).map(item=>`
+          <div class="checklist-row ${item.checked?'done':''}">
+            <span class="cb">${item.checked?'✓':''}</span>
+            <span>${item.label}</span>
+          </div>
+        `).join('')}
+      `).join('')}
+    </section>`;
 
-    // Activities
-    (day.activities||[]).forEach(a => {
-      pageCheck(16);
-      setFont(9,'bold',ink);
-      doc.text(`${a.emoji||'•'}  ${a.name}`, margin + 2, y); y += 5;
-      if (a.address) { setFont(8,'normal',muted); wrap(a.address, margin + 6, col - 6); }
-      if (a.notes)   { setFont(8,'normal',ink);   wrap(a.notes,   margin + 6, col - 6); }
-      y += 2; pageCheck(10);
-    });
+  const daysHTML = (trip.days||[]).map(day=>`
+    <div class="day-block">
+      <div class="day-header">${day.label||formatDate(day.date)}</div>
+      ${(day.activities||[]).map(a=>`
+        <div class="card">
+          <div class="card-title">${a.emoji||'📍'} ${a.name}</div>
+          ${a.address?`<div class="card-meta">${a.address}</div>`:''}
+          ${a.notes?`<div class="card-notes">${a.notes}</div>`:''}
+          ${a.bookingRequired&&a.bookingUrl?`<div class="book-badge">Book in advance</div>`:''}
+        </div>
+      `).join('')}
+      ${(day.restaurants||[]).map(r=>`
+        <div class="card">
+          <div class="card-title">${r.emoji||'🍽️'} ${r.name}</div>
+          ${r.cuisine?`<div class="card-meta">${r.cuisine}${r.neighborhood?' · '+r.neighborhood:''}</div>`:''}
+          ${r.notes?`<div class="card-notes">${r.notes}</div>`:''}
+          ${r.reservationRequired?`<div class="book-badge">Reservation recommended</div>`:''}
+        </div>
+      `).join('')}
+      ${day.notes?`<div class="day-notes">📝 ${day.notes}</div>`:''}
+    </div>
+  `).join('');
 
-    // Restaurants
-    (day.restaurants||[]).forEach(r => {
-      pageCheck(14);
-      setFont(9,'bold',ink);
-      doc.text(`${r.emoji||'🍽️'}  ${r.name}`, margin + 2, y); y += 5;
-      if (r.notes) { setFont(8,'normal',ink); wrap(r.notes, margin + 6, col - 6); }
-      y += 2; pageCheck(10);
-    });
-
-    // Day notes
-    if (day.notes) {
-      pageCheck(12);
-      setFont(8,'italic',[100,100,100]);
-      wrap(`Notes: ${day.notes}`, margin + 2, col - 4);
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'DM Sans',sans-serif;background:#F5F2EC;color:#1A1714;font-size:13px;line-height:1.5}
+    .cover{background:${grad};color:#fff;padding:36px 32px 28px;border-radius:0 0 20px 20px;margin-bottom:24px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .cover-wordmark{font-family:'Cormorant Garamond',serif;font-size:13px;opacity:.7;margin-bottom:12px;letter-spacing:.1em}
+    .cover-title{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;margin-bottom:6px}
+    .cover-meta{opacity:.8;font-size:12px;margin-bottom:4px}
+    .cover-dest{opacity:.7;font-size:11px}
+    .section{padding:0 24px;margin-bottom:20px}
+    .section-title{font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;color:#2B5F6E;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #DDD9D1}
+    .meta{font-size:11px;color:#8A8784;margin-bottom:10px}
+    .cat-label{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#8A8784;margin:10px 0 4px}
+    .checklist-row{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid #EDE9E1;font-size:12px}
+    .checklist-row.done{color:#8A8784;text-decoration:line-through}
+    .cb{width:16px;height:16px;border-radius:4px;border:1.5px solid #C8C5C0;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#2B5F6E;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .checklist-row.done .cb{background:#2B5F6E;border-color:#2B5F6E;color:#fff}
+    .day-block{padding:0 24px;margin-bottom:16px;page-break-inside:avoid}
+    .day-header{font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:600;color:#fff;background:${grad};padding:8px 14px;border-radius:10px;margin-bottom:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .card{background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:8px;border:1px solid #EDE9E1;page-break-inside:avoid}
+    .card-title{font-weight:500;font-size:13px;margin-bottom:3px}
+    .card-meta{font-size:11px;color:#8A8784;margin-bottom:3px}
+    .card-notes{font-size:11px;color:#5A5755;line-height:1.5}
+    .book-badge{display:inline-block;margin-top:6px;background:#EAF3F5;color:#2B5F6E;font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .day-notes{font-size:11px;font-style:italic;color:#8A8784;padding:8px 12px;background:#FAF8F4;border-radius:8px;margin-top:4px}
+    .footer{text-align:center;font-size:10px;color:#B0ADA8;padding:20px;margin-top:8px}
+    @media print{
+      body{background:#F5F2EC}
+      .cover,.day-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .no-print{display:none}
+      @page{margin:12mm}
     }
-    y += 4; line([220,218,214]);
-  });
+  </style>
+  </head><body>
+  <div class="cover">
+    <div class="cover-wordmark">Locale</div>
+    <div class="cover-title">${trip.title||'My Trip'}</div>
+    <div class="cover-meta">${formatDate(trip.startDate)} – ${formatDate(trip.endDate)}</div>
+    <div class="cover-dest">${(trip.destinations||[]).map(d=>d.city).join(' → ')}</div>
+  </div>
+  ${checklistHTML}
+  <section class="section"><h2 class="section-title">Itinerary</h2></section>
+  ${daysHTML}
+  <div class="footer">Generated by Locale · ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
 
-  // ── Footer on last page ──
-  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...muted);
-  doc.text(`Generated by Locale · ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`, W/2, 290, {align:'center'});
-
-  // Save
-  const filename = `${(trip.title||'trip').toLowerCase().replace(/[^a-z0-9]+/g,'-')}-locale.pdf`;
-  doc.save(filename);
+  const w = window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
 }
 
 // ── AI ITINERARY PLANNER ───────────────────────────────────────────────────────
@@ -2137,7 +2111,6 @@ const STATIC = [
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
 ];
 
 self.addEventListener('install', e => {
