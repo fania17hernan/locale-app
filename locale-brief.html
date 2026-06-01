@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Locale — Focus Group Brief</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;background:#F5F2EC;color:#1A1714;padding:0 0 80px;font-size:15px;line-height:1.6}
+
+  /* Hero */
+  .hero{background:linear-gradient(135deg,#1C4A56 0%,#2B5F6E 50%,#3D5A7A 100%);color:#fff;padding:48px 28px 40px;text-align:center}
+  .hero-eyebrow{font-size:11px;letter-spacing:.15em;text-transform:uppercase;opacity:.65;margin-bottom:10px}
+  .hero-title{font-family:'Cormorant Garamond',serif;font-size:36px;font-weight:600;margin-bottom:8px}
+  .hero-sub{font-size:14px;opacity:.75;max-width:420px;margin:0 auto 24px;line-height:1.6}
+  .hero-pills{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .hero-pill{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:20px;padding:5px 14px;font-size:12px;color:#fff;backdrop-filter:blur(4px)}
+
+  /* Nav tabs */
+  .nav{position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #DDD9D1;padding:0 20px;overflow-x:auto;white-space:nowrap}
+  .nav-inner{display:inline-flex;gap:4px;padding:10px 0}
+  .nav-btn{background:none;border:none;border-radius:20px;padding:7px 16px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:#8A8784;cursor:pointer;transition:all .15s;white-space:nowrap}
+  .nav-btn.active{background:#2B5F6E;color:#fff}
+  .nav-btn:hover:not(.active){background:#F0EDE7;color:#1A1714}
+
+  /* Sections */
+  .section{display:none;max-width:680px;margin:0 auto;padding:32px 24px}
+  .section.active{display:block}
+
+  .section-eyebrow{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#2B5F6E;margin-bottom:6px}
+  .section-title{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;margin-bottom:16px;line-height:1.2}
+  p{color:#3A3735;margin-bottom:14px;line-height:1.7}
+  p:last-child{margin-bottom:0}
+
+  /* Cards */
+  .card{background:#fff;border-radius:14px;padding:20px 22px;border:1px solid #DDD9D1;margin-bottom:12px}
+  .card-title{font-weight:600;font-size:15px;margin-bottom:4px;color:#1A1714}
+  .card-desc{font-size:13px;color:#5A5755;line-height:1.6}
+  .card-tag{display:inline-block;font-size:10px;font-weight:600;padding:2px 9px;border-radius:20px;margin-top:8px;letter-spacing:.04em}
+  .tag-live{background:#E6F4EC;color:#1A6B3A}
+  .tag-bug{background:#FEE2E2;color:#B91C1C}
+  .tag-soon{background:#EAF3F5;color:#1A5268}
+  .tag-future{background:#F3F0FA;color:#5B3FA8}
+  .tag-wont{background:#F5F2EC;color:#8A8784}
+
+  /* Quote / callout */
+  .callout{background:linear-gradient(135deg,#EAF3F5,#F0F8FA);border-left:3px solid #2B5F6E;border-radius:0 12px 12px 0;padding:16px 20px;margin-bottom:16px}
+  .callout p{color:#1A4A58;margin:0;font-style:italic;font-size:14px}
+
+  /* Comparison table */
+  .compare{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}
+  .compare th{background:#2B5F6E;color:#fff;padding:10px 14px;text-align:left;font-weight:500}
+  .compare th:first-child{border-radius:10px 0 0 0}
+  .compare th:last-child{border-radius:0 10px 0 0}
+  .compare td{padding:10px 14px;border-bottom:1px solid #EDE9E1;color:#3A3735;vertical-align:top}
+  .compare tr:last-child td{border-bottom:none}
+  .compare tr:nth-child(even) td{background:#FAF8F4}
+  .compare .yes{color:#1A6B3A;font-weight:600}
+  .compare .no{color:#B91C1C}
+
+  /* Backlog item */
+  .backlog-item{display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-bottom:1px solid #EDE9E1}
+  .backlog-item:last-child{border-bottom:none}
+  .backlog-num{width:24px;height:24px;border-radius:50%;background:#2B5F6E;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+  .backlog-num.bug{background:#DC2626}
+  .backlog-num.future{background:#7C3AED}
+  .backlog-body{flex:1}
+  .backlog-title{font-weight:500;font-size:14px;margin-bottom:2px}
+  .backlog-desc{font-size:12px;color:#8A8784;line-height:1.5}
+
+  /* Feature grid */
+  .feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:8px}
+
+  /* Divider */
+  .divider{height:1px;background:#DDD9D1;margin:24px 0}
+
+  /* CTA */
+  .cta-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+  .btn{display:inline-block;padding:11px 20px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;text-decoration:none;text-align:center;cursor:pointer;border:none}
+  .btn-primary{background:#2B5F6E;color:#fff}
+  .btn-secondary{background:#fff;color:#2B5F6E;border:1px solid #2B5F6E}
+  .btn:active{opacity:.85}
+
+  /* Footer */
+  .footer{text-align:center;font-size:11px;color:#B0ADA8;padding:32px 20px 0;max-width:680px;margin:0 auto}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-eyebrow">Focus Group Brief · Beta v0.1</div>
+  <div class="hero-title">Locale</div>
+  <div class="hero-sub">Your trips, beautifully kept. — A POC brief for focus group testers.</div>
+  <div class="hero-pills">
+    <span class="hero-pill">✈️ Trip Planner</span>
+    <span class="hero-pill">📱 PWA</span>
+    <span class="hero-pill">🤖 AI-powered</span>
+    <span class="hero-pill">🔗 Group sharing</span>
+  </div>
+</div>
+
+<div class="nav">
+  <div class="nav-inner">
+    <button class="nav-btn active" onclick="show('why')">Why Locale</button>
+    <button class="nav-btn" onclick="show('pwa')">Why PWA</button>
+    <button class="nav-btn" onclick="show('features')">What's Live</button>
+    <button class="nav-btn" onclick="show('backlog')">Backlog</button>
+    <button class="nav-btn" onclick="show('test')">Start Testing</button>
+  </div>
+</div>
+
+<!-- WHY LOCALE -->
+<div class="section active" id="why">
+  <div class="section-eyebrow">The problem</div>
+  <div class="section-title">Trip planning is fragmented and exhausting</div>
+
+  <div class="callout">
+    <p>"The problem I'm trying to solve is making planning trips seamless and less hectic. To plan a trip today I have to juggle multiple tools — ChatGPT or Claude for ideas, Google or Apple Maps for navigation, spreadsheets for logistics, group chats for collaboration. The result is often fragmented and frustrating for the planner, which is always me."</p>
+  </div>
+
+  <p>The goal: <strong>consolidate all those planning tools into one personalized, interactive hub</strong> — with an AI-powered itinerary builder that handles pre-trip planning, real-time suggestions, local tips, and shared planning so the planner feels organized and excited about the trip, not anxious about tracking everything.</p>
+
+  <p>Group travel is one of the most logistically complex things people do together — and yet the tools haven't really caught up. What exists today falls into two camps:</p>
+
+  <div class="card">
+    <div class="card-title">🧳 Full-scale travel apps (TripIt, Wanderlog, TripAdvisor)</div>
+    <div class="card-desc">Powerful but heavy. Require accounts, often require imports from email confirmations, and the collaboration features are buried behind paywalls or too complex for casual group trips. They're built for the solo frequent traveler, not a group of friends going to Disney together.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 DIY tools (Google Docs, Notion, Notes)</div>
+    <div class="card-desc">Flexible but unstructured. Everyone's editing the same doc, formatting breaks, there's no checklist logic, no itinerary structure, and sharing requires everyone to have an account or remember a link. It works but it doesn't feel like a product.</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-eyebrow">The opportunity</div>
+  <div class="section-title" style="font-size:22px">What Locale is trying to be</div>
+
+  <p>Locale is a <strong>lightweight group trip planner</strong> that combines the structure of a travel app with the simplicity of sharing a link. No accounts. No app store. No friction.</p>
+
+  <p>The goal is to answer three questions every group traveler asks:</p>
+
+  <div class="feature-grid">
+    <div class="card">
+      <div class="card-title">📋 Are we ready?</div>
+      <div class="card-desc">Trip-specific checklist — documents, bookings, packing. Tracks prep progress right on the dashboard card.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">📅 What's the plan?</div>
+      <div class="card-desc">Day-by-day itinerary with activities, restaurants, and booking links — generated by AI or built manually.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔗 Does everyone know?</div>
+      <div class="card-desc">One tap shares the full trip as a link. Recipients open it, add it to their app, and see the same plan.</div>
+    </div>
+  </div>
+</div>
+
+<!-- WHY PWA -->
+<div class="section" id="pwa">
+  <div class="section-eyebrow">Technical approach</div>
+  <div class="section-title">Why a PWA for the proof of concept</div>
+
+  <p>Before investing in native iOS/Android development or a full backend, Locale is being validated as a <strong>Progressive Web App (PWA)</strong> — a website that behaves like an app on your phone.</p>
+
+  <div class="callout">
+    <p>A PWA can be installed on your home screen, works offline, loads instantly, and is indistinguishable from a native app for most everyday tasks — at a fraction of the build cost.</p>
+  </div>
+
+  <table class="compare">
+    <tr>
+      <th>Consideration</th>
+      <th>Native App</th>
+      <th>PWA (Locale today)</th>
+    </tr>
+    <tr>
+      <td>Time to build v1</td>
+      <td class="no">Months</td>
+      <td class="yes">Weeks</td>
+    </tr>
+    <tr>
+      <td>App Store required</td>
+      <td class="no">Yes</td>
+      <td class="yes">No — share a link</td>
+    </tr>
+    <tr>
+      <td>Works on iPhone + Android</td>
+      <td class="no">Separate builds</td>
+      <td class="yes">One codebase</td>
+    </tr>
+    <tr>
+      <td>Install on home screen</td>
+      <td class="yes">Yes</td>
+      <td class="yes">Yes</td>
+    </tr>
+    <tr>
+      <td>Works offline</td>
+      <td class="yes">Yes</td>
+      <td class="yes">Yes (after first load)</td>
+    </tr>
+    <tr>
+      <td>Real-time sync across users</td>
+      <td class="yes">Yes</td>
+      <td class="no">Not yet (Phase 2)</td>
+    </tr>
+    <tr>
+      <td>Push notifications</td>
+      <td class="yes">Yes</td>
+      <td class="no">Not yet (Phase 2)</td>
+    </tr>
+    <tr>
+      <td>Cost to test with users</td>
+      <td class="no">High</td>
+      <td class="yes">Free</td>
+    </tr>
+  </table>
+
+  <p>The PWA approach lets us validate the core concept — <em>does this actually solve the group planning problem?</em> — before committing to native development. If the answer is yes, a native app or backend sync layer gets added in Phase 2.</p>
+
+  <div class="divider"></div>
+
+  <div class="section-eyebrow">Current limitation</div>
+  <div class="section-title" style="font-size:20px">The one big caveat</div>
+  <p>Right now, trips are stored <strong>on your device only</strong>. If you share a trip link with someone, they get a copy — but changes you make afterwards don't sync to them automatically. You'd re-share the link to update them. This is a known limitation that a backend database solves in Phase 2.</p>
+</div>
+
+<!-- FEATURES LIVE -->
+<div class="section" id="features">
+  <div class="section-eyebrow">Beta v0.1 — What's live today</div>
+  <div class="section-title">Features available to test</div>
+
+  <p>Everything below is live in the current build. This is what you're being asked to evaluate.</p>
+
+  <div class="feature-grid">
+    <div class="card">
+      <div class="card-title">✈️ Trip creation</div>
+      <div class="card-desc">Create a trip with name, destination(s), dates, occasion type, travelers, and flights. Multi-stop supported.</div>
+      <span class="card-tag tag-live">Live</span>
+    </div>
+    <div class="card">
+      <div class="card-title">🤖 AI itinerary generator</div>
+      <div class="card-desc">Describe what you want to do — activities, food, vibe — and Claude generates a day-by-day plan with venues, addresses, and booking flags.</div>
+      <span class="card-tag tag-live">Live</span>
+    </div>
+    <div class="card">
+      <div class="card-title">✅ Smart checklist</div>
+      <div class="card-desc">Auto-generates a trip-specific prep checklist from your itinerary — flights to check in, bookings to make, documents needed, packing essentials.</div>
+      <span class="card-tag tag-live">Live</span>
+    </div>
+    <div class="card">
+      <div class="card-title">📅 Day-by-day itinerary</div>
+      <div class="card-desc">Browse each day's activities and restaurants. Booking-required items show a "Book now" badge. Day notes supported.</div>
+      <span class="card-tag tag-live">Live</span>
+    </div>
+    <div class="card">
+      <div class="card-title">🔗 Trip sharing</div>
+      <div class="card-desc">Tap "Share Trip" to send a link via iMessage, WhatsApp, email, or clipboard. Recipients get a full copy of the trip added to their app in one tap.</div>
+      <span class="card-tag tag-live">Live</span>
+    </div>
+    <div class="card">
+      <div class="card-title">🎨 Trip colors</div>
+      <div class="card-desc">8 color themes to distinguish trips on your dashboard — Ocean, Navy, Forest, Rust, Desert, Violet, Rose, Slate.</div>
+      <span class="card-tag tag-live">Live</span>
+    </div>
+    <div class="card">
+      <div class="card-title">💱 Currency converter</div>
+      <div class="card-desc">USD ↔ GBP ↔ EUR quick converter built into each trip's Overview tab. No API needed — uses fixed reference rates.</div>
+      <span class="card-tag tag-live">Live</span>
+    </div>
+    <div class="card">
+      <div class="card-title">💡 City tips</div>
+      <div class="card-desc">Curated local tips for select destinations — neighborhoods, restaurants, transport advice. Currently covers London, Paris, and Anaheim.</div>
+      <span class="card-tag tag-live">Live</span>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 International entry flags</div>
+      <div class="card-desc">Alerts for international trips — EES registration, passport requirements, visa reminders — shown on the dashboard card and trip header.</div>
+      <span class="card-tag tag-live">Live · Demo trips only</span>
+    </div>
+    <div class="card">
+      <div class="card-title">✏️ Update itinerary</div>
+      <div class="card-desc">Changed your plans? Describe what's different and the AI regenerates around your updates — no full restart needed.</div>
+      <span class="card-tag tag-live">Live</span>
+    </div>
+    <div class="card">
+      <div class="card-title">↓ PDF export</div>
+      <div class="card-desc">Downloads a styled PDF of your full trip — cover page, checklist, and day-by-day itinerary — matching the app's visual design.</div>
+      <span class="card-tag tag-live">Live</span>
+    </div>
+    <div class="card">
+      <div class="card-title">📲 PWA install</div>
+      <div class="card-desc">Add to home screen on iPhone (Share → Add to Home Screen) or Android for a full app-like experience. Works offline after first load.</div>
+      <span class="card-tag tag-live">Live</span>
+    </div>
+  </div>
+</div>
+
+<!-- BACKLOG -->
+<div class="section" id="backlog">
+  <div class="section-eyebrow">Known issues + future roadmap</div>
+  <div class="section-title">What's being worked on</div>
+
+  <p>This is an honest view of what's broken, what's coming, and what's planned for later phases.</p>
+
+  <div class="divider"></div>
+  <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#DC2626;margin-bottom:12px">🔴 Bugs to fix</p>
+
+  <div class="backlog-item">
+    <div class="backlog-num bug">1</div>
+    <div class="backlog-body">
+      <div class="backlog-title">iPhone zooms in when tapping form inputs</div>
+      <div class="backlog-desc">Safari auto-zooms on inputs smaller than 16px. Affects the new trip form. Fix: set all inputs to 16px minimum.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num bug">2</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Keyboard pushes Back/Preview buttons off screen</div>
+      <div class="backlog-desc">On iPhone, opening the keyboard during trip creation hides navigation buttons. Fix: use 100dvh + sticky button layout.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num bug">3</div>
+    <div class="backlog-body">
+      <div class="backlog-title">End date can be set before start date</div>
+      <div class="backlog-desc">No validation prevents invalid date ranges like "May 31 – May 16." Fix: inline error + block progression.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num bug">4</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Wrong flag shown on user-created trips</div>
+      <div class="backlog-desc">Shows passport country flag instead of destination country flag next to city names. Fix: map destination countryCode to flag.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num bug">5</div>
+    <div class="backlog-body">
+      <div class="backlog-title">City names display exactly as typed — no normalization</div>
+      <div class="backlog-desc">"ZUrich" stays as "ZUrich." Fix: capitalize on input (first letter up, rest down).</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num bug">6</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Text truncation in itinerary cards</div>
+      <div class="backlog-desc">"Hotel Indi..." and "Long Beach A..." get cut off. Fix: min-width: 0 on flex children.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num bug">7</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Two confusingly similar share buttons</div>
+      <div class="backlog-desc">The second share button sends plain text instead of a tappable link. Fix: rename to "Export" and fix link encoding.</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#2B5F6E;margin-bottom:12px">🔵 Coming soon (Phase 1 polish)</p>
+
+  <div class="backlog-item">
+    <div class="backlog-num">8</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Role-aware onboarding</div>
+      <div class="backlog-desc">Separate flows for trip Creators (need API key) vs. Viewers (receiving a shared trip, should never see the API key prompt).</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num">9</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Traveler avatar tooltips</div>
+      <div class="backlog-desc">Initials like "S" and "A" are meaningless to someone receiving a shared trip. Hover/long-press to show full name.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num">10</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Entry requirements via dedicated API</div>
+      <div class="backlog-desc">Currently baked into demo trips only. Move to Travel Buddy AI (free tier) so every trip gets live visa/entry data automatically — no API key needed.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num">11</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Better date picker UX</div>
+      <div class="backlog-desc">Replace browser-native date inputs (which vary wildly by device) with Flatpickr for a consistent, on-brand experience. Add calendar icon. No default date.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num">12</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Open Graph link previews</div>
+      <div class="backlog-desc">Shared links currently preview as just "Locale — Your trips, beautifully kept." Should show trip name, destination, and dates.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num">13</div>
+    <div class="backlog-body">
+      <div class="backlog-title">📧 Confirmation email parsing</div>
+      <div class="backlog-desc">Paste or upload a booking confirmation (flight, hotel, tour, restaurant) and the AI extracts the key details — dates, times, confirmation numbers, addresses — and adds them directly to your trip. Similar to how Apple Calendar pulls events from confirmation emails, but inside Locale so everything lands in the right trip automatically.</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7C3AED;margin-bottom:12px">🟣 Phase 2 — Future features</p>
+
+  <div class="backlog-item">
+    <div class="backlog-num future">14</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Real-time trip sync</div>
+      <div class="backlog-desc">Backend database (Supabase) so all group members see the same live trip — no need to re-share after every update.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num future">15</div>
+    <div class="backlog-body">
+      <div class="backlog-title">User accounts + trip ownership</div>
+      <div class="backlog-desc">Login so your trips follow you across devices. Role-based access: organizer, collaborator, viewer.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num future">16</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Push notifications</div>
+      <div class="backlog-desc">Check-in reminders 24hrs before flights. Itinerary updates when the organizer changes the plan.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num future">17</div>
+    <div class="backlog-body">
+      <div class="backlog-title">In-app group chat / comments</div>
+      <div class="backlog-desc">Comment on specific days or activities. Keep the "where are we meeting?" conversation inside the trip.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num future">18</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Native iOS + Android app</div>
+      <div class="backlog-desc">Once the PWA POC validates the concept, wrap in a native shell for App Store / Play Store distribution.</div>
+    </div>
+  </div>
+  <div class="backlog-item">
+    <div class="backlog-num future">19</div>
+    <div class="backlog-body">
+      <div class="backlog-title">Booking integrations</div>
+      <div class="backlog-desc">Connect directly to OpenTable, Viator, and GetYourGuide so "Book now" badges actually book — without leaving the app.</div>
+    </div>
+  </div>
+</div>
+
+<!-- START TESTING -->
+<div class="section" id="test">
+  <div class="section-eyebrow">You're here!</div>
+  <div class="section-title">Ready to test?</div>
+
+  <p>Thanks for being part of this early group. Your feedback directly shapes what gets built next. The goal isn't a polished product yet — it's to find out whether the core idea is worth investing in.</p>
+
+  <div class="callout">
+    <p>The most useful feedback is honest. If something feels confusing, broken, or unnecessary — say so. If something delights you — say that too.</p>
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-title">📋 Step 1 — Read the tester checklist</div>
+    <div class="card-desc">It walks you through exactly what to test, step by step. Takes about 5–10 minutes. Has a feedback form at the bottom that emails Stephanie directly.</div>
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-title">📱 Step 2 — Open the app</div>
+    <div class="card-desc">The app is at the link below. Two demo trips are pre-loaded so you can explore before creating your own. Feel free to delete them when done.</div>
+  </div>
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title">💬 Step 3 — Send your feedback</div>
+    <div class="card-desc">Use the feedback form in the tester checklist, or just text/iMessage Stephanie directly. Screenshots are gold.</div>
+  </div>
+
+  <div class="cta-row">
+    <a href="https://fania17hernan.github.io/locale-app/locale-uat.html" target="_blank" class="btn btn-primary">📋 Open tester checklist</a>
+    <a href="https://fania17hernan.github.io/locale-app/locale.html" target="_blank" class="btn btn-secondary">✈️ Open Locale</a>
+  </div>
+</div>
+
+<div class="footer">
+  Locale — Focus Group Brief · Beta v0.1 · Built by Stephanie · May 2026
+</div>
+
+<script>
+  function show(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    event.target.classList.add('active');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Locale">
@@ -38,8 +38,8 @@
 }
 
 html { background: var(--color-cream); color: var(--color-ink); font-family: var(--font-body); font-size: 16px; }
-body { min-height: 100vh; }
-#root { min-height: 100vh; }
+body { min-height: 100dvh; }
+#root { min-height: 100dvh; }
 
 /* ── Reset & base ── */
 button { font-family: var(--font-body); cursor: pointer; }
@@ -85,10 +85,12 @@ img { max-width: 100%; }
 }
 
 /* ── Inputs ── */
+/* iOS Safari zoom fix: all inputs must be at least 16px */
+input, select, textarea { font-size: 16px !important; }
 .input, .input-field {
   width: 100%; padding: 9px 12px; border-radius: 8px;
   border: 1px solid var(--color-border); background: var(--color-surface);
-  font-size: .875rem; color: var(--color-ink);
+  font-size: 16px; color: var(--color-ink);
   transition: border-color .2s;
   -webkit-appearance: none;
 }
@@ -102,7 +104,7 @@ select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://ww
 /* ── Overlay & Sheet ── */
 .overlay { position: fixed; inset: 0; background: rgba(26,23,20,.55); z-index: 200; display: flex; align-items: flex-end; justify-content: center; padding: 0; }
 @media(min-width:600px){ .overlay { align-items: center; padding: 20px; } }
-.sheet { background: var(--color-surface); border-radius: 20px 20px 0 0; width: 100%; padding: 24px 20px; max-height: 92vh; overflow-y: auto; }
+.sheet { background: var(--color-surface); border-radius: 20px 20px 0 0; width: 100%; padding: 24px 20px; max-height: 92dvh; overflow-y: auto; }
 @media(min-width:600px){ .sheet { border-radius: 20px; } }
 .sheet-handle { width: 36px; height: 4px; background: var(--color-border); border-radius: 2px; margin: 0 auto 20px; }
 
@@ -172,7 +174,7 @@ select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://ww
 /* ── Checklist ── */
 .progress-bar-track { height: 6px; border-radius: 3px; background: var(--color-cream-dark); overflow: hidden; }
 .progress-bar-fill { height: 100%; border-radius: 3px; background: var(--color-accent); transition: width .4s ease; }
-.item-label { font-size: .875rem; color: var(--color-ink); line-height: 1.4; }
+.item-label { font-size: .875rem; color: var(--color-ink); line-height: 1.4; min-width: 0; flex: 1; }
 .checklist-item { display: flex; align-items: flex-start; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--color-border); cursor: pointer; transition: background .15s; }
 .checklist-item:last-child { border-bottom: none; }
 .checklist-item:hover { background: var(--color-cream); }
@@ -205,8 +207,11 @@ select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://ww
 .step-dot.done { background: var(--color-success); color: #fff; border-color: var(--color-success); }
 
 /* ── Avatar ── */
-.avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 600; color: #fff; border: 2px solid var(--color-surface); margin-left: -8px; flex-shrink: 0; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 600; color: #fff; border: 2px solid var(--color-surface); margin-left: -8px; flex-shrink: 0; position: relative; cursor: default; }
 .avatar:first-child { margin-left: 0; }
+.avatar-tooltip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: var(--color-ink); color: var(--color-cream); font-size: .7rem; font-weight: 500; white-space: nowrap; padding: 4px 8px; border-radius: 6px; pointer-events: none; opacity: 0; transition: opacity .15s; z-index: 99; }
+.avatar-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 4px solid transparent; border-top-color: var(--color-ink); }
+.avatar:hover .avatar-tooltip, .avatar.show-tip .avatar-tooltip { opacity: 1; }
 
 /* ── FAB ── */
 .fab { position: fixed; bottom: 28px; right: 24px; width: 52px; height: 52px; border-radius: 50%; background: var(--color-accent); color: var(--color-cream); font-size: 1.6rem; border: none; display: flex; align-items: center; justify-content: center; z-index: 100; transition: transform .2s ease; box-shadow: 0 2px 12px rgba(43,95,110,.35); }
@@ -369,6 +374,11 @@ function formatDateShort(iso){if(!iso)return'';return new Date(iso+'T12:00:00').
 function getOccasionEmoji(o){return OCCASION_OPTIONS.find(x=>x.value===o)?.emoji||'✨'}
 function getOccasionLabel(o){return OCCASION_OPTIONS.find(x=>x.value===o)?.label||'Trip'}
 function getFlightAwareUrl(fn){if(!fn)return null;return `https://www.flightaware.com/live/flight/${fn.replace(/\s+/g,'')}`}
+function getCountryFlag(code){
+  if(!code)return'📍';
+  // Convert country code to flag emoji via regional indicator symbols
+  try{return code.toUpperCase().replace(/./g,c=>String.fromCodePoint(0x1F1E6-65+c.charCodeAt(0)));}catch(e){return'📍';}
+}
 function getAirlineCheckinUrl(fn){
   if(!fn)return null;
   const code=fn.replace(/\s+/g,'').toUpperCase().slice(0,2);
@@ -692,8 +702,18 @@ function saveTrips(trips){try{localStorage.setItem(SK,JSON.stringify(trips));}ca
 // ── SHARED COMPONENTS ──────────────────────────────────────────────────────────
 function AvatarStack({collaborators,max=4}){
   const shown=collaborators.slice(0,max),extra=collaborators.length-max;
+  const [tipId,setTipId]=useState(null);
+  let pressTimer=null;
   return(<div style={{display:'flex',alignItems:'center'}}>
-    {shown.map(c=><div key={c.id} className="avatar" style={{background:c.avatarColor}}>{c.name.charAt(0)}</div>)}
+    {shown.map(c=>(
+      <div key={c.id} className={`avatar${tipId===c.id?' show-tip':''}`} style={{background:c.avatarColor}}
+        onMouseEnter={()=>setTipId(c.id)} onMouseLeave={()=>setTipId(null)}
+        onTouchStart={()=>{pressTimer=setTimeout(()=>setTipId(c.id),400);}}
+        onTouchEnd={()=>{clearTimeout(pressTimer);setTimeout(()=>setTipId(null),1500);}}>
+        {c.name.charAt(0)}
+        <span className="avatar-tooltip">{c.name}</span>
+      </div>
+    ))}
     {extra>0&&<div className="avatar" style={{background:'var(--color-ink-light)'}}>+{extra}</div>}
   </div>);
 }
@@ -982,10 +1002,10 @@ function DayView({trip,day,onUpdateTrip}){
       )}
       {hotel&&(
         <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:'rgba(184,92,56,.05)',borderRadius:10,border:'1px solid rgba(184,92,56,.12)',marginBottom:16}}>
-          <span style={{fontSize:'1.1rem'}}>🏨</span>
-          <div>
-            <p style={{fontWeight:600,fontSize:'.875rem'}}>{hotel.name}</p>
-            <p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>{hotel.address}</p>
+          <span style={{fontSize:'1.1rem',flexShrink:0}}>🏨</span>
+          <div style={{minWidth:0,flex:1}}>
+            <p style={{fontWeight:600,fontSize:'.875rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{hotel.name}</p>
+            <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{hotel.address}</p>
           </div>
         </div>
       )}
@@ -1022,10 +1042,18 @@ function AtAGlance({trip}){
   const allCount=trip.days.reduce((n,d)=>n+(d.activities||[]).length+(d.restaurants||[]).length,0);
   return(
     <div style={{padding:'0 16px 32px'}}>
-      <div className="card" style={{padding:16,marginBottom:16}}>
-        <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:4}}>{trip.days.length} days · {allCount} stops planned</p>
-        <p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {formatDateShort(trip.startDate)} – {formatDateShort(trip.endDate)}</p>
-      </div>
+      {trip.days.length===0||allCount===0?(
+        <div className="card" style={{padding:20,marginBottom:16,textAlign:'center',borderStyle:'dashed',borderColor:'var(--color-accent-warm)'}}>
+          <div style={{fontSize:'1.6rem',marginBottom:8}}>🗺️</div>
+          <p style={{fontWeight:600,fontSize:'.95rem',marginBottom:4,color:'var(--color-accent)'}}>No itinerary yet</p>
+          <p style={{fontSize:'.82rem',color:'var(--color-ink-light)',lineHeight:1.5}}>Head to the Days tab and tap <strong>Generate Itinerary</strong> to build your trip with AI. Make sure your API key is saved in Settings first.</p>
+        </div>
+      ):(
+        <div className="card" style={{padding:16,marginBottom:16}}>
+          <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:4}}>{trip.days.length} days · {allCount} stops planned</p>
+          <p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {formatDateShort(trip.startDate)} – {formatDateShort(trip.endDate)}</p>
+        </div>
+      )}
       {trip.days.filter(d=>(d.activities||[]).length+(d.restaurants||[]).length>0).map(day=>{
         const items=[...(day.activities||[]).map(a=>({...a,_t:'activity'})),...(day.restaurants||[]).map(r=>({...r,_t:'restaurant'}))];
         return(
@@ -1148,7 +1176,7 @@ function TripCard({trip, onClick, animDelay=0}) {
           </div>
           <div className="trip-card-dest-strip">
             {destinations.map(d=>(
-              <span key={d.id} className="trip-card-dest-chip">📍 {d.city}</span>
+              <span key={d.id} className="trip-card-dest-chip">{getCountryFlag(d.countryCode)} {d.city}</span>
             ))}
           </div>
         </div>
@@ -1211,6 +1239,7 @@ function NewTripSheet({onClose, onSave}) {
     const e={};
     if(!form.startDate) e.startDate='Start date required';
     if(!form.endDate) e.endDate='End date required';
+    if(form.startDate&&form.endDate&&form.endDate<form.startDate) e.endDate='End date must be after start date';
     if(form.destinations.some(d=>!d.city.trim())) e.destinations='All destinations need a city';
     setErrors(e);
     return Object.keys(e).length===0;
@@ -1288,12 +1317,20 @@ function NewTripSheet({onClose, onSave}) {
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
               <div>
                 <label className="section-label">Start Date *</label>
-                <input className={`input ${errors.startDate?'input-error':''}`} type="date" value={form.startDate} onChange={e=>set('startDate',e.target.value)}/>
+                <input className={`input ${errors.startDate?'input-error':''}`} type="date" value={form.startDate} onChange={e=>{
+                  const v=e.target.value;
+                  set('startDate',v);
+                  // Auto-suggest end date as +1 day if end is not yet set or is before new start
+                  if(v&&(!form.endDate||form.endDate<=v)){
+                    const d=new Date(v+'T12:00:00');d.setDate(d.getDate()+1);
+                    set('endDate',d.toISOString().slice(0,10));
+                  }
+                }}/>
                 {errors.startDate&&<p style={{color:'var(--color-flag)',fontSize:'.75rem',marginTop:4}}>{errors.startDate}</p>}
               </div>
               <div>
                 <label className="section-label">End Date *</label>
-                <input className={`input ${errors.endDate?'input-error':''}`} type="date" value={form.endDate} onChange={e=>set('endDate',e.target.value)}/>
+                <input className={`input ${errors.endDate?'input-error':''}`} type="date" value={form.endDate} onChange={e=>set('endDate',e.target.value)} min={form.startDate||undefined}/>
                 {errors.endDate&&<p style={{color:'var(--color-flag)',fontSize:'.75rem',marginTop:4}}>{errors.endDate}</p>}
               </div>
             </div>
@@ -1310,7 +1347,7 @@ function NewTripSheet({onClose, onSave}) {
                     {form.destinations.length>1&&<button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'2px 8px',color:'var(--color-flag)'}} onClick={()=>removeDest(i)}>Remove</button>}
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8,marginBottom:8}}>
-                    <input className="input" placeholder="City (e.g. Paris)" value={d.city} onChange={e=>setDest(i,'city',e.target.value)}/>
+                    <input className="input" placeholder="City (e.g. Paris)" value={d.city} onChange={e=>{const v=e.target.value;setDest(i,'city',v.length?v.charAt(0).toUpperCase()+v.slice(1).toLowerCase():v);}}/>
                     <input className="input" placeholder="Code (FR)" value={d.countryCode} onChange={e=>setDest(i,'countryCode',e.target.value.toUpperCase().slice(0,2))} maxLength={2}/>
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
@@ -1763,7 +1800,6 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
             <div style={{display:'flex',gap:8}}>
               <button onClick={()=>generateTripPDF(trip)} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>↓ PDF</button>
               <button onClick={()=>{ if(window.confirm(`Delete "${trip.title}"? This can't be undone.`)) onDelete(trip.id); }} style={{background:'rgba(255,80,80,.25)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>🗑 Delete</button>
-              <button onClick={()=>setShowShare(true)} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>Share</button>
             </div>
           </div>
           {flags.length>0&&(
@@ -1842,7 +1878,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:24}}>
               {trip.destinations.map(d=>(
                 <div key={d.id} style={{background:'var(--color-surface)',borderRadius:12,padding:16,border:'1px solid var(--color-border)',textAlign:'center'}}>
-                  <div style={{fontSize:'1.5rem',marginBottom:4}}>{d.countryCode==='US'?'🇺🇸':d.countryCode==='GB'?'🇬🇧':d.countryCode==='FR'?'🇫🇷':d.countryCode==='IT'?'🇮🇹':d.countryCode==='JP'?'🇯🇵':'📍'}</div>
+                  <div style={{fontSize:'1.5rem',marginBottom:4}}>{getCountryFlag(d.countryCode)}</div>
                   <div style={{fontFamily:'var(--font-display)',fontSize:'1rem',fontWeight:600}}>{d.city}</div>
                   {d.arrivalDate&&<div style={{fontSize:'.72rem',color:'var(--color-ink-light)',marginTop:4}}>{formatDateShort(d.arrivalDate)} – {formatDateShort(d.departureDate)}</div>}
                 </div>
