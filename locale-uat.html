@@ -82,7 +82,7 @@
 <div class="section" style="padding-bottom:12px">
   <div class="section-label">Your progress</div>
   <div class="progress-wrap">
-    <div class="progress-label"><span>Tasks completed</span><span id="prog-text">0 of 14</span></div>
+    <div class="progress-label"><span>Tasks completed</span><span id="prog-text">0 of 16</span></div>
     <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
   </div>
 </div>
@@ -136,6 +136,29 @@
         <div class="task-title">Change the trip color</div>
         <div class="task-desc">Open your trip → Overview tab → tap a color swatch. Does the card color update on the dashboard?</div>
         <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group 2b: AI Generator -->
+<div class="task-group">
+  <div class="task-group-label">AI Itinerary Generator</div>
+  <div class="card-group">
+    <div class="task" data-id="tai1" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Add the API key in Settings</div>
+        <div class="task-desc">Stephanie will text you an API key. Inside your trip, tap the ⚙️ Settings tab and paste it into the "Claude API Key" field. Tap Save.</div>
+        <span class="task-tag tag-required">Required for AI</span>
+      </div>
+    </div>
+    <div class="task" data-id="tai2" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Generate an itinerary with AI</div>
+        <div class="task-desc">Go to the Days tab → tap "Generate Itinerary." Describe what you want (e.g. "3 days in Paris, mix of museums and food, with kids"). Does it generate a full day-by-day plan?</div>
+        <span class="task-tag tag-required">Required for AI</span>
       </div>
     </div>
   </div>
@@ -252,7 +275,7 @@
 </div>
 
 <script>
-  const TOTAL = 14;
+  const TOTAL = 16;
 
   function toggle(el) {
     el.classList.toggle('done');
