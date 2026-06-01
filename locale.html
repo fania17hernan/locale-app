@@ -15,6 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
@@ -213,6 +214,13 @@ select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://ww
 .avatar-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 4px solid transparent; border-top-color: var(--color-ink); }
 .avatar:hover .avatar-tooltip, .avatar.show-tip .avatar-tooltip { opacity: 1; }
 
+/* ── DRAG & DROP ── */
+.drag-handle { font-size: 1rem; color: var(--color-ink-light); cursor: grab; padding: 2px 4px; flex-shrink: 0; margin-top: 2px; user-select: none; touch-action: none; line-height: 1; opacity: 0.5; transition: opacity .15s; }
+.drag-handle:hover { opacity: 1; }
+.drag-handle:active { cursor: grabbing; }
+.sortable-ghost { opacity: .35; background: var(--color-accent-warm-light, rgba(184,92,56,.08)) !important; border-radius: 12px; }
+.sortable-chosen { box-shadow: 0 4px 20px rgba(43,95,110,.18); }
+
 /* ── FAB ── */
 .fab { position: fixed; bottom: 28px; right: 24px; width: 52px; height: 52px; border-radius: 50%; background: var(--color-accent); color: var(--color-cream); font-size: 1.6rem; border: none; display: flex; align-items: center; justify-content: center; z-index: 100; transition: transform .2s ease; box-shadow: 0 2px 12px rgba(43,95,110,.35); }
 .fab:hover { transform: scale(1.08); }
@@ -255,6 +263,99 @@ const CURRENCY_INFO={
   AU:{code:'AUD',symbol:'A$',name:'Australian Dollar',rate:1.54,flag:'🇦🇺'},
   CA:{code:'CAD',symbol:'C$',name:'Canadian Dollar',rate:1.36,flag:'🇨🇦'},
   MX:{code:'MXN',symbol:'$',name:'Mexican Peso',rate:17.8,flag:'🇲🇽'},
+};
+
+// City → country auto-fill (lowercase key → {countryCode, country, isInternational})
+const CITY_TO_COUNTRY={
+  // Europe
+  'london':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'paris':{countryCode:'FR',country:'France',isInternational:true},
+  'rome':{countryCode:'IT',country:'Italy',isInternational:true},
+  'milan':{countryCode:'IT',country:'Italy',isInternational:true},
+  'florence':{countryCode:'IT',country:'Italy',isInternational:true},
+  'venice':{countryCode:'IT',country:'Italy',isInternational:true},
+  'barcelona':{countryCode:'ES',country:'Spain',isInternational:true},
+  'madrid':{countryCode:'ES',country:'Spain',isInternational:true},
+  'seville':{countryCode:'ES',country:'Spain',isInternational:true},
+  'amsterdam':{countryCode:'NL',country:'Netherlands',isInternational:true},
+  'berlin':{countryCode:'DE',country:'Germany',isInternational:true},
+  'munich':{countryCode:'DE',country:'Germany',isInternational:true},
+  'frankfurt':{countryCode:'DE',country:'Germany',isInternational:true},
+  'vienna':{countryCode:'AT',country:'Austria',isInternational:true},
+  'zurich':{countryCode:'CH',country:'Switzerland',isInternational:true},
+  'geneva':{countryCode:'CH',country:'Switzerland',isInternational:true},
+  'prague':{countryCode:'CZ',country:'Czech Republic',isInternational:true},
+  'budapest':{countryCode:'HU',country:'Hungary',isInternational:true},
+  'lisbon':{countryCode:'PT',country:'Portugal',isInternational:true},
+  'porto':{countryCode:'PT',country:'Portugal',isInternational:true},
+  'athens':{countryCode:'GR',country:'Greece',isInternational:true},
+  'santorini':{countryCode:'GR',country:'Greece',isInternational:true},
+  'mykonos':{countryCode:'GR',country:'Greece',isInternational:true},
+  'stockholm':{countryCode:'SE',country:'Sweden',isInternational:true},
+  'copenhagen':{countryCode:'DK',country:'Denmark',isInternational:true},
+  'oslo':{countryCode:'NO',country:'Norway',isInternational:true},
+  'helsinki':{countryCode:'FI',country:'Finland',isInternational:true},
+  'dublin':{countryCode:'IE',country:'Ireland',isInternational:true},
+  'edinburgh':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'manchester':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'brussels':{countryCode:'BE',country:'Belgium',isInternational:true},
+  'warsaw':{countryCode:'PL',country:'Poland',isInternational:true},
+  'krakow':{countryCode:'PL',country:'Poland',isInternational:true},
+  // Americas
+  'new york':{countryCode:'US',country:'United States',isInternational:false},
+  'los angeles':{countryCode:'US',country:'United States',isInternational:false},
+  'chicago':{countryCode:'US',country:'United States',isInternational:false},
+  'miami':{countryCode:'US',country:'United States',isInternational:false},
+  'san francisco':{countryCode:'US',country:'United States',isInternational:false},
+  'las vegas':{countryCode:'US',country:'United States',isInternational:false},
+  'orlando':{countryCode:'US',country:'United States',isInternational:false},
+  'anaheim':{countryCode:'US',country:'United States',isInternational:false},
+  'seattle':{countryCode:'US',country:'United States',isInternational:false},
+  'boston':{countryCode:'US',country:'United States',isInternational:false},
+  'nashville':{countryCode:'US',country:'United States',isInternational:false},
+  'austin':{countryCode:'US',country:'United States',isInternational:false},
+  'denver':{countryCode:'US',country:'United States',isInternational:false},
+  'phoenix':{countryCode:'US',country:'United States',isInternational:false},
+  'atlanta':{countryCode:'US',country:'United States',isInternational:false},
+  'honolulu':{countryCode:'US',country:'United States',isInternational:false},
+  'new orleans':{countryCode:'US',country:'United States',isInternational:false},
+  'washington':{countryCode:'US',country:'United States',isInternational:false},
+  'toronto':{countryCode:'CA',country:'Canada',isInternational:true},
+  'vancouver':{countryCode:'CA',country:'Canada',isInternational:true},
+  'montreal':{countryCode:'CA',country:'Canada',isInternational:true},
+  'mexico city':{countryCode:'MX',country:'Mexico',isInternational:true},
+  'cancun':{countryCode:'MX',country:'Mexico',isInternational:true},
+  'cabo':{countryCode:'MX',country:'Mexico',isInternational:true},
+  'buenos aires':{countryCode:'AR',country:'Argentina',isInternational:true},
+  'rio de janeiro':{countryCode:'BR',country:'Brazil',isInternational:true},
+  'são paulo':{countryCode:'BR',country:'Brazil',isInternational:true},
+  'bogota':{countryCode:'CO',country:'Colombia',isInternational:true},
+  'lima':{countryCode:'PE',country:'Peru',isInternational:true},
+  // Asia
+  'tokyo':{countryCode:'JP',country:'Japan',isInternational:true},
+  'osaka':{countryCode:'JP',country:'Japan',isInternational:true},
+  'kyoto':{countryCode:'JP',country:'Japan',isInternational:true},
+  'seoul':{countryCode:'KR',country:'South Korea',isInternational:true},
+  'beijing':{countryCode:'CN',country:'China',isInternational:true},
+  'shanghai':{countryCode:'CN',country:'China',isInternational:true},
+  'hong kong':{countryCode:'HK',country:'Hong Kong',isInternational:true},
+  'bangkok':{countryCode:'TH',country:'Thailand',isInternational:true},
+  'phuket':{countryCode:'TH',country:'Thailand',isInternational:true},
+  'singapore':{countryCode:'SG',country:'Singapore',isInternational:true},
+  'bali':{countryCode:'ID',country:'Indonesia',isInternational:true},
+  'jakarta':{countryCode:'ID',country:'Indonesia',isInternational:true},
+  'kuala lumpur':{countryCode:'MY',country:'Malaysia',isInternational:true},
+  'mumbai':{countryCode:'IN',country:'India',isInternational:true},
+  'delhi':{countryCode:'IN',country:'India',isInternational:true},
+  'dubai':{countryCode:'AE',country:'UAE',isInternational:true},
+  'abu dhabi':{countryCode:'AE',country:'UAE',isInternational:true},
+  'istanbul':{countryCode:'TR',country:'Turkey',isInternational:true},
+  'tel aviv':{countryCode:'IL',country:'Israel',isInternational:true},
+  // Oceania / Africa
+  'sydney':{countryCode:'AU',country:'Australia',isInternational:true},
+  'melbourne':{countryCode:'AU',country:'Australia',isInternational:true},
+  'auckland':{countryCode:'NZ',country:'New Zealand',isInternational:true},
+  'cape town':{countryCode:'ZA',country:'South Africa',isInternational:true},
 };
 
 const CITY_DATA={
@@ -433,7 +534,7 @@ function getIntlFlags(trip){
 function generateChecklist(trip){
   const items=[];
   const isIntl=trip.destinations.some(d=>d.isInternational||(d.countryCode&&d.countryCode!=='US'));
-  const add=(label,emoji,cat,days,notes=null)=>items.push({id:uuid(),label,emoji,category:cat,completed:false,daysBeforeTrip:days,isAutoGenerated:true,notes});
+  const add=(label,emoji,cat,days,notes=null,bookingUrl=null)=>items.push({id:uuid(),label,emoji,category:cat,completed:false,daysBeforeTrip:days,isAutoGenerated:true,notes,bookingUrl});
 
   // ── Documents ──
   if(isIntl){
@@ -474,12 +575,12 @@ function generateChecklist(trip){
   // Activities that need booking
   allItems.filter(i=>i.bookingRequired&&i.bucket==='must-do').forEach(item=>{
     add(`${item.name} — tickets/booking confirmed`,item.emoji||'🎟️','bookings',30,
-      item.bookingUrl?`Book at: ${item.bookingUrl}`:item.notes||null);
+      item.notes||null, item.bookingUrl||null);
   });
   // Restaurants that need reservations
   allItems.filter(i=>i.reservationRequired).forEach(item=>{
     add(`${item.name} — reservation confirmed`,item.emoji||'🍽️','bookings',21,
-      item.bookingUrl?`Reserve at: ${item.bookingUrl}`:item.notes||null);
+      item.notes||null, item.bookingUrl||null);
   });
   // Nice-to-have bookings
   allItems.filter(i=>i.bookingRequired&&i.bucket!=='must-do').forEach(item=>{
@@ -907,7 +1008,20 @@ function ChecklistView({trip,onUpdate}){
                       <span style={{fontSize:'.875rem'}}>{item.emoji}</span>
                       <span className="item-label" style={{fontSize:'.875rem'}}>{item.label}</span>
                     </div>
-                    {item.notes&&!item.completed&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginTop:2}}>{item.notes}</p>}
+                    {item.notes&&!item.completed&&!item.bookingUrl&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginTop:2}}>{item.notes}</p>}
+                    {(()=>{
+                      // Support new bookingUrl field AND legacy "Book at: https://..." in notes
+                      const burl=item.bookingUrl||(item.notes&&item.notes.match(/https?:\/\/\S+/)?.[0])||null;
+                      return burl&&!item.completed?(
+                        <div style={{marginTop:6}} onClick={e=>e.stopPropagation()}>
+                          <a href={burl} target="_blank" rel="noopener noreferrer"
+                            className="btn btn-primary btn-sm"
+                            style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:'.75rem',padding:'4px 10px',borderRadius:20,textDecoration:'none'}}>
+                            {item.category==='bookings'&&(item.label||'').toLowerCase().includes('reservation')?'🍽️ Book reservation →':'🎟️ Book tickets →'}
+                          </a>
+                        </div>
+                      ):null;
+                    })()}
                   </div>
                 </div>
               ))}
@@ -927,13 +1041,14 @@ function ChecklistView({trip,onUpdate}){
 }
 
 // ── ACTIVITY CARD ──────────────────────────────────────────────────────────────
-function ActivityCard({item,type}){
+function ActivityCard({item,type,draggable}){
   const [exp,setExp]=useState(false);
   const mapsUrl=`https://maps.google.com/?q=${encodeURIComponent(item.address||item.name)}`;
   return(
-    <div className="card" style={{marginBottom:10,overflow:'hidden'}}>
+    <div className="card sortable-item" data-id={item.id} style={{marginBottom:10,overflow:'hidden'}}>
       <button onClick={()=>setExp(e=>!e)}
         style={{width:'100%',padding:'13px 16px',display:'flex',alignItems:'flex-start',gap:12,background:'none',border:'none',cursor:'pointer',textAlign:'left'}}>
+        {draggable&&<span className="drag-handle" title="Drag to reorder">⠿</span>}
         <span style={{fontSize:'1.2rem',lineHeight:1,flexShrink:0,marginTop:2}}>{item.emoji}</span>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:3}}>
@@ -977,9 +1092,43 @@ function DayView({trip,day,onUpdateTrip}){
   const [notes,setNotes]=useState(day.notes||'');
   const [filter,setFilter]=useState('all');
   const [copied,setCopied]=useState(false);
+  const actsRef=useRef(null);
+  const restsRef=useRef(null);
   const dest=trip.destinations.find(d=>d.id===day.destinationId);
   const acts=(day.activities||[]).filter(a=>filter==='all'||a.bucket===filter);
   const rests=(day.restaurants||[]).filter(r=>filter==='all'||r.bucket===filter);
+
+  // Wire up SortableJS for drag-and-drop reordering
+  useEffect(()=>{
+    if(!window.Sortable)return;
+    const makeSort=(ref,listKey)=>{
+      if(!ref.current)return null;
+      return new window.Sortable(ref.current,{
+        animation:150,
+        handle:'.drag-handle',
+        ghostClass:'sortable-ghost',
+        chosenClass:'sortable-chosen',
+        onEnd(evt){
+          if(evt.oldIndex===evt.newIndex)return;
+          const fullList=[...(day[listKey]||[])];
+          // Find the item ids in their new rendered order via DOM
+          const orderedIds=[...evt.from.querySelectorAll('.sortable-item')].map(el=>el.dataset.id);
+          const reordered=orderedIds.map((id,i)=>{
+            const item=fullList.find(x=>x.id===id);
+            return item?{...item,sortOrder:i}:null;
+          }).filter(Boolean);
+          // Merge back — items not shown (filtered) keep their place
+          const hiddenItems=fullList.filter(x=>!reordered.find(r=>r.id===x.id));
+          const merged=[...reordered,...hiddenItems];
+          const updatedDays=trip.days.map(d=>d.id===day.id?{...d,[listKey]:merged}:d);
+          onUpdateTrip({...trip,days:updatedDays});
+        }
+      });
+    };
+    const s1=makeSort(actsRef,'activities');
+    const s2=makeSort(restsRef,'restaurants');
+    return()=>{s1&&s1.destroy();s2&&s2.destroy();};
+  },[day.id,filter,acts.length,rests.length]);
   const hotel=trip.lodging?.find(l=>!l.destinationId||l.destinationId===day.destinationId);
   const wxMap={GB:{icon:'🌤',cond:'Partly Cloudy',hi:17,lo:12,unit:'C',rain:30},FR:{icon:'☀️',cond:'Mild & Sunny',hi:20,lo:14,unit:'C',rain:10},US:{icon:'☀️',cond:'Sunny',hi:30,lo:24,unit:'F',rain:5}};
   const wx=dest?wxMap[dest.countryCode]||null:null;
@@ -1016,8 +1165,8 @@ function DayView({trip,day,onUpdateTrip}){
           </button>
         ))}
       </div>
-      {acts.length>0&&<div style={{marginBottom:16}}><p className="section-label">Activities</p>{acts.map(a=><ActivityCard key={a.id} item={a} type="activity"/>)}</div>}
-      {rests.length>0&&<div style={{marginBottom:16}}><p className="section-label">Food & Drinks</p>{rests.map(r=><ActivityCard key={r.id} item={r} type="restaurant"/>)}</div>}
+      {acts.length>0&&<div style={{marginBottom:16}}><p className="section-label">Activities {acts.length>1&&<span style={{fontSize:'.7rem',color:'var(--color-ink-light)',fontWeight:400}}>· drag to reorder</span>}</p><div ref={actsRef}>{acts.map(a=><ActivityCard key={a.id} item={a} type="activity" draggable={acts.length>1}/>)}</div></div>}
+      {rests.length>0&&<div style={{marginBottom:16}}><p className="section-label">Food & Drinks {rests.length>1&&<span style={{fontSize:'.7rem',color:'var(--color-ink-light)',fontWeight:400}}>· drag to reorder</span>}</p><div ref={restsRef}>{rests.map(r=><ActivityCard key={r.id} item={r} type="restaurant" draggable={rests.length>1}/>)}</div></div>}
       {acts.length===0&&rests.length===0&&(
         <div style={{textAlign:'center',padding:'32px 0',color:'var(--color-ink-light)'}}>
           <p style={{fontSize:'1.5rem',marginBottom:8}}>🗺️</p>
@@ -1347,7 +1496,16 @@ function NewTripSheet({onClose, onSave}) {
                     {form.destinations.length>1&&<button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'2px 8px',color:'var(--color-flag)'}} onClick={()=>removeDest(i)}>Remove</button>}
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8,marginBottom:8}}>
-                    <input className="input" placeholder="City (e.g. Paris)" value={d.city} onChange={e=>{const v=e.target.value;setDest(i,'city',v.length?v.charAt(0).toUpperCase()+v.slice(1).toLowerCase():v);}}/>
+                    <input className="input" placeholder="City (e.g. Paris)" value={d.city} onChange={e=>{
+                      const v=e.target.value;
+                      const cap=v.length?v.charAt(0).toUpperCase()+v.slice(1):v;
+                      const match=CITY_TO_COUNTRY[v.toLowerCase().trim()];
+                      if(match){
+                        setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],city:cap,...match};return{...f,destinations:ds};});
+                      } else {
+                        setDest(i,'city',cap);
+                      }
+                    }}/>
                     <input className="input" placeholder="Code (FR)" value={d.countryCode} onChange={e=>setDest(i,'countryCode',e.target.value.toUpperCase().slice(0,2))} maxLength={2}/>
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
@@ -1799,7 +1957,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
             </div>
             <div style={{display:'flex',gap:8}}>
               <button onClick={()=>generateTripPDF(trip)} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>↓ PDF</button>
-              <button onClick={()=>{ if(window.confirm(`Delete "${trip.title}"? This can't be undone.`)) onDelete(trip.id); }} style={{background:'rgba(255,80,80,.25)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>🗑 Delete</button>
+              <button onClick={()=>{ if(window.confirm(`Delete "${trip.title}"? This can't be undone.`)) onDelete(trip.id); }} style={{background:'rgba(255,80,80,.25)',border:'none',borderRadius:20,padding:'6px 12px',color:'#fff',fontSize:'1rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>🗑</button>
             </div>
           </div>
           {flags.length>0&&(

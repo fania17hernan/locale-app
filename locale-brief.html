@@ -43,6 +43,23 @@
   .tag-soon{background:#EAF3F5;color:#1A5268}
   .tag-future{background:#F3F0FA;color:#5B3FA8}
   .tag-wont{background:#F5F2EC;color:#8A8784}
+  .tag-fixed{background:#E6F4EC;color:#1A6B3A}
+
+  /* Release notes */
+  .release-block{margin-bottom:28px}
+  .release-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .release-version{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:600;color:#1A1714}
+  .release-date{font-size:11px;color:#8A8784;background:#F0EDE7;padding:3px 9px;border-radius:20px}
+  .release-item{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid #EDE9E1;font-size:13px;color:#3A3735;line-height:1.5}
+  .release-item:last-child{border-bottom:none}
+  .release-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+  .dot-fix{background:#1A6B3A}
+  .dot-feature{background:#2B5F6E}
+  .dot-polish{background:#B45309}
+  .release-label{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:1px 7px;border-radius:20px;flex-shrink:0;margin-top:2px}
+  .label-fix{background:#E6F4EC;color:#1A6B3A}
+  .label-feature{background:#EAF3F5;color:#1A5268}
+  .label-polish{background:#FEF3C7;color:#92610A}
 
   /* Quote / callout */
   .callout{background:linear-gradient(135deg,#EAF3F5,#F0F8FA);border-left:3px solid #2B5F6E;border-radius:0 12px 12px 0;padding:16px 20px;margin-bottom:16px}
@@ -89,7 +106,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-eyebrow">Focus Group Brief · Beta v0.1</div>
+  <div class="hero-eyebrow">Focus Group Brief · Beta v0.2</div>
   <div class="hero-title">Locale</div>
   <div class="hero-sub">Your trips, beautifully kept. — A POC brief for focus group testers.</div>
   <div class="hero-pills">
@@ -107,6 +124,7 @@
     <button class="nav-btn" onclick="show('features')">What's Live</button>
     <button class="nav-btn" onclick="show('backlog')">Backlog</button>
     <button class="nav-btn" onclick="show('test')">Start Testing</button>
+    <button class="nav-btn" onclick="show('changelog')">Release Notes</button>
   </div>
 </div>
 
@@ -302,58 +320,89 @@
   <div class="section-eyebrow">Known issues + future roadmap</div>
   <div class="section-title">What's being worked on</div>
 
-  <p>This is an honest view of what's broken, what's coming, and what's planned for later phases.</p>
+  <p>This is an honest view of what's broken, what's coming, and what's planned for later phases. Fixed items are marked — see <strong>Release Notes</strong> for the full history.</p>
 
   <div class="divider"></div>
-  <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#DC2626;margin-bottom:12px">🔴 Bugs to fix</p>
+  <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:12px">✅ Bugs — Fixed in v0.2</p>
 
-  <div class="backlog-item">
-    <div class="backlog-num bug">1</div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
     <div class="backlog-body">
-      <div class="backlog-title">iPhone zooms in when tapping form inputs</div>
-      <div class="backlog-desc">Safari auto-zooms on inputs smaller than 16px. Affects the new trip form. Fix: set all inputs to 16px minimum.</div>
+      <div class="backlog-title" style="text-decoration:line-through">iPhone zooms in when tapping form inputs</div>
+      <div class="backlog-desc">Fixed — all inputs set to 16px minimum to prevent Safari auto-zoom.</div>
+      <span class="card-tag tag-fixed">Fixed v0.2</span>
     </div>
   </div>
-  <div class="backlog-item">
-    <div class="backlog-num bug">2</div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
     <div class="backlog-body">
-      <div class="backlog-title">Keyboard pushes Back/Preview buttons off screen</div>
-      <div class="backlog-desc">On iPhone, opening the keyboard during trip creation hides navigation buttons. Fix: use 100dvh + sticky button layout.</div>
+      <div class="backlog-title" style="text-decoration:line-through">Keyboard pushes Back/Preview buttons off screen</div>
+      <div class="backlog-desc">Fixed — using 100dvh + sticky button layout.</div>
+      <span class="card-tag tag-fixed">Fixed v0.2</span>
     </div>
   </div>
-  <div class="backlog-item">
-    <div class="backlog-num bug">3</div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
     <div class="backlog-body">
-      <div class="backlog-title">End date can be set before start date</div>
-      <div class="backlog-desc">No validation prevents invalid date ranges like "May 31 – May 16." Fix: inline error + block progression.</div>
+      <div class="backlog-title" style="text-decoration:line-through">End date can be set before start date</div>
+      <div class="backlog-desc">Fixed — inline validation blocks invalid ranges and auto-suggests next-day end date.</div>
+      <span class="card-tag tag-fixed">Fixed v0.2</span>
     </div>
   </div>
-  <div class="backlog-item">
-    <div class="backlog-num bug">4</div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
     <div class="backlog-body">
-      <div class="backlog-title">Wrong flag shown on user-created trips</div>
-      <div class="backlog-desc">Shows passport country flag instead of destination country flag next to city names. Fix: map destination countryCode to flag.</div>
+      <div class="backlog-title" style="text-decoration:line-through">Wrong flag shown on user-created trips</div>
+      <div class="backlog-desc">Fixed — destination country flag now shown correctly.</div>
+      <span class="card-tag tag-fixed">Fixed v0.2</span>
     </div>
   </div>
-  <div class="backlog-item">
-    <div class="backlog-num bug">5</div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
     <div class="backlog-body">
-      <div class="backlog-title">City names display exactly as typed — no normalization</div>
-      <div class="backlog-desc">"ZUrich" stays as "ZUrich." Fix: capitalize on input (first letter up, rest down).</div>
+      <div class="backlog-title" style="text-decoration:line-through">City names display exactly as typed — no normalization</div>
+      <div class="backlog-desc">Fixed — city now auto-capitalizes on input.</div>
+      <span class="card-tag tag-fixed">Fixed v0.2</span>
     </div>
   </div>
-  <div class="backlog-item">
-    <div class="backlog-num bug">6</div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
     <div class="backlog-body">
-      <div class="backlog-title">Text truncation in itinerary cards</div>
-      <div class="backlog-desc">"Hotel Indi..." and "Long Beach A..." get cut off. Fix: min-width: 0 on flex children.</div>
+      <div class="backlog-title" style="text-decoration:line-through">Text truncation in itinerary cards</div>
+      <div class="backlog-desc">Fixed — hotel name and address no longer get clipped.</div>
+      <span class="card-tag tag-fixed">Fixed v0.2</span>
     </div>
   </div>
-  <div class="backlog-item">
-    <div class="backlog-num bug">7</div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
     <div class="backlog-body">
-      <div class="backlog-title">Two confusingly similar share buttons</div>
-      <div class="backlog-desc">The second share button sends plain text instead of a tappable link. Fix: rename to "Export" and fix link encoding.</div>
+      <div class="backlog-title" style="text-decoration:line-through">Two confusingly similar share buttons</div>
+      <div class="backlog-desc">Fixed — duplicate removed, one clean "Share Trip" button remains.</div>
+      <span class="card-tag tag-fixed">Fixed v0.2</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Checklist booking items show URL as plain text</div>
+      <div class="backlog-desc">Fixed — booking items now show a tappable "Book tickets →" or "Book reservation →" button. Clicking it doesn't accidentally check off the item.</div>
+      <span class="card-tag tag-fixed">Fixed v0.2</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Delete button shows redundant "Delete" text label</div>
+      <div class="backlog-desc">Fixed — now icon-only (🗑).</div>
+      <span class="card-tag tag-fixed">Fixed v0.2</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Traveler avatar initials have no tooltip</div>
+      <div class="backlog-desc">Fixed — hover on desktop or long-press on mobile shows full traveler name.</div>
+      <span class="card-tag tag-fixed">Fixed v0.2</span>
     </div>
   </div>
 
@@ -361,42 +410,35 @@
   <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#2B5F6E;margin-bottom:12px">🔵 Coming soon (Phase 1 polish)</p>
 
   <div class="backlog-item">
-    <div class="backlog-num">8</div>
+    <div class="backlog-num">1</div>
     <div class="backlog-body">
       <div class="backlog-title">Role-aware onboarding</div>
       <div class="backlog-desc">Separate flows for trip Creators (need API key) vs. Viewers (receiving a shared trip, should never see the API key prompt).</div>
     </div>
   </div>
   <div class="backlog-item">
-    <div class="backlog-num">9</div>
-    <div class="backlog-body">
-      <div class="backlog-title">Traveler avatar tooltips</div>
-      <div class="backlog-desc">Initials like "S" and "A" are meaningless to someone receiving a shared trip. Hover/long-press to show full name.</div>
-    </div>
-  </div>
-  <div class="backlog-item">
-    <div class="backlog-num">10</div>
+    <div class="backlog-num">2</div>
     <div class="backlog-body">
       <div class="backlog-title">Entry requirements via dedicated API</div>
       <div class="backlog-desc">Currently baked into demo trips only. Move to Travel Buddy AI (free tier) so every trip gets live visa/entry data automatically — no API key needed.</div>
     </div>
   </div>
   <div class="backlog-item">
-    <div class="backlog-num">11</div>
+    <div class="backlog-num">3</div>
     <div class="backlog-body">
       <div class="backlog-title">Better date picker UX</div>
-      <div class="backlog-desc">Replace browser-native date inputs (which vary wildly by device) with Flatpickr for a consistent, on-brand experience. Add calendar icon. No default date.</div>
+      <div class="backlog-desc">Replace browser-native date inputs (which vary wildly by device) with Flatpickr for a consistent, on-brand experience. Add calendar icon.</div>
     </div>
   </div>
   <div class="backlog-item">
-    <div class="backlog-num">12</div>
+    <div class="backlog-num">4</div>
     <div class="backlog-body">
       <div class="backlog-title">Open Graph link previews</div>
       <div class="backlog-desc">Shared links currently preview as just "Locale — Your trips, beautifully kept." Should show trip name, destination, and dates.</div>
     </div>
   </div>
   <div class="backlog-item">
-    <div class="backlog-num">13</div>
+    <div class="backlog-num">5</div>
     <div class="backlog-body">
       <div class="backlog-title">📧 Confirmation email parsing</div>
       <div class="backlog-desc">Paste or upload a booking confirmation (flight, hotel, tour, restaurant) and the AI extracts the key details — dates, times, confirmation numbers, addresses — and adds them directly to your trip. Similar to how Apple Calendar pulls events from confirmation emails, but inside Locale so everything lands in the right trip automatically.</div>
@@ -407,45 +449,194 @@
   <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7C3AED;margin-bottom:12px">🟣 Phase 2 — Future features</p>
 
   <div class="backlog-item">
-    <div class="backlog-num future">14</div>
+    <div class="backlog-num future">6</div>
     <div class="backlog-body">
       <div class="backlog-title">Real-time trip sync</div>
       <div class="backlog-desc">Backend database (Supabase) so all group members see the same live trip — no need to re-share after every update.</div>
     </div>
   </div>
   <div class="backlog-item">
-    <div class="backlog-num future">15</div>
+    <div class="backlog-num future">7</div>
     <div class="backlog-body">
       <div class="backlog-title">User accounts + trip ownership</div>
       <div class="backlog-desc">Login so your trips follow you across devices. Role-based access: organizer, collaborator, viewer.</div>
     </div>
   </div>
   <div class="backlog-item">
-    <div class="backlog-num future">16</div>
+    <div class="backlog-num future">8</div>
     <div class="backlog-body">
       <div class="backlog-title">Push notifications</div>
       <div class="backlog-desc">Check-in reminders 24hrs before flights. Itinerary updates when the organizer changes the plan.</div>
     </div>
   </div>
   <div class="backlog-item">
-    <div class="backlog-num future">17</div>
+    <div class="backlog-num future">9</div>
     <div class="backlog-body">
       <div class="backlog-title">In-app group chat / comments</div>
       <div class="backlog-desc">Comment on specific days or activities. Keep the "where are we meeting?" conversation inside the trip.</div>
     </div>
   </div>
   <div class="backlog-item">
-    <div class="backlog-num future">18</div>
+    <div class="backlog-num future">10</div>
     <div class="backlog-body">
       <div class="backlog-title">Native iOS + Android app</div>
       <div class="backlog-desc">Once the PWA POC validates the concept, wrap in a native shell for App Store / Play Store distribution.</div>
     </div>
   </div>
   <div class="backlog-item">
-    <div class="backlog-num future">19</div>
+    <div class="backlog-num future">11</div>
     <div class="backlog-body">
       <div class="backlog-title">Booking integrations</div>
       <div class="backlog-desc">Connect directly to OpenTable, Viator, and GetYourGuide so "Book now" badges actually book — without leaving the app.</div>
+    </div>
+  </div>
+</div>
+
+<!-- RELEASE NOTES -->
+<div class="section" id="changelog">
+  <div class="section-eyebrow">Changelog</div>
+  <div class="section-title">Release Notes</div>
+  <p>A running history of everything shipped — bugs fixed, features added, and polish applied. Newest first.</p>
+
+  <div class="divider"></div>
+
+  <!-- v0.2 -->
+  <div class="release-block">
+    <div class="release-header">
+      <div class="release-version">v0.2</div>
+      <div class="release-date">May 31, 2026</div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#2B5F6E;margin-bottom:8px">✨ New features</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>Drag-to-reorder itinerary items</strong> — Activities and restaurants within a day can now be reordered by dragging the ⠿ handle. Order is saved automatically.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>City auto-fills country</strong> — Typing a recognized city in the new trip form (90+ cities worldwide) automatically fills in the country code and flag. No manual entry needed.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>Booking buttons on checklist</strong> — Checklist items with a booking URL now show a tappable button: "🎟️ Book tickets →" for venues or "🍽️ Book reservation →" for restaurants. Clicking the button doesn't accidentally check off the item.</div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:8px">🐛 Bug fixes</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>iPhone auto-zoom on inputs</strong> — Safari was zooming in when tapping form fields. All inputs now set to 16px minimum.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Keyboard hiding navigation buttons</strong> — On iPhone, the soft keyboard was pushing Back/Preview buttons off screen during trip creation. Fixed with 100dvh + dynamic viewport layout.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Invalid date ranges allowed</strong> — End date could be set before start date with no warning. Now validated inline with an error message, and end date auto-suggests +1 day from start.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Wrong destination flag</strong> — Trips were showing the passport country flag instead of the destination country flag next to city names.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>City name capitalization</strong> — "ZUrich" or "pARIS" would display as typed. Now normalized to title case on input.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Text truncation in itinerary cards</strong> — Hotel name and address were being clipped mid-word in the day view hotel strip.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Duplicate share buttons</strong> — Two nearly identical share buttons existed, one of which sent unformatted plain text instead of a tappable trip link. Duplicate removed.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Traveler avatar initials showed no names</strong> — Hovering (desktop) or long-pressing (mobile) now reveals the full traveler name in a tooltip.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Delete button had redundant text label</strong> — Now shows icon only (🗑) for a cleaner header.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- v0.1 -->
+  <div class="release-block">
+    <div class="release-header">
+      <div class="release-version">v0.1</div>
+      <div class="release-date">May 2026 — Initial beta</div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#2B5F6E;margin-bottom:8px">🚀 Initial launch</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;">
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>Trip creation flow</strong> — Multi-step form: name, dates, destinations (multi-stop), occasion type, travelers, flights.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>AI itinerary generator</strong> — Describe your trip and Claude generates a day-by-day plan with venues, addresses, booking flags, and things to consider.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>Smart trip checklist</strong> — Auto-generated from the itinerary: documents, bookings, finance, tech, health, packing. Tracks progress with a readiness bar.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>Day-by-day itinerary view</strong> — Browse activities and restaurants per day with expandable cards. Weather strip, hotel strip, group notes, and filter by Must Do / Nice.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>Trip sharing via link</strong> — Base64-encoded trip URL. Recipients tap the link and the full trip is added to their app in one tap.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>Currency converter</strong> — USD ↔ GBP ↔ EUR using fixed reference rates. Built into the trip Overview tab.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>City tips</strong> — Curated local guidance for select destinations: transport, tipping, customs, SIM cards, emergency numbers, best areas, and local phrases.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>PDF export</strong> — Styled PDF covering trip cover page, checklist, and day-by-day itinerary.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>PWA install</strong> — Works on iPhone (Share → Add to Home Screen) and Android. Offline support after first load.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>Demo trips pre-loaded</strong> — London + Paris and Disneyland Anaheim sample trips ship with the app so testers can explore before creating their own.</div>
+      </div>
     </div>
   </div>
 </div>
@@ -481,7 +672,7 @@
 </div>
 
 <div class="footer">
-  Locale — Focus Group Brief · Beta v0.1 · Built by Stephanie · May 2026
+  Locale — Focus Group Brief · Beta v0.2 · Built by Stephanie · May 2026
 </div>
 
 <script>

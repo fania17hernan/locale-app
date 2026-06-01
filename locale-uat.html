@@ -82,7 +82,7 @@
 <div class="section" style="padding-bottom:12px">
   <div class="section-label">Your progress</div>
   <div class="progress-wrap">
-    <div class="progress-label"><span>Tasks completed</span><span id="prog-text">0 of 12</span></div>
+    <div class="progress-label"><span>Tasks completed</span><span id="prog-text">0 of 14</span></div>
     <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
   </div>
 </div>
@@ -153,12 +153,28 @@
         <span class="task-tag tag-required">Required</span>
       </div>
     </div>
+    <div class="task" data-id="t6b" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Tap a "Book tickets" or "Book reservation" button on the checklist</div>
+        <div class="task-desc">Open the London + Paris demo trip → Checklist → Bookings section. Booking items like "Tower of London" or "Louvre" should show a teal button. Tap it — does it open the booking site without checking off the item?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
     <div class="task" data-id="t7" onclick="toggle(this)">
       <div class="cb"><div class="cb-check"></div></div>
       <div class="task-body">
         <div class="task-title">View the Days tab</div>
         <div class="task-desc">Tap the Days tab. If there's an itinerary, tap each day to see activities and restaurants.</div>
         <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="t7b" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Drag to reorder activities in a day</div>
+        <div class="task-desc">Open a day with 2+ activities. Grab the ⠿ handle on the left of a card and drag it up or down. Does the order update and stick after letting go?</div>
+        <span class="task-tag tag-optional">Optional</span>
       </div>
     </div>
   </div>
@@ -203,7 +219,7 @@
       <div class="cb"><div class="cb-check"></div></div>
       <div class="task-body">
         <div class="task-title">Delete a trip</div>
-        <div class="task-desc">Tap 🗑 Delete on a trip. Confirm the dialog. Does it go back to the dashboard and remove the card?</div>
+        <div class="task-desc">Tap the 🗑 icon in the trip header. Confirm the dialog. Does it go back to the dashboard and remove the card?</div>
         <span class="task-tag tag-optional">Optional</span>
       </div>
     </div>
@@ -236,7 +252,7 @@
 </div>
 
 <script>
-  const TOTAL = 12;
+  const TOTAL = 14;
 
   function toggle(el) {
     el.classList.toggle('done');
@@ -273,7 +289,7 @@
     if(!text){ alert('Please add a note before sending!'); return; }
     const done = document.querySelectorAll('.task.done').length;
     const subject = encodeURIComponent('Locale Beta Feedback');
-    const body = encodeURIComponent(`Hi Stephanie!\n\nHere's my feedback on Locale:\n\n${text}\n\n---\nCompleted ${done} of ${TOTAL} tasks.`);
+    const body = encodeURIComponent(`Hi Stephanie!\n\nHere's my Locale v0.2 beta feedback:\n\n${text}\n\n---\nCompleted ${done} of ${TOTAL} tasks.`);
     window.location.href = `mailto:s.borboa9@gmail.com?subject=${subject}&body=${body}`;
   }
 
