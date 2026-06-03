@@ -12,10 +12,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" onerror="console.warn('SortableJS failed to load — drag-to-reorder will be unavailable.');"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
@@ -463,6 +463,18 @@ const CITY_LOCAL_TIPS={
   },
 };
 
+// ── APP VERSION & FEATURE FLAGS ────────────────────────────────────────────────
+const APP_VERSION = '0.3';
+const SCHEMA_VERSION = 3; // increment when trip data shape changes
+
+// Feature flags — set to false to disable a feature for all users without a deploy
+const FLAGS = {
+  aiGenerator:  true,   // Claude itinerary generator (requires API key)
+  packingList:  true,   // 🧳 Packing tab
+  dragReorder:  true,   // drag-to-reorder activities/restaurants
+  shareTrip:    true,   // URL-based trip sharing
+};
+
 // ── AI KEY STORAGE ─────────────────────────────────────────────────────────────
 const AI_KEY_SK = 'locale_ai_key';
 function getAIKey(){try{return localStorage.getItem(AI_KEY_SK)||'';}catch(e){return '';}}
@@ -776,12 +788,30 @@ const RAW_MOCK_TRIPS=[
 ];
 // Normalize a trip so it always has title, startDate, endDate regardless of legacy shape
 function normalizeTrip(t){
+  const v = t.schemaVersion || 0;
   const title = t.title || t.name || 'My Trip';
   const startDate = t.startDate || t.travelPeriod?.depart || '';
   const endDate = t.endDate || t.travelPeriod?.return || '';
   const collaborators = (t.collaborators||[]).map(c=>({...c, avatarColor: c.avatarColor||c.color||'var(--color-accent)'}));
   const checklist = (t.checklist||[]).length ? t.checklist : generateChecklist({...t, startDate, endDate, title});
-  return {...t, title, startDate, endDate, collaborators, checklist};
+
+  // Schema migrations — add fields introduced in each version
+  // v1→v2: destinations array, days array
+  const destinations = t.destinations || [];
+  const days = t.days || [];
+  // v2→v3: packingList, lodging, flights
+  const packingList = t.packingList || [];
+  const lodging = t.lodging || [];
+  const flights = t.flights || [];
+
+  return {
+    ...t,
+    schemaVersion: SCHEMA_VERSION,
+    title, startDate, endDate,
+    collaborators, checklist,
+    destinations, days,
+    packingList, lodging, flights,
+  };
 }
 const MOCK_TRIPS=RAW_MOCK_TRIPS.map(t=>normalizeTrip(t));
 
@@ -1036,6 +1066,266 @@ function ChecklistView({trip,onUpdate}){
           <button className="btn btn-primary" onClick={addCustom} style={{flexShrink:0}}>Add</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── PACKING LIST ──────────────────────────────────────────────────────────────
+
+// Inspiration: TREK uses category buckets, per-item checked state, and a
+// per-category progress ratio. Locale's version is original vanilla React
+// with smart trip-aware defaults, quantity support, and bulk-pack per category.
+
+const PACK_CATS = [
+  {id:'clothing',  label:'Clothing',    emoji:'👕'},
+  {id:'toiletries',label:'Toiletries',  emoji:'🧴'},
+  {id:'tech',      label:'Tech',        emoji:'🔌'},
+  {id:'documents', label:'Documents',   emoji:'📄'},
+  {id:'health',    label:'Health',      emoji:'💊'},
+  {id:'misc',      label:'Misc',        emoji:'🎒'},
+];
+
+// Smart starter packs — trip-aware defaults. No code borrowed; these are
+// independently written item lists based on common travel planning knowledge.
+function buildPackingDefaults(trip){
+  const nights = trip.startDate && trip.endDate
+    ? Math.max(1, Math.round((new Date(trip.endDate)-new Date(trip.startDate))/(1000*60*60*24)))
+    : 5;
+  const isIntl = (trip.destinations||[]).some(d=>d.isInternational||(d.countryCode&&d.countryCode!=='US'));
+  const isBeach = (trip.title||'').toLowerCase().includes('beach') || (trip.destinations||[]).some(d=>['Cancun','Cabo','Phuket','Bali','Miami','Honolulu'].includes(d.city));
+  const isBiz  = (trip.occasion||'') === 'business';
+
+  const item = (name, cat, qty=1) => ({id: uuid(), name, category: cat, qty, packed: false});
+
+  const clothing = [
+    item(`T-shirts / tops (×${Math.min(nights+1,7)})`, 'clothing', Math.min(nights+1,7)),
+    item(`Underwear (×${Math.min(nights+2,8)})`, 'clothing', Math.min(nights+2,8)),
+    item(`Socks (×${Math.min(nights+1,7)})`, 'clothing', Math.min(nights+1,7)),
+    item('Comfortable walking shoes', 'clothing'),
+    item('Casual outfit for evenings', 'clothing'),
+    item('Light jacket or cardigan', 'clothing'),
+    ...(isBeach ? [item('Swimsuit', 'clothing'), item('Sandals / flip-flops', 'clothing'), item('Cover-up / beach towel', 'clothing')] : []),
+    ...(isBiz   ? [item('Business attire (×2)', 'clothing', 2), item('Dress shoes', 'clothing')] : []),
+    ...(nights>5 ? [item('Jeans / travel pants', 'clothing')] : []),
+  ];
+
+  const toiletries = [
+    item('Toothbrush & toothpaste', 'toiletries'),
+    item('Deodorant', 'toiletries'),
+    item('Shampoo & conditioner', 'toiletries'),
+    item('Face wash & moisturizer', 'toiletries'),
+    item('Razor', 'toiletries'),
+    item('Sunscreen SPF 30+', 'toiletries'),
+    item('Lip balm', 'toiletries'),
+    ...(isBeach ? [item('After-sun lotion', 'toiletries')] : []),
+  ];
+
+  const tech = [
+    item('Phone charger', 'tech'),
+    item('Portable battery bank', 'tech'),
+    item('Earbuds / headphones', 'tech'),
+    item('Camera + memory card', 'tech'),
+    ...(isIntl ? [item('Universal power adapter', 'tech')] : []),
+    item('Laptop / tablet (if needed)', 'tech'),
+  ];
+
+  const documents = [
+    ...(isIntl ? [
+      item('Passport (check expiry!)', 'documents'),
+      item('Printed itinerary + hotel confirmations', 'documents'),
+      item('Travel insurance card', 'documents'),
+    ] : [
+      item('Photo ID / driver\'s license', 'documents'),
+      item('Hotel / booking confirmations', 'documents'),
+    ]),
+    item('Credit card + backup card', 'documents'),
+    item('Emergency contacts written down', 'documents'),
+  ];
+
+  const health = [
+    item('Prescription medications', 'health'),
+    item('Pain reliever (Advil / Tylenol)', 'health'),
+    item('Band-aids & blister pads', 'health'),
+    item('Antacid / Pepto', 'health'),
+    ...(isIntl ? [item('Digestive / travel sickness pills', 'health')] : []),
+    ...(isBeach ? [item('Insect repellent', 'health')] : []),
+  ];
+
+  const misc = [
+    item('Reusable water bottle', 'misc'),
+    item('Snacks for travel day', 'misc'),
+    item('Neck pillow (for flights)', 'misc'),
+    item('Pen (customs forms / journaling)', 'misc'),
+    ...(isIntl ? [item('Small amount of local currency', 'misc')] : []),
+    item('Lock for luggage', 'misc'),
+  ];
+
+  return [...clothing,...toiletries,...tech,...documents,...health,...misc];
+}
+
+function PackingView({trip, onUpdateTrip}){
+  const packingList = trip.packingList || null;
+  const [newItem, setNewItem] = useState('');
+  const [newCat, setNewCat] = useState('clothing');
+  const [collapsed, setCollapsed] = useState({});
+
+  // Initialise from trip or generate defaults on first open
+  const items = packingList || [];
+  const initialised = trip.packingList != null;
+
+  function saveItems(updated){
+    onUpdateTrip({...trip, packingList: updated});
+  }
+
+  function initDefaults(){
+    saveItems(buildPackingDefaults(trip));
+  }
+
+  function toggleItem(id){
+    saveItems(items.map(i => i.id===id ? {...i, packed: !i.packed} : i));
+  }
+
+  function packAll(catId){
+    const allPacked = items.filter(i=>i.category===catId).every(i=>i.packed);
+    saveItems(items.map(i => i.category===catId ? {...i, packed: !allPacked} : i));
+  }
+
+  function removeItem(id){
+    saveItems(items.filter(i=>i.id!==id));
+  }
+
+  function addItem(){
+    const name = newItem.trim();
+    if(!name) return;
+    saveItems([...items, {id:uuid(), name, category:newCat, qty:1, packed:false}]);
+    setNewItem('');
+  }
+
+  function resetList(){
+    if(window.confirm('Reset packing list and regenerate from your trip? Custom items will be lost.'))
+      saveItems(buildPackingDefaults(trip));
+  }
+
+  // Progress math — same concept TREK uses: done/total per category + overall
+  const total = items.length;
+  const packed = items.filter(i=>i.packed).length;
+  const pct = total > 0 ? Math.round((packed/total)*100) : 0;
+
+  const byCat = PACK_CATS.reduce((acc,cat)=>{
+    acc[cat.id] = items.filter(i=>i.category===cat.id);
+    return acc;
+  },{});
+
+  if(!initialised){
+    return(
+      <div style={{padding:'0 16px 32px'}}>
+        <div style={{textAlign:'center',padding:'48px 24px'}}>
+          <div style={{fontSize:'2.5rem',marginBottom:12}}>🧳</div>
+          <h2 className="font-display" style={{fontSize:'1.4rem',fontWeight:600,marginBottom:8}}>Build your packing list</h2>
+          <p style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.6,marginBottom:24,maxWidth:320,margin:'0 auto 24px'}}>
+            Locale will generate a smart starter list based on your destination, trip length, and occasion. You can add, remove, or edit anything.
+          </p>
+          <button className="btn btn-primary" style={{padding:'12px 28px',fontSize:'.95rem'}} onClick={initDefaults}>
+            ✨ Generate my packing list
+          </button>
+          <p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',marginTop:12}}>Or add items manually after generating</p>
+        </div>
+      </div>
+    );
+  }
+
+  return(
+    <div style={{padding:'0 16px 32px'}}>
+
+      {/* Overall progress */}
+      <div className="card" style={{padding:'16px',marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+          <span style={{fontWeight:600,fontSize:'.9rem'}}>Pack Progress</span>
+          <span style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{packed}/{total} packed {pct===100?'🎯':''}</span>
+        </div>
+        <div className="progress-bar-track">
+          <div className="progress-bar-fill" style={{width:`${pct}%`}}/>
+        </div>
+        {pct===100&&<p style={{color:'var(--color-success)',fontSize:'.85rem',fontWeight:500,marginTop:8}}>✅ All packed — you're ready to go!</p>}
+      </div>
+
+      {/* Category sections */}
+      {PACK_CATS.map(cat=>{
+        const catItems = byCat[cat.id] || [];
+        if(catItems.length===0) return null;
+        const catPacked = catItems.filter(i=>i.packed).length;
+        const catTotal  = catItems.length;
+        const allDone   = catPacked === catTotal;
+        const isOpen    = !collapsed[cat.id];
+
+        return(
+          <div key={cat.id} className="card" style={{marginBottom:10,overflow:'hidden'}}>
+            {/* Category header */}
+            <div style={{display:'flex',alignItems:'center',padding:'12px 16px',gap:10,borderBottom: isOpen?'1px solid var(--color-border)':'none'}}>
+              <button onClick={()=>setCollapsed(c=>({...c,[cat.id]:!c[cat.id]}))}
+                style={{flex:1,display:'flex',alignItems:'center',gap:10,background:'none',border:'none',cursor:'pointer',textAlign:'left',padding:0}}>
+                <span style={{fontSize:'1rem'}}>{cat.emoji}</span>
+                <span style={{fontWeight:600,fontSize:'.875rem'}}>{cat.label}</span>
+                <span className="pill pill-neutral" style={{padding:'2px 8px',fontSize:'.7rem',marginLeft:4}}>{catPacked}/{catTotal}</span>
+                <span style={{color:'var(--color-ink-light)',fontSize:'.7rem',marginLeft:'auto'}}>{isOpen?'▲':'▼'}</span>
+              </button>
+              {/* Bulk pack/unpack toggle */}
+              <button onClick={()=>packAll(cat.id)}
+                style={{flexShrink:0,background:allDone?'var(--color-accent)':'none',border:`1px solid ${allDone?'var(--color-accent)':'var(--color-border)'}`,borderRadius:20,padding:'3px 10px',fontSize:'.7rem',fontWeight:500,color:allDone?'#fff':'var(--color-ink-light)',cursor:'pointer',transition:'all .15s'}}>
+                {allDone?'✓ All packed':'Pack all'}
+              </button>
+            </div>
+
+            {/* Items */}
+            {isOpen && (
+              <div>
+                {catItems.map(item=>(
+                  <div key={item.id}
+                    style={{display:'flex',alignItems:'center',gap:12,padding:'11px 16px',borderBottom:'1px solid var(--color-border)',opacity:item.packed?.7:1,transition:'opacity .15s'}}>
+                    {/* Checkbox */}
+                    <button onClick={()=>toggleItem(item.id)}
+                      style={{width:22,height:22,borderRadius:6,border:`2px solid ${item.packed?'var(--color-accent)':'var(--color-border)'}`,background:item.packed?'var(--color-accent)':'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',transition:'all .15s'}}>
+                      {item.packed&&<span style={{color:'#fff',fontSize:'.65rem',fontWeight:700}}>✓</span>}
+                    </button>
+                    {/* Name */}
+                    <span style={{flex:1,fontSize:'.875rem',textDecoration:item.packed?'line-through':'none',color:item.packed?'var(--color-ink-muted)':'var(--color-ink)'}}>
+                      {item.name}
+                    </span>
+                    {/* Qty badge if > 1 */}
+                    {item.qty>1 && <span style={{fontSize:'.7rem',color:'var(--color-ink-light)',background:'var(--color-cream)',borderRadius:20,padding:'1px 7px',border:'1px solid var(--color-border)',flexShrink:0}}>×{item.qty}</span>}
+                    {/* Remove */}
+                    <button onClick={()=>removeItem(item.id)}
+                      style={{background:'none',border:'none',cursor:'pointer',color:'var(--color-ink-muted)',fontSize:'.9rem',flexShrink:0,padding:'0 4px',lineHeight:1,opacity:.5}}
+                      title="Remove">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Add custom item */}
+      <div className="card" style={{padding:16,marginBottom:12}}>
+        <p className="section-label">Add item</p>
+        <div style={{display:'flex',gap:8,marginBottom:8}}>
+          <select className="input" value={newCat} onChange={e=>setNewCat(e.target.value)} style={{flexShrink:0,width:'auto'}}>
+            {PACK_CATS.map(c=><option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
+          </select>
+          <input className="input" placeholder="Item name..." value={newItem}
+            onChange={e=>setNewItem(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&addItem()}
+            style={{flex:1}}/>
+          <button className="btn btn-primary" onClick={addItem} style={{flexShrink:0}}>Add</button>
+        </div>
+      </div>
+
+      {/* Reset link */}
+      <p style={{textAlign:'center',fontSize:'.75rem',color:'var(--color-ink-muted)',marginTop:8}}>
+        <button onClick={resetList} style={{background:'none',border:'none',cursor:'pointer',color:'var(--color-ink-muted)',textDecoration:'underline',fontSize:'.75rem'}}>
+          Reset &amp; regenerate from trip
+        </button>
+      </p>
     </div>
   );
 }
@@ -1774,15 +2064,28 @@ Rules:
         throw new Error(err?.error?.message || `API error ${res.status}`);
       }
 
-      const data = await res.json();
+      const data = await res.json().catch(() => { throw new Error('Could not read the API response. Please try again.'); });
       const full = data?.content?.[0]?.text || '';
-      if (!full) throw new Error('Empty response from Claude. Please try again.');
+      if (!full) throw new Error('Claude returned an empty response. Please try again.');
       setStreamText(full);
 
-      // Parse the JSON from the response
-      const jsonMatch = full.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) throw new Error('No valid JSON array found in response. Try again.');
-      const days = JSON.parse(jsonMatch[0]);
+      // Parse the JSON from the response — hardened against malformed output
+      let days;
+      try {
+        const jsonMatch = full.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) throw new Error('No JSON array found in response.');
+        days = JSON.parse(jsonMatch[0]);
+        if (!Array.isArray(days) || days.length === 0) throw new Error('Response contained an empty or invalid itinerary.');
+      } catch(parseErr) {
+        // Log for debugging, show friendly message
+        console.error('AI response parse failed:', parseErr, '\nRaw response:', full.slice(0, 500));
+        try {
+          const log = JSON.parse(localStorage.getItem('locale_error_log') || '[]');
+          log.unshift({ ts: new Date().toISOString(), msg: 'AI parse: ' + parseErr.message, raw: full.slice(0, 300) });
+          localStorage.setItem('locale_error_log', JSON.stringify(log.slice(0, 10)));
+        } catch(e) {}
+        throw new Error('Claude\'s response wasn\'t formatted correctly. Your trip is safe — please try generating again.');
+      }
 
       // Assign proper IDs and link destinations
       const destId = trip.destinations[0]?.id || 'd1';
@@ -1815,11 +2118,12 @@ Rules:
       <div style={{background:'var(--color-surface)',borderRadius:16,padding:24,border:'1px solid var(--color-border)'}}>
         <div style={{fontSize:'1.8rem',marginBottom:12,textAlign:'center'}}>🔑</div>
         <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600,marginBottom:8,textAlign:'center'}}>Add your Claude API key</h3>
-        <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',marginBottom:16,textAlign:'center',lineHeight:1.5}}>
+        <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',marginBottom:12,textAlign:'center',lineHeight:1.5}}>
           Locale uses Claude to generate your itinerary. Your key is stored on this device only and only sent to Anthropic's API.
-          <br/><br/>
-          Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" style={{color:'var(--color-accent)'}}>console.anthropic.com</a>
         </p>
+        <div style={{background:'#FEF3C7',border:'1px solid #D97706',borderRadius:8,padding:'8px 12px',marginBottom:12,fontSize:'.78rem',color:'#92400E',lineHeight:1.5,textAlign:'left'}}>
+          <strong>⚠️ Beta testers:</strong> Use only the test key provided by Stephanie — do not enter your personal API key. This key is visible in browser DevTools.
+        </div>
         <input
           className="input"
           type="password"
@@ -1909,6 +2213,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
     {id:'overview',label:'Overview',icon:'🗺️'},
     {id:'checklist',label:'Checklist',icon:'✅'},
     {id:'days',label:'Days',icon:'📅'},
+    {id:'packing',label:'Packing',icon:'🧳'},
     {id:'tidbits',label:'City Tips',icon:'💡'},
   ];
   if(['bachelorette','birthday','anniversary','honeymoon','celebration'].includes(trip.occasion)) TABS.push({id:'celebrate',label:'Celebrate',icon:'🎉'});
@@ -2088,6 +2393,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
           </div>
         )}
         {activeTab==='checklist' && <ChecklistView trip={trip} onUpdate={handleChecklistUpdate}/>}
+        {activeTab==='packing' && <PackingView trip={trip} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='tidbits' && <CityTidbits destinations={trip.destinations}/>}
         {activeTab==='celebrate' && <CelebrationSection trip={trip} onUpdateTrip={onUpdateTrip}/>}
       </div>
@@ -2307,7 +2613,66 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+// ── Error Boundary ──────────────────────────────────────────────────────────
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    console.error('Locale caught an error:', error, info);
+    // Store error in localStorage for debugging
+    try {
+      const log = JSON.parse(localStorage.getItem('locale_error_log') || '[]');
+      log.unshift({ ts: new Date().toISOString(), msg: error?.message, stack: error?.stack?.slice(0,500) });
+      localStorage.setItem('locale_error_log', JSON.stringify(log.slice(0, 10)));
+    } catch(e) {}
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{minHeight:'100dvh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'40px 24px',fontFamily:'var(--font-body)',textAlign:'center',background:'var(--color-cream)'}}>
+          <div style={{fontSize:'2.5rem',marginBottom:16}}>😔</div>
+          <h2 style={{fontFamily:'var(--font-display)',fontSize:'1.5rem',fontWeight:600,marginBottom:8,color:'var(--color-ink)'}}>Something went wrong</h2>
+          <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',maxWidth:340,lineHeight:1.6,marginBottom:24}}>
+            Don't worry — your trips are safe in local storage. Try refreshing the page. If the problem persists, tap below to reset.
+          </p>
+          <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%',maxWidth:280}}>
+            <button
+              style={{background:'var(--color-accent)',color:'#fff',border:'none',borderRadius:10,padding:'12px 20px',fontSize:'.9rem',cursor:'pointer',fontFamily:'var(--font-body)'}}
+              onClick={()=>window.location.reload()}>
+              🔄 Refresh the app
+            </button>
+            <button
+              style={{background:'transparent',color:'var(--color-ink-muted)',border:'1px solid var(--color-border)',borderRadius:10,padding:'10px 20px',fontSize:'.85rem',cursor:'pointer',fontFamily:'var(--font-body)'}}
+              onClick={()=>{
+                const log = JSON.parse(localStorage.getItem('locale_error_log')||'[]');
+                const body = encodeURIComponent('Error log:\n\n' + JSON.stringify(log, null, 2));
+                window.location.href = 'mailto:?subject=Locale%20Error%20Report&body=' + body;
+              }}>
+              📧 Send error report
+            </button>
+          </div>
+          {this.state.error?.message && (
+            <p style={{marginTop:20,fontSize:'.75rem',color:'var(--color-ink-muted)',fontFamily:'monospace',maxWidth:400,wordBreak:'break-all'}}>
+              {this.state.error.message}
+            </p>
+          )}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <ErrorBoundary>
+    <App/>
+  </ErrorBoundary>
+);
 
 </script>
 
