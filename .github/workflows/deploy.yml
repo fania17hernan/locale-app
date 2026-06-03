@@ -1,0 +1,124 @@
+name: Validate & Deploy Locale
+
+on:
+  push:
+    branches:
+      - main      # production deploy
+      - dev        # staging deploy
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # ── Step 1: Validate the HTML file ──────────────────────────────────────────
+  validate:
+    name: Validate HTML
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check locale.html exists
+        run: |
+          if [ ! -f "locale.html" ]; then
+            echo "❌ locale.html not found!"
+            exit 1
+          fi
+          echo "✅ locale.html found ($(wc -c < locale.html) bytes)"
+
+      - name: Check for required script tags
+        run: |
+          REQUIRED=("react.production.min.js" "react-dom.production.min.js" "babel.min.js")
+          for tag in "${REQUIRED[@]}"; do
+            if ! grep -q "$tag" locale.html; then
+              echo "❌ Missing required script: $tag"
+              exit 1
+            fi
+          done
+          echo "✅ All required CDN scripts present"
+
+      - name: Check for unclosed JSX/HTML (basic)
+        run: |
+          # Fail if there are obvious Babel syntax errors by checking for unmatched braces
+          # (a light check — catches the most common copy-paste accidents)
+          OPEN=$(grep -o '{' locale.html | wc -l)
+          CLOSE=$(grep -o '}' locale.html | wc -l)
+          DIFF=$((OPEN - CLOSE))
+          if [ ${DIFF#-} -gt 50 ]; then
+            echo "⚠️  Brace mismatch detected: $OPEN open, $CLOSE close (diff: $DIFF)"
+            echo "This may indicate a syntax error. Please review locale.html."
+            exit 1
+          fi
+          echo "✅ Brace balance check passed (open: $OPEN, close: $CLOSE)"
+
+      - name: Check for API key accidentally committed
+        run: |
+          if grep -qE "sk-ant-[a-zA-Z0-9\-]{20,}" locale.html; then
+            echo "🚨 SECURITY: API key found in locale.html! Remove it before deploying."
+            exit 1
+          fi
+          echo "✅ No API key found in source"
+
+      - name: Check file size (warn if > 500KB)
+        run: |
+          SIZE=$(wc -c < locale.html)
+          if [ $SIZE -gt 512000 ]; then
+            echo "⚠️  locale.html is $(($SIZE / 1024))KB — consider optimizing"
+          else
+            echo "✅ File size OK: $(($SIZE / 1024))KB"
+          fi
+
+  # ── Step 2: Deploy to GitHub Pages ──────────────────────────────────────────
+  deploy-production:
+    name: Deploy to Production
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ── Step 3: Deploy dev branch to /dev/ subfolder ────────────────────────────
+  deploy-staging:
+    name: Deploy to Staging (/dev/)
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare staging folder
+        run: |
+          mkdir -p staging
+          cp locale.html staging/index.html
+          cp locale-brief.html staging/brief.html 2>/dev/null || true
+          cp locale-uat.html staging/uat.html 2>/dev/null || true
+          echo "<!-- STAGING BUILD - $(date -u) -->" >> staging/index.html
+
+      - name: Deploy staging to gh-pages/dev branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./staging
+          destination_dir: dev
+          keep_files: true
