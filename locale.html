@@ -390,15 +390,15 @@ const CITY_DATA={
     tips:["Most patisseries close Monday.","Book Eiffel Tower summit tickets 3+ weeks ahead.","The Marché d'Aligre is Paris's best budget market.","Picnic in the Jardins du Palais Royal — a local secret."],
   },
   US:{
-    transport:"Ride-share (Uber/Lyft) is ubiquitous. Major cities have solid transit. Miami: Brightline train connects Miami–Fort Lauderdale–West Palm.",
+    transport:"Ride-share (Uber/Lyft) widely available. Many cities have public transit — check the local transit app. Tip: open your preferred ride-share app directly from the City Tips section.",
     tipping:"18–22% at restaurants is the norm. $1–2 per drink at bars. Tipping is a major part of service workers' income.",
     customs:"Sales tax added at register (not on price tags). Portions are large — splitting meals is normal.",
     simCard:"T-Mobile, AT&T, Verizon all have widespread coverage.",
     power:"🔌 Type A/B (2 flat pins). 120V / 60Hz.",
     emergency:"911 — Police / Ambulance / Fire",
-    bestAreas:"Varies by city. Miami: South Beach, Wynwood, Brickell.",
+    bestAreas:"Varies by city — see local tips below for neighborhood recommendations.",
     phrases:[],
-    tips:["Budget ~30% on top of menu prices for tax and tip.","Water is free and refillable at restaurants."],
+    tips:["Budget ~30% on top of menu prices for tax and tip.","Water is free and refillable at restaurants.","Most US cities are car-friendly — check if your destination has a bike share or scooter program for short hops."],
   },
 };
 
@@ -424,6 +424,145 @@ const CITY_LOCAL_TIPS={
       'July is peak season: parks hit capacity by mid-morning on weekends. Rope drop is essential.',
       'The ART (Anaheim Resort Transit) shuttle runs between hotels and parks for ~$5/day.',
       'Disneyland Main Street Confectionery opens before the park — great for morning treats.',
+    ],
+  },
+  'austin':{
+    transport:"Austin is car-friendly but Uber/Lyft are everywhere downtown. The B-Cycle bike share and Lime scooters are great for 6th Street and the waterfront. CapMetro bus routes cover major corridors.",
+    nearby:[
+      {name:'South Congress Avenue (SoCo)',emoji:'🎸',desc:'Austin\'s coolest stretch — vintage shops, food trucks, murals, and the famous "I Love You So Much" wall.',address:'S Congress Ave, Austin, TX'},
+      {name:'Barton Springs Pool',emoji:'🏊',desc:'Natural spring-fed pool in Zilker Park — locals\' favorite on hot days. $9 entry, open year-round.',address:'2201 Barton Springs Rd, Austin, TX'},
+      {name:'Sixth Street Entertainment District',emoji:'🎵',desc:'Heart of Austin\'s live music scene. Rainey Street for a more local bar crawl vibe.',address:'E 6th St, Austin, TX'},
+      {name:'Blanton Museum of Art',emoji:'🎨',desc:'UT Austin\'s world-class free art museum. The Ellsworth Kelly chapel nearby is stunning.',address:'200 E Martin Luther King Jr Blvd, Austin'},
+      {name:'Mount Bonnell',emoji:'🌅',desc:'Best sunset view in Austin. Short hike, 360° panorama of the Colorado River and Hill Country.',address:'3800 Mt Bonnell Rd, Austin, TX'},
+    ],
+    food:[
+      {name:'Franklin Barbecue',emoji:'🥩',desc:'#1 BBQ in Texas. Arrive by 8am and bring a cooler — they sell out by noon. Cash only. Worth it.',address:'900 E 11th St, Austin, TX'},
+      {name:'Tacodeli',emoji:'🌮',desc:'Austin institution for breakfast tacos. The Doña sauce is legendary. Multiple locations.',address:'1500 Spyglass Dr, Austin, TX'},
+      {name:'Uchi',emoji:'🍣',desc:'James Beard Award–winning Japanese restaurant. Tasting menu or à la carte — both exceptional. Book weeks ahead.',address:'801 S Lamar Blvd, Austin, TX'},
+      {name:'Juan in a Million',emoji:'🌯',desc:'East Austin legend for Don Juan breakfast tacos — enormous, cheap, and iconic.',address:'2300 E Cesar Chavez St, Austin, TX'},
+      {name:'Veracruz All Natural',emoji:'🚚',desc:'Best migas tacos in Austin from this beloved food truck turned mini-chain.',address:'1704 E Cesar Chavez St, Austin, TX'},
+    ],
+    tips:[
+      'Live music is everywhere and almost always free — just walk in. Sixth Street, Rainey Street, and the Continental Club are staples.',
+      'Austin weather in summer is brutal (100°F+). Start mornings early, rest midday, go back out after 6pm.',
+      'Parking downtown is a nightmare. Uber/Lyft or Lime scooters are the move for 6th Street nights.',
+      '"Keep Austin Weird" is real — explore East Austin for the most local, non-touristy experience.',
+      'H-E-B grocery is a Texas institution and essential Austin culture. Visit one.',
+    ],
+  },
+  'miami':{
+    transport:"Miami is very car-dependent, but Uber/Lyft are widely available. The Metromover is free and great for downtown/Brickell. Brightline train connects Miami–Fort Lauderdale–West Palm Beach.",
+    nearby:[
+      {name:'Wynwood Walls',emoji:'🎨',desc:'World-famous outdoor street art museum. Best on weekday mornings before crowds. The surrounding neighborhood has great coffee and boutiques.',address:'2516 NW 2nd Ave, Miami, FL'},
+      {name:'Vizcaya Museum & Gardens',emoji:'🏛️',desc:'Stunning Italian Renaissance villa on the bay — a hidden gem most tourists miss. Gorgeous for photos.',address:'3251 S Miami Ave, Miami, FL'},
+      {name:'Key Biscayne',emoji:'🏖️',desc:'30 min from South Beach but worlds quieter. Crandon Park beach is one of the best in Florida.',address:'Key Biscayne, FL'},
+      {name:'Little Havana',emoji:'🎺',desc:'Calle Ocho for Cuban coffee, dominos in Maximo Gomez Park, and the best empanadas in the city.',address:'SW 8th St (Calle Ocho), Miami, FL'},
+      {name:'Design District',emoji:'🛍️',desc:'Luxury shopping meets public art installations. Great for a stroll even if you\'re just window shopping.',address:'NE 2nd Ave & 39th St, Miami, FL'},
+    ],
+    food:[
+      {name:'Versailles Restaurant',emoji:'🥣',desc:'The most famous Cuban restaurant in America. The Cuban sandwich and media noche are legendary. Open until midnight.',address:'3555 SW 8th St, Miami, FL'},
+      {name:'Joe\'s Stone Crab',emoji:'🦀',desc:'Miami institution since 1913. Stone crab claws Oct–May only. Expect a wait — worth it.',address:'11 Washington Ave, Miami Beach, FL'},
+      {name:'Zak the Baker',emoji:'🥐',desc:'Best bakery in Miami. Come for breakfast, stay for the sourdough. Wynwood location is the original.',address:'405 NW 26th St, Miami, FL'},
+      {name:'KYU',emoji:'🔥',desc:'Asian-inspired wood-fired BBQ in Wynwood — one of the best restaurants in Miami. Book ahead.',address:'251 NW 25th St, Miami, FL'},
+    ],
+    tips:[
+      'South Beach in July is brutally hot and packed. Go early morning or after 5pm.',
+      'Ocean Drive is tourist-heavy — locals eat on Collins or Washington Ave.',
+      'Hurricane season is June–November. Travel insurance is worth it.',
+      'Parking on South Beach is a nightmare and expensive. Rideshare is the move.',
+      'Miami runs on Cuban time — dinner before 8pm feels early. Nightlife doesn\'t start until midnight.',
+    ],
+  },
+  'new york':{
+    transport:"The NYC subway runs 24/7 and is the fastest way around. Get an OMNY card (tap-to-pay). Citi Bike is great for short rides. Avoid taxis during rush hour — they\'re stuck in traffic.",
+    nearby:[
+      {name:'The High Line',emoji:'🌿',desc:'Elevated park on a former freight rail line through Chelsea. Best in the morning. Connects to Hudson Yards.',address:'Gansevoort St to 34th St, Manhattan'},
+      {name:'Brooklyn Bridge & DUMBO',emoji:'🌉',desc:'Walk the bridge from Manhattan side. DUMBO has stunning views, great coffee, and the Brooklyn Ice Cream Factory.',address:'Brooklyn Bridge, New York, NY'},
+      {name:'The Frick Collection',emoji:'🖼️',desc:'One of NYC\'s most underrated museums — Vermeer, Rembrandt, El Greco in a gorgeous Gilded Age mansion.',address:'1 E 70th St, New York, NY'},
+      {name:'Smorgasburg',emoji:'🥙',desc:'Legendary open-air food market. Saturdays in Prospect Park, Sundays in Williamsburg (seasonal).',address:'East River State Park, Brooklyn (Sundays)'},
+      {name:'Roosevelt Island Tram',emoji:'🚡',desc:'$2.90 tram ride over the East River with insane Manhattan views. Often overlooked, always magical.',address:'Tram Plaza, 59th St & 2nd Ave, NYC'},
+    ],
+    food:[
+      {name:'Katz\'s Delicatessen',emoji:'🥪',desc:'NYC institution since 1888. The pastrami on rye is non-negotiable. Go for lunch — expect a line.',address:'205 E Houston St, New York, NY'},
+      {name:'Di Fara Pizza',emoji:'🍕',desc:'Arguably NYC\'s best slice. Cash only, long waits, worth every minute.',address:'1424 Ave J, Brooklyn, NY'},
+      {name:'Xi\'an Famous Foods',emoji:'🍜',desc:'Hand-pulled noodles in spicy lamb sauce. Multiple locations, always cheap and outstanding.',address:'Multiple locations, Manhattan'},
+      {name:'Levain Bakery',emoji:'🍪',desc:'The most famous cookie in New York. Warm, enormous, and life-changing. Get the chocolate chip walnut.',address:'167 W 74th St, New York, NY'},
+    ],
+    tips:[
+      'The subway map is confusing at first — download Citymapper, it\'s better than Google Maps for NYC transit.',
+      'Bagels: H&H, Ess-a-Bagel, or Russ & Daughters. Get it with lox. This is not negotiable.',
+      'NYC restaurant reservations fill up weeks out. Use Resy or Tock — check cancellations the morning of.',
+      'Tipping 20% is the standard, not the ceiling.',
+      'Skip Times Square for everything except seeing it once. All the best stuff is one subway stop away.',
+    ],
+  },
+  'chicago':{
+    transport:"Chicago\'s L train (CTA) is excellent and covers most tourist areas. The Blue Line runs 24/7 from O\'Hare. Divvy bikes are everywhere. Ubers are reasonable outside rush hour.",
+    nearby:[
+      {name:'Millennium Park & The Bean',emoji:'🫘',desc:'The Cloud Gate sculpture is iconic. Free, always open, magical at sunset and early morning.',address:'201 E Randolph St, Chicago, IL'},
+      {name:'Chicago Architecture Foundation River Cruise',emoji:'🏗️',desc:'Best way to see Chicago. 90-min narrated boat tour of iconic architecture along the river. Book ahead.',address:'111 E Wacker Dr, Chicago, IL'},
+      {name:'Wicker Park',emoji:'🎸',desc:'Chicago\'s coolest neighborhood. Vintage shops, great bars, live music, and the best brunch spots.',address:'Wicker Park, Chicago, IL'},
+      {name:'Art Institute of Chicago',emoji:'🖼️',desc:'One of the top 5 art museums in the US. The Impressionist collection and Seurat\'s Sunday on La Grande Jatte are unmissable.',address:'111 S Michigan Ave, Chicago, IL'},
+      {name:'Navy Pier',emoji:'🎡',desc:'Classic Chicago waterfront attraction. Better at night when it\'s lit up. The ferris wheel views are worth it.',address:'600 E Grand Ave, Chicago, IL'},
+    ],
+    food:[
+      {name:'Lou Malnati\'s Pizzeria',emoji:'🍕',desc:'Chicago deep dish done right. Order the Malnati Chicago Classic. Expect a 30–45 min wait for the pizza.',address:'439 N Wells St, Chicago, IL'},
+      {name:'Publican',emoji:'🍺',desc:'James Beard–winning gastropub in Fulton Market. Oysters, charcuterie, perfect pork dishes. Always packed.',address:'837 W Fulton Market, Chicago, IL'},
+      {name:'Gene & Georgetti',emoji:'🥩',desc:'Old-school Chicago steakhouse since 1941. Dark, boothy, legendary. Get the bone-in ribeye.',address:'500 N Franklin St, Chicago, IL'},
+      {name:'Girl & the Goat',emoji:'🐐',desc:'Stephanie Izard\'s flagship — creative small plates and one of the best restaurants in Chicago. Book weeks ahead.',address:'800 W Randolph St, Chicago, IL'},
+    ],
+    tips:[
+      'Chicago winters are brutal — even in September, bring a layer for nights near the lake.',
+      'Chicago-style hot dog: no ketchup. Ever. This is law.',
+      'The Magnificent Mile is touristy but State Street and Wicker Park are where locals actually shop.',
+      'Free days at the Art Institute and Museum of Science + Industry — check their calendars.',
+      'The Chicago Card (or Apple Pay) works on all CTA trains and buses.',
+    ],
+  },
+  'nashville':{
+    transport:"Nashville is very car and Uber/Lyft dependent. Downtown is walkable but you\'ll need rides to get anywhere else. Parking is expensive on Broadway — rideshare is smarter.",
+    nearby:[
+      {name:'Broadway Honky-Tonk Strip',emoji:'🎸',desc:'The heart of Nashville nightlife. Legends Corner, Robert\'s Western World, and Tootsies are the classics. Free entry, live music all day.',address:'Broadway, Nashville, TN'},
+      {name:'The Parthenon',emoji:'🏛️',desc:'Full-scale replica of the Athenian Parthenon in Centennial Park. Genuinely stunning and completely free.',address:'2500 West End Ave, Nashville, TN'},
+      {name:'12 South Neighborhood',emoji:'🌸',desc:'Charming walkable neighborhood with boutiques, coffee shops, and the famous "I Believe in Nashville" mural.',address:'12th Ave S, Nashville, TN'},
+      {name:'Ryman Auditorium',emoji:'🎵',desc:'The Mother Church of Country Music. Catch a show or take a daytime self-guided tour — the acoustics are legendary.',address:'116 5th Ave N, Nashville, TN'},
+      {name:'Johnny Cash Museum',emoji:'🎶',desc:'The most comprehensive museum on the Man in Black. A must for any music fan.',address:'119 3rd Ave S, Nashville, TN'},
+    ],
+    food:[
+      {name:'Prince\'s Hot Chicken',emoji:'🔥',desc:'The original Nashville hot chicken. Get medium unless you\'re brave. Cash only, worth the wait.',address:'123 Ewing Dr, Nashville, TN'},
+      {name:'Loveless Cafe',emoji:'🍳',desc:'Nashville institution for Southern breakfast. Famous biscuits, country ham, and preserves. Open since 1951.',address:'8400 TN-100, Nashville, TN'},
+      {name:'Husk Nashville',emoji:'🌽',desc:'Sean Brock\'s Southern cuisine temple. Farm-to-table before it was a trend. Book ahead.',address:'37 Rutledge St, Nashville, TN'},
+      {name:'The Gulch',emoji:'🍷',desc:'Trendy neighborhood with the best cocktail bars and upscale dining. Great for a night out.',address:'The Gulch, Nashville, TN'},
+    ],
+    tips:[
+      'Bachelorette parties dominate Broadway on weekends — if that\'s not your vibe, go Thursday or Sunday.',
+      'East Nashville is the locals\' neighborhood for coffee, brunch, and non-tourist bars.',
+      'Expect cover charges on Broadway after 8pm. Carry some cash.',
+      'Nashville summers are hot and humid — stay hydrated if you\'re bar-hopping.',
+      'The Uber/Lyft surge on Broadway at 2am is real. Leave a little before bar close.',
+    ],
+  },
+  'las vegas':{
+    transport:"The Strip is walkable but deceptively long — what looks like 2 blocks is a 20-min walk. The Deuce bus runs 24/7 for $6/day. Uber/Lyft are the smart move for off-Strip spots.",
+    nearby:[
+      {name:'Red Rock Canyon',emoji:'🏜️',desc:'30 min from the Strip — stunning desert canyon for hiking or a scenic drive. Best at sunrise. Completely free drive-through.',address:'Red Rock Canyon National Conservation Area, NV'},
+      {name:'Fremont Street Experience',emoji:'💡',desc:'Old Vegas with the iconic LED canopy light show. More locals, cheaper drinks, better people-watching than the Strip.',address:'Fremont St, Las Vegas, NV'},
+      {name:'The Sphere',emoji:'🔮',desc:'The most technologically advanced entertainment venue in the world. Even if you\'re not seeing a show, the exterior LED displays at night are jaw-dropping.',address:'255 Sands Ave, Las Vegas, NV'},
+      {name:'AREA15 & Meow Wolf',emoji:'🌀',desc:'Immersive art experience that\'s unlike anything else. Omega Mart is wild. Plan 2–3 hours.',address:'3215 S Rancho Dr, Las Vegas, NV'},
+      {name:'Valley of Fire State Park',emoji:'🔥',desc:'1 hour from Vegas — alien red rock formations. Best photography spot in Nevada.',address:'Valley of Fire State Park, NV'},
+    ],
+    food:[
+      {name:'Eggslut (The Cosmopolitan)',emoji:'🍳',desc:'Legendary breakfast sandwich spot. The Slut in a jar is iconic. Expect a line.',address:'The Cosmopolitan, 3708 Las Vegas Blvd S'},
+      {name:'Joël Robuchon (MGM Grand)',emoji:'⭐',desc:'The most Michelin stars of any chef in history. Special occasion dining at its absolute peak. Book far ahead.',address:'MGM Grand, 3799 Las Vegas Blvd S'},
+      {name:'Secret Pizza (Cosmopolitan)',emoji:'🍕',desc:'Hidden on the 3rd floor of the Cosmo — follow the signs through the corridor. Best late-night slice in Vegas.',address:'Cosmopolitan, 3708 Las Vegas Blvd S'},
+      {name:'Herbs & Rye',emoji:'🍸',desc:'Off-Strip locals\' cocktail bar. Incredible craft cocktails, zero tourist markup. One of the best bars in America.',address:'3713 W Sahara Ave, Las Vegas, NV'},
+    ],
+    tips:[
+      'The Strip is enormous — use rideshare between casino-hotels, not your feet.',
+      'Free drinks at the casino only apply if you\'re actively gambling. A $5 slot bet can keep your drink coming.',
+      'Shows sell out fast — book before you arrive, especially weekends.',
+      'Vegas in July/August hits 115°F. Stay hydrated, wear sunscreen, and appreciate that every casino is 65°F inside.',
+      'Check out the free shows: Bellagio fountains (every 15–30 min), Mirage volcano (evenings), Fremont Light Show.',
     ],
   },
   'london':{
@@ -937,7 +1076,9 @@ function CityTidbits({destinations}){
         if(localData?.tips?.length) sections.push({icon:'💡',label:'Insider Tips',type:'tips',items:localData.tips});
         // International sections
         if(intlData){
-          sections.push({icon:'🚇',label:'Getting Around',type:'body',body:intlData.transport});
+          // Use city-specific transport text if available, otherwise fall back to country-level
+          const transportText = localData?.transport || intlData.transport;
+          sections.push({icon:'🚇',label:'Getting Around',type:'transport',body:transportText,city:dest.city,countryCode:dest.countryCode});
           sections.push({icon:'💳',label:'Tipping & Money',type:'body',body:intlData.tipping});
           if(intlData.customs) sections.push({icon:'🛂',label:'Local Customs',type:'body',body:intlData.customs});
           if(intlData.phrases?.length) sections.push({icon:'💬',label:'Key Phrases',type:'phrases',items:intlData.phrases});
@@ -960,6 +1101,21 @@ function CityTidbits({destinations}){
                   </button>
                   {open[k]&&(
                     <div style={{padding:'0 16px 14px',borderTop:'1px solid var(--color-border)'}}>
+                      {s.type==='transport'&&(
+                        <div style={{paddingTop:10}}>
+                          <p style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.65,marginBottom:12}}>{s.body}</p>
+                          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                            <a href="https://m.uber.com/ul/" target="_blank" rel="noopener noreferrer"
+                              style={{display:'inline-flex',alignItems:'center',gap:6,background:'#000',color:'#fff',borderRadius:20,padding:'7px 14px',fontSize:'.78rem',fontWeight:500,textDecoration:'none'}}>
+                              🚗 Open Uber
+                            </a>
+                            <a href="lyft://ridetype?id=lyft" target="_blank" rel="noopener noreferrer"
+                              style={{display:'inline-flex',alignItems:'center',gap:6,background:'#FF00BF',color:'#fff',borderRadius:20,padding:'7px 14px',fontSize:'.78rem',fontWeight:500,textDecoration:'none'}}>
+                              🩷 Open Lyft
+                            </a>
+                          </div>
+                        </div>
+                      )}
                       {s.type==='body'&&<p style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.65,paddingTop:10}}>{s.body}</p>}
                       {s.type==='tips'&&s.items.map((t,j)=>(
                         <p key={j} style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.55,marginTop:8,paddingLeft:4,borderLeft:'2px solid var(--color-accent-warm)'}}>  {t}</p>
@@ -1738,7 +1894,11 @@ function NewTripSheet({onClose, onSave}) {
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
               <div>
                 <label className="section-label">Travelers</label>
-                <input className="input" type="number" min={1} max={20} value={form.travelerCount} onChange={e=>set('travelerCount',parseInt(e.target.value)||1)}/>
+                <div style={{display:'flex',alignItems:'center',gap:0,border:'1px solid var(--color-border)',borderRadius:10,overflow:'hidden',background:'var(--color-surface)'}}>
+                  <button type="button" onClick={()=>set('travelerCount',Math.max(1,(form.travelerCount||1)-1))} style={{background:'none',border:'none',width:44,height:44,fontSize:'1.2rem',cursor:'pointer',color:'var(--color-ink-light)',flexShrink:0}}>−</button>
+                  <span style={{flex:1,textAlign:'center',fontFamily:'var(--font-body)',fontSize:'1rem',fontWeight:500,color:'var(--color-ink)'}}>{form.travelerCount||1}</span>
+                  <button type="button" onClick={()=>set('travelerCount',Math.min(20,(form.travelerCount||1)+1))} style={{background:'none',border:'none',width:44,height:44,fontSize:'1.2rem',cursor:'pointer',color:'var(--color-ink-light)',flexShrink:0}}>+</button>
+                </div>
               </div>
               <div>
                 <label className="section-label">Passport Country</label>
@@ -1799,8 +1959,18 @@ function NewTripSheet({onClose, onSave}) {
                     <input className="input" placeholder="Code (FR)" value={d.countryCode} onChange={e=>setDest(i,'countryCode',e.target.value.toUpperCase().slice(0,2))} maxLength={2}/>
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                    <div><label style={{fontSize:'.7rem',color:'var(--color-ink-light)'}}>Arrival</label><input className="input" type="date" value={d.arrivalDate} onChange={e=>setDest(i,'arrivalDate',e.target.value)}/></div>
-                    <div><label style={{fontSize:'.7rem',color:'var(--color-ink-light)'}}>Departure</label><input className="input" type="date" value={d.departureDate} onChange={e=>setDest(i,'departureDate',e.target.value)}/></div>
+                    <div>
+                      <label className="section-label" style={{fontSize:'.7rem'}}>Arrival</label>
+                      <input className="input" type="date" value={d.arrivalDate}
+                        min={form.startDate||undefined} max={form.endDate||undefined}
+                        onChange={e=>setDest(i,'arrivalDate',e.target.value)}/>
+                    </div>
+                    <div>
+                      <label className="section-label" style={{fontSize:'.7rem'}}>Departure</label>
+                      <input className="input" type="date" value={d.departureDate}
+                        min={d.arrivalDate||form.startDate||undefined} max={form.endDate||undefined}
+                        onChange={e=>setDest(i,'departureDate',e.target.value)}/>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1969,7 +2139,10 @@ function ItineraryAIPlanner({trip, onUpdateTrip}) {
 
   const saveKey = (k) => { setAIKey(k.trim()); setApiKeyState(k.trim()); setShowKeyInput(false); };
 
-  const buildSystemPrompt = () => `You are a travel itinerary planner. Given a trip description, generate a detailed day-by-day itinerary as a JSON array.
+  const buildSystemPrompt = () => {
+    const lodgingLines = (trip.lodging||[]).map(l=>`  • ${l.name}${l.address?' at '+l.address:''}${l.checkIn?' · Check-in: '+l.checkIn:''}${l.checkOut?' · Check-out: '+l.checkOut:''}`).join('\n');
+    const flightLines = (trip.flights||[]).map(f=>`  • ${f.direction||''} ${f.flightNumber||''} ${f.departureAirport||''}→${f.arrivalAirport||''} on ${f.departureTime?.slice(0,10)||''} at ${f.departureTime?.slice(11,16)||''}${f.confirmationNumber?' (conf: '+f.confirmationNumber+')':''}`).join('\n');
+    return `You are a travel itinerary planner. Given a trip description, generate a detailed day-by-day itinerary as a JSON array.
 
 Trip context:
 - Name: ${trip.title}
@@ -1977,7 +2150,16 @@ Trip context:
 - Dates: ${trip.startDate} to ${trip.endDate} (${nightCount} nights)
 - Occasion: ${trip.occasion}
 - Travelers: ${trip.travelerCount || 2}
-${trip.lodging?.length ? `- Staying at: ${trip.lodging.map(l=>l.name+' in '+(l.address||'')).join('; ')}` : ''}
+${lodgingLines ? `- Lodging (MUST include check-in/check-out in itinerary):\n${lodgingLines}` : ''}
+${flightLines ? `- Flights (MUST include in itinerary with exact times and confirmation numbers):\n${flightLines}` : ''}
+
+CRITICAL RULES about the user's request:
+1. The user's message contains their NON-NEGOTIABLE activities, restaurants, and plans. You MUST include every specific place, activity, or event they mention — do not skip or replace them.
+2. If they mention a hotel or where they're staying, include hotel check-in on arrival day and check-out on departure day as activities.
+3. If lodging is listed above, always start arrival day with "Check-in at [hotel name]" and end last day with "Check-out from [hotel name]".
+4. If flights are listed above, include departure flight prep (travel to airport, check-in time) on the appropriate days.
+5. After placing all non-negotiables, fill remaining slots with suggestions that complement their stated plans — same neighborhood, logical geography, similar vibe.
+6. Never replace a user-specified activity with a generic one.`;
 
 Return ONLY a valid JSON array of day objects. No markdown, no explanation — just the raw JSON array starting with [ and ending with ].
 
@@ -2033,6 +2215,124 @@ Rules:
 - bucket is "must-do", "nice-to-have", or "if-time"
 - category is one of: sightseeing, food, outdoor, shopping, entertainment, culture, tour, other
 - mealType is one of: breakfast, lunch, dinner, cafe, drinks`;
+  };
+
+  const [generated, setGenerated] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
+  const [uploadResult, setUploadResult] = React.useState(null); // {type:'lodging'|'flight', parsed, raw}
+  const [showContext, setShowContext] = React.useState(false);
+  const fileInputRef = React.useRef(null);
+
+  const extractFromConfirmation = async (file) => {
+    if (!apiKey) { setShowKeyInput(true); return; }
+    setUploading(true); setUploadResult(null); setError('');
+    try {
+      // Read file as base64
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const isPdf = file.type === 'application/pdf';
+      const mediaType = isPdf ? 'application/pdf' : (file.type || 'image/jpeg');
+
+      const extractPrompt = `You are parsing a travel confirmation document. Extract ALL available details and return ONLY a JSON object — no markdown, no explanation.
+
+If this is a HOTEL/LODGING confirmation, return:
+{
+  "type": "lodging",
+  "name": "hotel name",
+  "address": "full address",
+  "checkIn": "YYYY-MM-DD",
+  "checkOut": "YYYY-MM-DD",
+  "checkInTime": "HH:MM",
+  "checkOutTime": "HH:MM",
+  "confirmationNumber": "conf number or null",
+  "roomType": "room type or null",
+  "notes": "any useful info like parking, amenities, check-in instructions"
+}
+
+If this is a FLIGHT confirmation, return an array:
+{
+  "type": "flights",
+  "flights": [
+    {
+      "direction": "outbound|return|connecting",
+      "airline": "airline name",
+      "flightNumber": "e.g. DL204",
+      "departureAirport": "airport code or name",
+      "arrivalAirport": "airport code or name",
+      "departureTime": "YYYY-MM-DDTHH:MM:00",
+      "arrivalTime": "YYYY-MM-DDTHH:MM:00",
+      "confirmationNumber": "conf number or null",
+      "seatNumber": "seat or null",
+      "notes": "baggage info, terminal, gate if available"
+    }
+  ]
+}
+
+Only include fields you can actually read from the document. Use null for anything missing.`;
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: isPdf ? 'document' : 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+              { type: 'text', text: extractPrompt }
+            ]
+          }]
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err?.error?.message || `API error ${res.status}`);
+      }
+      const data = await res.json();
+      const text = data?.content?.[0]?.text || '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Could not extract details from this document. Try a clearer image or PDF.');
+      const parsed = JSON.parse(jsonMatch[0]);
+      setUploadResult({ parsed, filename: file.name });
+    } catch(e) {
+      setError('Upload failed: ' + e.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const saveExtracted = () => {
+    if (!uploadResult?.parsed) return;
+    const p = uploadResult.parsed;
+    if (p.type === 'lodging') {
+      const newLodging = [...(trip.lodging||[])];
+      const existing = newLodging.findIndex(l=>l.name===p.name);
+      const entry = { id: existing>=0 ? newLodging[existing].id : uuid(), name:p.name||'', address:p.address||'', checkIn:p.checkIn||'', checkOut:p.checkOut||'', checkInTime:p.checkInTime||'', checkOutTime:p.checkOutTime||'', confirmationNumber:p.confirmationNumber||'', roomType:p.roomType||'', notes:p.notes||'' };
+      if (existing >= 0) newLodging[existing] = entry; else newLodging.push(entry);
+      onUpdateTrip({...trip, lodging: newLodging});
+    } else if (p.type === 'flights') {
+      const newFlights = [...(trip.flights||[])];
+      (p.flights||[]).forEach(f => {
+        const exists = newFlights.findIndex(x=>x.flightNumber===f.flightNumber&&x.departureTime===f.departureTime);
+        const entry = {...f, id: exists>=0 ? newFlights[exists].id : uuid()};
+        if (exists >= 0) newFlights[exists] = entry; else newFlights.push(entry);
+      });
+      onUpdateTrip({...trip, flights: newFlights});
+    }
+    setUploadResult(null);
+    setShowContext(true); // show the context panel so user sees what was saved
+  };
 
   const generate = async () => {
     if (!apiKey) { setShowKeyInput(true); return; }
@@ -2106,6 +2406,7 @@ Rules:
 
       onUpdateTrip({...trip, days: normalizedDays});
       setStreamText('');
+      setGenerated(true);
     } catch(e) {
       setError(e.message);
     } finally {
@@ -2159,6 +2460,108 @@ Rules:
         </div>
       </div>
 
+      {/* Upload confirmations */}
+      <div style={{marginBottom:16}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <label className="section-label" style={{marginBottom:0}}>📎 Upload confirmations</label>
+          <span style={{fontSize:'.72rem',color:'var(--color-ink-muted)'}}>Hotel · Flight · Optional</span>
+        </div>
+        <input ref={fileInputRef} type="file" accept="image/*,application/pdf" style={{display:'none'}}
+          onChange={e=>{ const f=e.target.files?.[0]; if(f) extractFromConfirmation(f); e.target.value=''; }}
+        />
+        <button className="btn btn-secondary" style={{width:'100%',gap:8,justifyContent:'center'}} onClick={()=>fileInputRef.current?.click()} disabled={uploading}>
+          {uploading ? '🔍 Reading your confirmation…' : '📤 Upload hotel or flight confirmation'}
+        </button>
+        <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:5,textAlign:'center'}}>
+          PDF or screenshot · Claude reads the details and adds them to your trip automatically
+        </p>
+
+        {/* Extracted result preview */}
+        {uploadResult?.parsed && (
+          <div style={{marginTop:12,background:'var(--color-surface)',border:'1px solid var(--color-accent)',borderRadius:12,overflow:'hidden'}}>
+            <div style={{background:'var(--color-accent-soft)',padding:'10px 14px',borderBottom:'1px solid var(--color-border)'}}>
+              <p style={{fontWeight:600,fontSize:'.875rem',color:'var(--color-accent)'}}>
+                {uploadResult.parsed.type==='lodging' ? '🏨 Hotel found' : '✈️ Flights found'} — from {uploadResult.filename}
+              </p>
+            </div>
+            <div style={{padding:'12px 14px',fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.7}}>
+              {uploadResult.parsed.type==='lodging' && (
+                <>
+                  <p><strong>🏨 {uploadResult.parsed.name}</strong></p>
+                  {uploadResult.parsed.address&&<p>📍 {uploadResult.parsed.address}</p>}
+                  {uploadResult.parsed.checkIn&&<p>📅 Check-in: {uploadResult.parsed.checkIn}{uploadResult.parsed.checkInTime?' at '+uploadResult.parsed.checkInTime:''}</p>}
+                  {uploadResult.parsed.checkOut&&<p>📅 Check-out: {uploadResult.parsed.checkOut}{uploadResult.parsed.checkOutTime?' at '+uploadResult.parsed.checkOutTime:''}</p>}
+                  {uploadResult.parsed.confirmationNumber&&<p>🔖 Conf: {uploadResult.parsed.confirmationNumber}</p>}
+                  {uploadResult.parsed.roomType&&<p>🛏 {uploadResult.parsed.roomType}</p>}
+                  {uploadResult.parsed.notes&&<p style={{marginTop:4,fontStyle:'italic'}}>{uploadResult.parsed.notes}</p>}
+                </>
+              )}
+              {uploadResult.parsed.type==='flights' && (uploadResult.parsed.flights||[]).map((f,i)=>(
+                <div key={i} style={{marginBottom:i<uploadResult.parsed.flights.length-1?10:0,paddingBottom:i<uploadResult.parsed.flights.length-1?10:0,borderBottom:i<uploadResult.parsed.flights.length-1?'1px solid var(--color-border)':'none'}}>
+                  <p><strong>✈️ {f.flightNumber} — {f.airline}</strong> <span style={{fontWeight:400,textTransform:'capitalize'}}>({f.direction})</span></p>
+                  <p>{f.departureAirport} → {f.arrivalAirport}</p>
+                  {f.departureTime&&<p>🕐 Departs: {f.departureTime.replace('T',' at ').slice(0,16)}</p>}
+                  {f.arrivalTime&&<p>🕐 Arrives: {f.arrivalTime.replace('T',' at ').slice(0,16)}</p>}
+                  {f.confirmationNumber&&<p>🔖 Conf: {f.confirmationNumber}</p>}
+                  {f.seatNumber&&<p>💺 Seat: {f.seatNumber}</p>}
+                </div>
+              ))}
+            </div>
+            <div style={{padding:'10px 14px',display:'flex',gap:8,borderTop:'1px solid var(--color-border)'}}>
+              <button className="btn btn-primary" style={{flex:2}} onClick={saveExtracted}>
+                ✅ Add to my trip
+              </button>
+              <button className="btn btn-secondary" style={{flex:1}} onClick={()=>setUploadResult(null)}>
+                Discard
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* What Claude knows */}
+      {(trip.lodging?.length>0 || trip.flights?.length>0) && (
+        <div style={{marginBottom:16,background:'var(--color-accent-soft)',borderRadius:12,overflow:'hidden',border:'1px solid #C8DFE4'}}>
+          <button onClick={()=>setShowContext(c=>!c)} style={{width:'100%',background:'none',border:'none',padding:'11px 14px',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}}>
+            <span style={{fontWeight:600,fontSize:'.83rem',color:'var(--color-accent)'}}>🧠 What Claude knows about your trip</span>
+            <span style={{fontSize:'.72rem',color:'var(--color-accent)'}}>{showContext?'▲ Hide':'▼ Show'}</span>
+          </button>
+          {showContext&&(
+            <div style={{padding:'0 14px 14px',borderTop:'1px solid #C8DFE4'}}>
+              {trip.lodging?.length>0&&(
+                <div style={{marginTop:10}}>
+                  <p style={{fontSize:'.72rem',fontWeight:600,color:'var(--color-accent)',letterSpacing:'.06em',textTransform:'uppercase',marginBottom:6}}>🏨 Lodging</p>
+                  {trip.lodging.map(l=>(
+                    <div key={l.id} style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6,marginBottom:6}}>
+                      <strong>{l.name}</strong>
+                      {l.address&&<span> · {l.address}</span>}
+                      {l.checkIn&&<span> · Check-in {l.checkIn}{l.checkInTime?' at '+l.checkInTime:''}</span>}
+                      {l.checkOut&&<span> · Check-out {l.checkOut}{l.checkOutTime?' at '+l.checkOutTime:''}</span>}
+                      {l.confirmationNumber&&<span> · Conf: {l.confirmationNumber}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {trip.flights?.length>0&&(
+                <div style={{marginTop:10}}>
+                  <p style={{fontSize:'.72rem',fontWeight:600,color:'var(--color-accent)',letterSpacing:'.06em',textTransform:'uppercase',marginBottom:6}}>✈️ Flights</p>
+                  {trip.flights.map(f=>(
+                    <div key={f.id} style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6,marginBottom:4}}>
+                      <strong>{f.flightNumber}</strong> {f.departureAirport}→{f.arrivalAirport}
+                      {f.departureTime&&<span> · {f.departureTime.slice(0,10)} {f.departureTime.slice(11,16)}</span>}
+                      {f.confirmationNumber&&<span> · Conf: {f.confirmationNumber}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p style={{fontSize:'.72rem',color:'var(--color-accent)',marginTop:10,opacity:.8}}>
+                ✓ Claude will automatically include all of the above in your itinerary.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Prompt area */}
       <div style={{marginBottom:16}}>
         <label className="section-label">What do you want to do?</label>
@@ -2189,6 +2592,24 @@ Rules:
       >
         {loading ? '✨ Building your itinerary…' : '✨ Generate itinerary with AI'}
       </button>
+
+      {generated && !loading && (
+        <div style={{marginTop:16,background:'#F0FAF4',border:'1px solid #6EBB8A',borderRadius:12,padding:'14px 16px'}}>
+          <p style={{fontWeight:600,fontSize:'.9rem',color:'#1A6B3A',marginBottom:6}}>✅ Itinerary generated! Check the Days tab to see it.</p>
+          <p style={{fontSize:'.8rem',color:'#2D5A3D',lineHeight:1.5,marginBottom:10}}>Want to refine it? Describe what to change below and regenerate — your edits will replace the current itinerary.</p>
+          <textarea
+            className="input"
+            rows={3}
+            placeholder={`e.g. "Move the museum to day 2, add a morning run on day 1, and suggest a rooftop bar for the last night"`}
+            value={prompt}
+            onChange={e=>setPrompt(e.target.value)}
+            style={{fontSize:'.83rem',lineHeight:1.5,marginBottom:10,resize:'vertical'}}
+          />
+          <button className="btn btn-primary" style={{width:'100%'}} onClick={()=>{setGenerated(false);generate();}}>
+            ✨ Regenerate with changes
+          </button>
+        </div>
+      )}
 
       <p style={{textAlign:'center',fontSize:'.75rem',color:'var(--color-ink-muted)',marginTop:10,lineHeight:1.5}}>
         Powered by Claude · Takes about 10–20 seconds · You can edit everything after

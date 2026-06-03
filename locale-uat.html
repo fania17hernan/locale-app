@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Locale Beta — Tester Checklist</title>
+<title>Locale Beta v0.4 — Tester Checklist</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
@@ -64,7 +64,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-word">Locale Beta</div>
+  <div class="hero-word">Locale Beta v0.4</div>
   <div class="hero-title">Help us test! 🧪</div>
   <div class="hero-sub">Stephanie is building a trip planning app and needs your feedback. Try it out and check off what works!</div>
   <a class="hero-link" href="https://fania17hernan.github.io/locale-app/locale.html" target="_blank">Open Locale ↗</a>
@@ -82,7 +82,7 @@
 <div class="section" style="padding-bottom:12px">
   <div class="section-label">Your progress</div>
   <div class="progress-wrap">
-    <div class="progress-label"><span>Tasks completed</span><span id="prog-text">0 of 20</span></div>
+    <div class="progress-label"><span>Tasks completed</span><span id="prog-text">0 of 27</span></div>
     <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
   </div>
 </div>
@@ -251,7 +251,7 @@
 
 <!-- Group 5b: Packing List (v0.3) -->
 <div class="task-group">
-  <div class="task-group-label">Packing List <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.3</span></div>
+  <div class="task-group-label">Packing List <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">v0.3</span></div>
   <div class="card-group">
     <div class="task" data-id="t13a" onclick="toggle(this)">
       <div class="cb"><div class="cb-check"></div></div>
@@ -288,7 +288,84 @@
   </div>
 </div>
 
-<!-- Group 6 -->
+<!-- Group 6a: Confirmation Upload (v0.4) -->
+<div class="task-group">
+  <div class="task-group-label">Confirmation Upload <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.4</span></div>
+  <div class="card-group">
+    <div class="task" data-id="t14a" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Upload a hotel or flight confirmation</div>
+        <div class="task-desc">Open the AI tab → tap "Upload a confirmation doc". Upload a screenshot or PDF of a hotel or flight booking. Does Claude extract the details and show a preview card?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="t14b" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Save the extracted details</div>
+        <div class="task-desc">After upload, tap "Add to trip". Does the lodging or flight info appear in the Checklist tab under Lodging or Flights?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group 6b: City Tips (v0.4) -->
+<div class="task-group">
+  <div class="task-group-label">City Tips — More cities <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.4</span></div>
+  <div class="card-group">
+    <div class="task" data-id="t15a" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Add a US city and check Getting Around</div>
+        <div class="task-desc">Create a trip to New York, Chicago, Nashville, Las Vegas, or Miami. Open the City Tips tab → Getting Around. Does it show city-specific transport info (not "Uber/Lyft only")?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="t15b" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Check local tidbits appear</div>
+        <div class="task-desc">In the same trip, do Local Tidbits cards appear (not just "No tips available")? Do the tips feel relevant to that city?</div>
+        <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group 6c: Bug Report Button (v0.4) -->
+<div class="task-group">
+  <div class="task-group-label">Bug Report Button <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.4</span></div>
+  <div class="card-group">
+    <div class="task" data-id="t16a" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Find and tap the 🐞 bug report button</div>
+        <div class="task-desc">Look for the small 🐞 icon in the bottom-right corner of any screen. Tap it — does a sheet slide up with a description field and device info?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="t16b" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Send a test bug report</div>
+        <div class="task-desc">Type a short description, tap "Send bug report →". Does your email app open with the subject and body pre-filled?</div>
+        <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+    <div class="task" data-id="t16c" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Verify "What Claude knows" panel</div>
+        <div class="task-desc">Open the AI Generator tab. Is there a summary panel showing your trip details before you hit Generate? Does it accurately list your destinations, dates, lodging, and non-negotiables?</div>
+        <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group 7 -->
 <div class="task-group">
   <div class="task-group-label">Overall feel</div>
   <div class="card-group">
@@ -314,7 +391,7 @@
 </div>
 
 <script>
-  const TOTAL = 20;
+  const TOTAL = 27;
 
   function toggle(el) {
     el.classList.toggle('done');
@@ -351,7 +428,7 @@
     if(!text){ alert('Please add a note before sending!'); return; }
     const done = document.querySelectorAll('.task.done').length;
     const subject = encodeURIComponent('Locale Beta Feedback');
-    const body = encodeURIComponent(`Hi Stephanie!\n\nHere's my Locale v0.3 beta feedback:\n\n${text}\n\n---\nCompleted ${done} of ${TOTAL} tasks.`);
+    const body = encodeURIComponent(`Hi Stephanie!\n\nHere's my Locale v0.4 beta feedback:\n\n${text}\n\n---\nCompleted ${done} of ${TOTAL} tasks.`);
     window.location.href = `mailto:s.borboa9@gmail.com?subject=${subject}&body=${body}`;
   }
 

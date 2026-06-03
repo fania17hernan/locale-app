@@ -106,7 +106,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-eyebrow">Focus Group Brief · Beta v0.3</div>
+  <div class="hero-eyebrow">Focus Group Brief · Beta v0.4</div>
   <div class="hero-title">Locale</div>
   <div class="hero-sub">Your trips, beautifully kept. — A POC brief for focus group testers.</div>
   <div class="hero-pills">
@@ -500,6 +500,78 @@
 
   <div class="divider"></div>
 
+  <!-- v0.4 -->
+  <div class="release-block">
+    <div class="release-header">
+      <div class="release-version">v0.4</div>
+      <div class="release-date">June 3, 2026</div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#2B5F6E;margin-bottom:8px">✨ New features</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>📄 Confirmation upload</strong> — Testers can now photograph or upload a hotel confirmation, flight itinerary, or booking PDF. Claude reads the document and auto-populates lodging or flight details directly into the trip — no manual entry needed.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>🧠 "What Claude knows" panel</strong> — Before generating an itinerary, the AI generator now shows a summary of everything Claude has to work with: trip dates, destinations, lodging, flights, traveler count, and non-negotiables. Helps testers catch gaps before hitting Generate.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>🌆 Expanded City Tips</strong> — Local tips now cover 9 cities: London, Paris, Austin, Anaheim, Miami, New York, Chicago, Nashville, and Las Vegas. Each includes local transport guidance (not just "open Uber"), neighborhood notes, and city-specific hidden gems.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>🐞 In-app bug report button</strong> — A floating 🐞 button on every screen opens a quick report sheet. It auto-attaches app version, current screen, device info, viewport size, and the last 5 error log entries, then pre-fills a mailto to Stephanie. One tap to send.</div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#B45309;margin-bottom:8px">🔧 Tester bug fixes</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Travelers input stuck at "14"</strong> — The number input was appending digits instead of replacing. Replaced with +/− stepper buttons that clamp cleanly between 1 and 20.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Inconsistent date pickers</strong> — Stop arrival/departure date pickers now respect trip start/end date as min/max bounds, and stop departure is always ≥ stop arrival. Consistent across all form screens.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>AI generator ignoring non-negotiables</strong> — Rebuilt the system prompt with explicit CRITICAL RULES ordering: non-negotiable activities are treated as mandatory, hotel check-in/check-out always appear on the right days, and flights are never omitted.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>City Tips showing static "Miami" text</strong> — Getting Around section now uses city-specific transport text instead of hardcoded Miami copy. Rideshare deep links (Uber, Lyft) are preserved; public transit notes appear where applicable.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>AI generator disappears after generation</strong> — The AI tab now shows a post-generation refinement panel with a text area to describe changes and a "Regenerate with changes" button, so testers can iterate without navigating away.</div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:8px">🔬 Quality & observability</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Test</span>
+        <div><strong>Inline test suite</strong> — 23 <code>console.assert</code> checks run on every page load, covering <code>uuid</code>, <code>normalizeTrip</code>, <code>generateChecklist</code>, <code>buildPackingDefaults</code>, and city lookup maps. Failures log to <code>locale_error_log</code> in localStorage and print clearly in DevTools.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
   <!-- v0.3 -->
   <div class="release-block">
     <div class="release-header">
@@ -735,7 +807,7 @@
 </div>
 
 <div class="footer">
-  Locale — Focus Group Brief · Beta v0.3 · Built by Stephanie · June 2026
+  Locale — Focus Group Brief · Beta v0.4 · Built by Stephanie · June 2026
 </div>
 
 <script>
