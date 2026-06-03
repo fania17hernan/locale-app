@@ -106,7 +106,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-eyebrow">Focus Group Brief · Beta v0.2</div>
+  <div class="hero-eyebrow">Focus Group Brief · Beta v0.3</div>
   <div class="hero-title">Locale</div>
   <div class="hero-sub">Your trips, beautifully kept. — A POC brief for focus group testers.</div>
   <div class="hero-pills">
@@ -500,6 +500,69 @@
 
   <div class="divider"></div>
 
+  <!-- v0.3 -->
+  <div class="release-block">
+    <div class="release-header">
+      <div class="release-version">v0.3</div>
+      <div class="release-date">June 2, 2026</div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#2B5F6E;margin-bottom:8px">✨ New features</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>🧳 Packing List tab</strong> — A new fourth tab on every trip. Smart defaults based on trip length, international travel, beach or business occasion. Per-item completion, bulk pack by category, overall progress bar, add/remove custom items, and reset &amp; regenerate.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>Feature flags</strong> — Major features (AI generator, packing list, drag-to-reorder, share) can now be toggled off instantly without a deploy. Gives Stephanie a kill switch for demos and incidents.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>CI/CD pipeline via GitHub Actions</strong> — Every push to <code>main</code> now runs 5 automated checks before deploying: file integrity, required scripts present, brace balance, API key leak detection, and file size. Pushes to <code>dev</code> branch deploy to a separate staging URL.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>localStorage schema versioning</strong> — Trip objects now carry a <code>schemaVersion</code> field. Future data migrations are versioned and explicit — no more silent field-existence guessing that could corrupt saved trips during upgrades.</div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:8px">🔒 Security & reliability</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>React ErrorBoundary added</strong> — App crashes now show a friendly recovery screen ("😔 Something went wrong") with a Refresh button and a one-tap error report email instead of a blank white page. Error details are logged to localStorage for debugging.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>AI generator hardened against bad responses</strong> — If Claude returns malformed JSON, the app now shows a clear retry message instead of crashing the trip view. Parse errors are logged for investigation.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>CDN fallback handlers</strong> — If React, Babel, or SortableJS fail to load from the CDN (offline, corporate network blocker), users now see a helpful error message instead of a blank page. SortableJS failure degrades gracefully — the app continues without drag-to-reorder.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>API key security warning for testers</strong> — The API key input screen now shows a yellow ⚠️ banner reminding beta testers to use only the provided test key and not their personal key, and notes that keys are visible in browser DevTools.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>API key leak detection in CI</strong> — The deploy pipeline now scans for accidentally committed API keys and blocks the deploy if one is found.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
   <!-- v0.2 -->
   <div class="release-block">
     <div class="release-header">
@@ -672,7 +735,7 @@
 </div>
 
 <div class="footer">
-  Locale — Focus Group Brief · Beta v0.2 · Built by Stephanie · May 2026
+  Locale — Focus Group Brief · Beta v0.3 · Built by Stephanie · June 2026
 </div>
 
 <script>

@@ -82,7 +82,7 @@
 <div class="section" style="padding-bottom:12px">
   <div class="section-label">Your progress</div>
   <div class="progress-wrap">
-    <div class="progress-label"><span>Tasks completed</span><span id="prog-text">0 of 16</span></div>
+    <div class="progress-label"><span>Tasks completed</span><span id="prog-text">0 of 20</span></div>
     <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
   </div>
 </div>
@@ -249,6 +249,45 @@
   </div>
 </div>
 
+<!-- Group 5b: Packing List (v0.3) -->
+<div class="task-group">
+  <div class="task-group-label">Packing List <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.3</span></div>
+  <div class="card-group">
+    <div class="task" data-id="t13a" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Open the 🧳 Packing tab</div>
+        <div class="task-desc">Open any trip → tap the Packing tab (4th tab). Does a packing list appear with categories like Clothing, Toiletries, Tech, Documents?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="t13b" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Check off a packing item</div>
+        <div class="task-desc">Tap any item to mark it packed. Does the checkbox fill in and the progress bar at the top update?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="t13c" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Add a custom item</div>
+        <div class="task-desc">Tap "Add item" at the bottom of any category. Type a custom item name and save. Does it appear in the list?</div>
+        <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+    <div class="task" data-id="t13d" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Use "Pack all" on a category</div>
+        <div class="task-desc">Tap "Pack all" next to a category header. Does every item in that category check off at once?</div>
+        <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Group 6 -->
 <div class="task-group">
   <div class="task-group-label">Overall feel</div>
@@ -275,7 +314,7 @@
 </div>
 
 <script>
-  const TOTAL = 16;
+  const TOTAL = 20;
 
   function toggle(el) {
     el.classList.toggle('done');
@@ -312,7 +351,7 @@
     if(!text){ alert('Please add a note before sending!'); return; }
     const done = document.querySelectorAll('.task.done').length;
     const subject = encodeURIComponent('Locale Beta Feedback');
-    const body = encodeURIComponent(`Hi Stephanie!\n\nHere's my Locale v0.2 beta feedback:\n\n${text}\n\n---\nCompleted ${done} of ${TOTAL} tasks.`);
+    const body = encodeURIComponent(`Hi Stephanie!\n\nHere's my Locale v0.3 beta feedback:\n\n${text}\n\n---\nCompleted ${done} of ${TOTAL} tasks.`);
     window.location.href = `mailto:s.borboa9@gmail.com?subject=${subject}&body=${body}`;
   }
 
