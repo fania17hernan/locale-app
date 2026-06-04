@@ -336,6 +336,10 @@ const CITY_TO_COUNTRY={
   'tokyo':{countryCode:'JP',country:'Japan',isInternational:true},
   'osaka':{countryCode:'JP',country:'Japan',isInternational:true},
   'kyoto':{countryCode:'JP',country:'Japan',isInternational:true},
+  'hiroshima':{countryCode:'JP',country:'Japan',isInternational:true},
+  'sapporo':{countryCode:'JP',country:'Japan',isInternational:true},
+  'nara':{countryCode:'JP',country:'Japan',isInternational:true},
+  'fukuoka':{countryCode:'JP',country:'Japan',isInternational:true},
   'seoul':{countryCode:'KR',country:'South Korea',isInternational:true},
   'beijing':{countryCode:'CN',country:'China',isInternational:true},
   'shanghai':{countryCode:'CN',country:'China',isInternational:true},
@@ -357,6 +361,34 @@ const CITY_TO_COUNTRY={
   'melbourne':{countryCode:'AU',country:'Australia',isInternational:true},
   'auckland':{countryCode:'NZ',country:'New Zealand',isInternational:true},
   'cape town':{countryCode:'ZA',country:'South Africa',isInternational:true},
+  // Country-name aliases — if user types a country instead of a city, still auto-fill correctly
+  'japan':{countryCode:'JP',country:'Japan',isInternational:true},
+  'france':{countryCode:'FR',country:'France',isInternational:true},
+  'italy':{countryCode:'IT',country:'Italy',isInternational:true},
+  'spain':{countryCode:'ES',country:'Spain',isInternational:true},
+  'germany':{countryCode:'DE',country:'Germany',isInternational:true},
+  'portugal':{countryCode:'PT',country:'Portugal',isInternational:true},
+  'greece':{countryCode:'GR',country:'Greece',isInternational:true},
+  'uk':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'united kingdom':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'england':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'ireland':{countryCode:'IE',country:'Ireland',isInternational:true},
+  'australia':{countryCode:'AU',country:'Australia',isInternational:true},
+  'new zealand':{countryCode:'NZ',country:'New Zealand',isInternational:true},
+  'mexico':{countryCode:'MX',country:'Mexico',isInternational:true},
+  'canada':{countryCode:'CA',country:'Canada',isInternational:false},
+  'brazil':{countryCode:'BR',country:'Brazil',isInternational:true},
+  'argentina':{countryCode:'AR',country:'Argentina',isInternational:true},
+  'colombia':{countryCode:'CO',country:'Colombia',isInternational:true},
+  'peru':{countryCode:'PE',country:'Peru',isInternational:true},
+  'south korea':{countryCode:'KR',country:'South Korea',isInternational:true},
+  'korea':{countryCode:'KR',country:'South Korea',isInternational:true},
+  'china':{countryCode:'CN',country:'China',isInternational:true},
+  'thailand':{countryCode:'TH',country:'Thailand',isInternational:true},
+  'indonesia':{countryCode:'ID',country:'Indonesia',isInternational:true},
+  'india':{countryCode:'IN',country:'India',isInternational:true},
+  'uae':{countryCode:'AE',country:'UAE',isInternational:true},
+  'south africa':{countryCode:'ZA',country:'South Africa',isInternational:true},
 };
 
 const CITY_DATA={
@@ -666,18 +698,39 @@ function getCountdownInfo(d){
 }
 function getIntlFlags(trip){
   const flags=[];
-  (trip.destinations||[]).filter(d=>d.isInternational).forEach(dest=>{
-    if(SCHENGEN.includes(dest.countryCode)&&trip.travelerPassportCountry==='US')
+  const checklist=trip.checklist||[];
+  // Helper: is a checklist item with keyword completed?
+  const isDone=(kw)=>checklist.some(i=>i.completed&&i.label&&i.label.toLowerCase().includes(kw.toLowerCase()));
+  const passport=trip.travelerPassportCountry||'US';
+
+  (trip.destinations||[]).filter(d=>d.isInternational||(d.countryCode&&d.countryCode!=='US')).forEach(dest=>{
+    // EES — Schengen entry for non-EU passport holders (currently US-focused)
+    if(SCHENGEN.includes(dest.countryCode)&&passport==='US'&&!isDone('EES pre-registration'))
       flags.push({severity:'critical',emoji:'🚨',label:'EES Registration Required',
         desc:`Required for all non-EU nationals entering Schengen Area (${dest.city}). Register before travel.`,
         url:'https://eu-entry.europa.eu'});
-    if(dest.countryCode==='GB'&&trip.travelerPassportCountry==='US')
+    // UK entry info for US passport holders
+    if(dest.countryCode==='GB'&&passport==='US'&&!isDone('UK entry requirements'))
       flags.push({severity:'info',emoji:'ℹ️',label:'UK Entry — No Visa Required',
         desc:'US passport holders can visit the UK for up to 6 months without a visa. Ensure passport is valid.',url:null});
-    if(dest.countryCode==='AU'&&trip.travelerPassportCountry==='US')
+    // Australia eTA for US passport holders
+    if(dest.countryCode==='AU'&&passport==='US'&&!isDone('Australia eTA'))
       flags.push({severity:'warning',emoji:'⚠️',label:'Australia eTA Required',
         desc:'Electronic Travel Authority required before departure. Apply online — typically instant.',
         url:'https://eta.homeaffairs.gov.au'});
+    // US entry requirements for non-US passport holders
+    if(dest.countryCode==='US'&&passport!=='US'){
+      // ESTA for Visa Waiver Program countries
+      const VWP=['GB','DE','FR','IT','ES','AU','NZ','JP','KR','SG','NL','BE','AT','CH','SE','NO','DK','FI','IE','PT','CZ','SK','HU','PL','LU','LI','MC','SM','IS','EE','LV','LT','SI','MT','CY','GR','HR','BG','RO','BN','TW','CL','HU'];
+      if(VWP.includes(passport)&&!isDone('ESTA'))
+        flags.push({severity:'warning',emoji:'⚠️',label:'US Entry — ESTA Required',
+          desc:'Citizens of Visa Waiver Program countries must apply for ESTA before traveling to the US.',
+          url:'https://esta.cbp.dhs.gov'});
+      else if(!VWP.includes(passport)&&!isDone('US visa'))
+        flags.push({severity:'critical',emoji:'🚨',label:'US Visa Required',
+          desc:'Your passport country requires a US visa to enter. Apply well in advance at travel.state.gov.',
+          url:'https://travel.state.gov/content/travel/en/us-visas.html'});
+    }
   });
   return flags;
 }
@@ -686,6 +739,7 @@ function getIntlFlags(trip){
 function generateChecklist(trip){
   const items=[];
   const isIntl=(trip.destinations||[]).some(d=>d.isInternational||(d.countryCode&&d.countryCode!=='US'));
+  const passport=trip.travelerPassportCountry||'US';
   const add=(label,category,days,notes=null,bookingUrl=null)=>items.push({id:uuid(),label,category,completed:false,daysBeforeTrip:days,isAutoGenerated:true,notes,bookingUrl});
 
   // ── Documents & Entry Requirements ──
@@ -705,6 +759,14 @@ function generateChecklist(trip){
     if(dest.countryCode==='IN') add('Apply for India e-Visa','documents',45,'Apply at indianvisaonline.gov.in — allow 3-5 business days');
     if(dest.countryCode==='JP') add('Check Japan entry requirements — visa-free for US citizens up to 90 days','documents',30,'Confirm at mofa.go.jp');
     if(dest.countryCode==='MX') add('Mexico entry: US citizens do not need a visa — confirm FMM tourist card (may be digital now)','documents',14);
+    // US entry for non-US passport holders
+    if(dest.countryCode==='US'&&passport!=='US'){
+      const VWP=['GB','DE','FR','IT','ES','AU','NZ','JP','KR','SG','NL','BE','AT','CH','SE','NO','DK','FI','IE','PT','CZ','SK','HU','PL','LU','LI','MC','SM','IS','EE','LV','LT','SI','MT','CY','GR','HR','BG','RO','BN','TW','CL','HU'];
+      if(VWP.includes(passport))
+        add('Apply for ESTA authorization before traveling to the US','documents',30,'Apply at esta.cbp.dhs.gov — takes minutes, valid 2 years. Required for Visa Waiver Program travelers.','https://esta.cbp.dhs.gov');
+      else
+        add('Apply for US visitor visa (B-1/B-2) well in advance','documents',90,'Apply at travel.state.gov — processing times vary by country. Schedule interview at US embassy/consulate.','https://travel.state.gov/content/travel/en/us-visas.html');
+    }
   });
 
   // ── Flights & Transportation ──
@@ -1871,7 +1933,7 @@ function TripCard({trip, onClick, animDelay=0}) {
     <div className="trip-card" onClick={onClick} style={{animationDelay:`${animDelay}ms`}}>
       <div className={`trip-card-header ${gradClass}`}>
         <div className="trip-card-top-row">
-          <span className="trip-card-emoji-sm">{emoji || '✈️'}</span>
+          <span className="trip-card-emoji-sm">{(()=>{const m=(title||'').match(/^\p{Emoji}/u);return m?m[0]:(emoji||'✈️');})()}</span>
           <span className="occasion-pill">{getOccasionEmoji(occasion)} {getOccasionLabel(occasion)}</span>
         </div>
         <div className="trip-card-meta">
@@ -1960,8 +2022,72 @@ function NewTripSheet({onClose, onSave}) {
       console.error('handleCreate error:', err);
     }
   };
-  const EMOJIS = ['✈️','🏖️','🏔️','🌍','🎉','💍','🎓','🌺','🗺️','🏛️'];
-  const PASSPORTS = [{code:'US',label:'🇺🇸 US'},{code:'GB',label:'🇬🇧 UK'},{code:'CA',label:'🇨🇦 Canada'},{code:'AU',label:'🇦🇺 Australia'},{code:'EU',label:'🇪🇺 EU/Schengen'},{code:'IN',label:'🇮🇳 India'}];
+  const PASSPORTS = [
+    {code:'AF',label:'Afghanistan'},{code:'AL',label:'Albania'},{code:'DZ',label:'Algeria'},
+    {code:'AD',label:'Andorra'},{code:'AO',label:'Angola'},{code:'AG',label:'Antigua & Barbuda'},
+    {code:'AR',label:'Argentina'},{code:'AM',label:'Armenia'},{code:'AU',label:'Australia'},
+    {code:'AT',label:'Austria'},{code:'AZ',label:'Azerbaijan'},{code:'BS',label:'Bahamas'},
+    {code:'BH',label:'Bahrain'},{code:'BD',label:'Bangladesh'},{code:'BB',label:'Barbados'},
+    {code:'BY',label:'Belarus'},{code:'BE',label:'Belgium'},{code:'BZ',label:'Belize'},
+    {code:'BJ',label:'Benin'},{code:'BT',label:'Bhutan'},{code:'BO',label:'Bolivia'},
+    {code:'BA',label:'Bosnia & Herzegovina'},{code:'BW',label:'Botswana'},{code:'BR',label:'Brazil'},
+    {code:'BN',label:'Brunei'},{code:'BG',label:'Bulgaria'},{code:'BF',label:'Burkina Faso'},
+    {code:'BI',label:'Burundi'},{code:'CV',label:'Cabo Verde'},{code:'KH',label:'Cambodia'},
+    {code:'CM',label:'Cameroon'},{code:'CA',label:'Canada'},{code:'CF',label:'Central African Republic'},
+    {code:'TD',label:'Chad'},{code:'CL',label:'Chile'},{code:'CN',label:'China'},
+    {code:'CO',label:'Colombia'},{code:'KM',label:'Comoros'},{code:'CG',label:'Congo'},
+    {code:'CD',label:'Congo (DRC)'},{code:'CR',label:'Costa Rica'},{code:'HR',label:'Croatia'},
+    {code:'CU',label:'Cuba'},{code:'CY',label:'Cyprus'},{code:'CZ',label:'Czech Republic'},
+    {code:'DK',label:'Denmark'},{code:'DJ',label:'Djibouti'},{code:'DM',label:'Dominica'},
+    {code:'DO',label:'Dominican Republic'},{code:'EC',label:'Ecuador'},{code:'EG',label:'Egypt'},
+    {code:'SV',label:'El Salvador'},{code:'GQ',label:'Equatorial Guinea'},{code:'ER',label:'Eritrea'},
+    {code:'EE',label:'Estonia'},{code:'SZ',label:'Eswatini'},{code:'ET',label:'Ethiopia'},
+    {code:'FJ',label:'Fiji'},{code:'FI',label:'Finland'},{code:'FR',label:'France'},
+    {code:'GA',label:'Gabon'},{code:'GM',label:'Gambia'},{code:'GE',label:'Georgia'},
+    {code:'DE',label:'Germany'},{code:'GH',label:'Ghana'},{code:'GR',label:'Greece'},
+    {code:'GD',label:'Grenada'},{code:'GT',label:'Guatemala'},{code:'GN',label:'Guinea'},
+    {code:'GW',label:'Guinea-Bissau'},{code:'GY',label:'Guyana'},{code:'HT',label:'Haiti'},
+    {code:'HN',label:'Honduras'},{code:'HU',label:'Hungary'},{code:'IS',label:'Iceland'},
+    {code:'IN',label:'India'},{code:'ID',label:'Indonesia'},{code:'IR',label:'Iran'},
+    {code:'IQ',label:'Iraq'},{code:'IE',label:'Ireland'},{code:'IL',label:'Israel'},
+    {code:'IT',label:'Italy'},{code:'JM',label:'Jamaica'},{code:'JP',label:'Japan'},
+    {code:'JO',label:'Jordan'},{code:'KZ',label:'Kazakhstan'},{code:'KE',label:'Kenya'},
+    {code:'KI',label:'Kiribati'},{code:'KW',label:'Kuwait'},{code:'KG',label:'Kyrgyzstan'},
+    {code:'LA',label:'Laos'},{code:'LV',label:'Latvia'},{code:'LB',label:'Lebanon'},
+    {code:'LS',label:'Lesotho'},{code:'LR',label:'Liberia'},{code:'LY',label:'Libya'},
+    {code:'LI',label:'Liechtenstein'},{code:'LT',label:'Lithuania'},{code:'LU',label:'Luxembourg'},
+    {code:'MG',label:'Madagascar'},{code:'MW',label:'Malawi'},{code:'MY',label:'Malaysia'},
+    {code:'MV',label:'Maldives'},{code:'ML',label:'Mali'},{code:'MT',label:'Malta'},
+    {code:'MH',label:'Marshall Islands'},{code:'MR',label:'Mauritania'},{code:'MU',label:'Mauritius'},
+    {code:'MX',label:'Mexico'},{code:'FM',label:'Micronesia'},{code:'MD',label:'Moldova'},
+    {code:'MC',label:'Monaco'},{code:'MN',label:'Mongolia'},{code:'ME',label:'Montenegro'},
+    {code:'MA',label:'Morocco'},{code:'MZ',label:'Mozambique'},{code:'MM',label:'Myanmar'},
+    {code:'NA',label:'Namibia'},{code:'NR',label:'Nauru'},{code:'NP',label:'Nepal'},
+    {code:'NL',label:'Netherlands'},{code:'NZ',label:'New Zealand'},{code:'NI',label:'Nicaragua'},
+    {code:'NE',label:'Niger'},{code:'NG',label:'Nigeria'},{code:'NO',label:'Norway'},
+    {code:'OM',label:'Oman'},{code:'PK',label:'Pakistan'},{code:'PW',label:'Palau'},
+    {code:'PA',label:'Panama'},{code:'PG',label:'Papua New Guinea'},{code:'PY',label:'Paraguay'},
+    {code:'PE',label:'Peru'},{code:'PH',label:'Philippines'},{code:'PL',label:'Poland'},
+    {code:'PT',label:'Portugal'},{code:'QA',label:'Qatar'},{code:'RO',label:'Romania'},
+    {code:'RU',label:'Russia'},{code:'RW',label:'Rwanda'},{code:'KN',label:'Saint Kitts & Nevis'},
+    {code:'LC',label:'Saint Lucia'},{code:'VC',label:'Saint Vincent & Grenadines'},
+    {code:'WS',label:'Samoa'},{code:'SM',label:'San Marino'},{code:'ST',label:'São Tomé & Príncipe'},
+    {code:'SA',label:'Saudi Arabia'},{code:'SN',label:'Senegal'},{code:'RS',label:'Serbia'},
+    {code:'SC',label:'Seychelles'},{code:'SL',label:'Sierra Leone'},{code:'SG',label:'Singapore'},
+    {code:'SK',label:'Slovakia'},{code:'SI',label:'Slovenia'},{code:'SB',label:'Solomon Islands'},
+    {code:'SO',label:'Somalia'},{code:'ZA',label:'South Africa'},{code:'SS',label:'South Sudan'},
+    {code:'ES',label:'Spain'},{code:'LK',label:'Sri Lanka'},{code:'SD',label:'Sudan'},
+    {code:'SR',label:'Suriname'},{code:'SE',label:'Sweden'},{code:'CH',label:'Switzerland'},
+    {code:'SY',label:'Syria'},{code:'TW',label:'Taiwan'},{code:'TJ',label:'Tajikistan'},
+    {code:'TZ',label:'Tanzania'},{code:'TH',label:'Thailand'},{code:'TL',label:'Timor-Leste'},
+    {code:'TG',label:'Togo'},{code:'TO',label:'Tonga'},{code:'TT',label:'Trinidad & Tobago'},
+    {code:'TN',label:'Tunisia'},{code:'TR',label:'Turkey'},{code:'TM',label:'Turkmenistan'},
+    {code:'TV',label:'Tuvalu'},{code:'UG',label:'Uganda'},{code:'UA',label:'Ukraine'},
+    {code:'AE',label:'United Arab Emirates'},{code:'GB',label:'United Kingdom'},
+    {code:'US',label:'United States'},{code:'UY',label:'Uruguay'},{code:'UZ',label:'Uzbekistan'},
+    {code:'VU',label:'Vanuatu'},{code:'VE',label:'Venezuela'},{code:'VN',label:'Vietnam'},
+    {code:'YE',label:'Yemen'},{code:'ZM',label:'Zambia'},{code:'ZW',label:'Zimbabwe'},
+  ];
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={e=>e.stopPropagation()} style={{maxWidth:520,width:'100%',maxHeight:'92vh',overflowY:'auto'}}>
@@ -1983,16 +2109,9 @@ function NewTripSheet({onClose, onSave}) {
           <div style={{display:'flex',flexDirection:'column',gap:16}}>
             <div>
               <label className="section-label">Trip Name *</label>
-              <input className={`input ${errors.title?'input-error':''}`} value={form.title} onChange={e=>set('title',e.target.value)} placeholder="e.g. London & Paris 2026"/>
+              <input className={`input ${errors.title?'input-error':''}`} value={form.title} onChange={e=>set('title',e.target.value)} placeholder="e.g. 🌍 London & Paris 2026"/>
+              <p style={{fontSize:'0.72rem',color:'var(--color-ink-light)',margin:'4px 0 0',fontFamily:'var(--font-body)'}}>Feel free to add an emoji from your keyboard ✈️</p>
               {errors.title&&<p style={{color:'var(--color-flag)',fontSize:'.75rem',marginTop:4}}>{errors.title}</p>}
-            </div>
-            <div>
-              <label className="section-label">Emoji</label>
-              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                {EMOJIS.map(em=>(
-                  <button key={em} onClick={()=>set('emoji',em)} style={{fontSize:'1.5rem',padding:'6px 8px',borderRadius:8,border:form.emoji===em?'2px solid var(--color-accent)':'2px solid transparent',background:form.emoji===em?'var(--color-accent-soft)':'transparent',cursor:'pointer'}}>{em}</button>
-                ))}
-              </div>
             </div>
             <div>
               <label className="section-label">Occasion</label>
@@ -2012,7 +2131,8 @@ function NewTripSheet({onClose, onSave}) {
                 </div>
               </div>
               <div>
-                <label className="section-label">Passport Country</label>
+                <label className="section-label">Your Passport / Citizenship</label>
+                <p style={{fontSize:'0.72rem',color:'var(--color-ink-light)',margin:'-4px 0 6px',fontFamily:'var(--font-body)'}}>The country whose passport you'll travel on</p>
                 <select className="input" value={form.travelerPassportCountry} onChange={e=>set('travelerPassportCountry',e.target.value)}>
                   {PASSPORTS.map(p=><option key={p.code} value={p.code}>{p.label}</option>)}
                 </select>
@@ -2057,17 +2177,22 @@ function NewTripSheet({onClose, onSave}) {
                     {form.destinations.length>1&&<button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'2px 8px',color:'var(--color-flag)'}} onClick={()=>removeDest(i)}>Remove</button>}
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8,marginBottom:8}}>
-                    <input className="input" placeholder="City (e.g. Paris)" value={d.city} onChange={e=>{
+                    <input className="input" placeholder="City (e.g. Tokyo)" value={d.city} onChange={e=>{
                       const v=e.target.value;
                       const cap=v.length?v.charAt(0).toUpperCase()+v.slice(1):v;
-                      const match=CITY_TO_COUNTRY[v.toLowerCase().trim()];
-                      if(match){
-                        setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],city:cap,...match};return{...f,destinations:ds};});
+                      const key=v.toLowerCase().trim();
+                      const cityMatch=CITY_TO_COUNTRY[key];
+                      if(cityMatch){
+                        setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],city:cap,...cityMatch};return{...f,destinations:ds};});
                       } else {
                         setDest(i,'city',cap);
                       }
                     }}/>
-                    <input className="input" placeholder="Code (FR)" value={d.countryCode} onChange={e=>setDest(i,'countryCode',e.target.value.toUpperCase().slice(0,2))} maxLength={2}/>
+                    <input className="input" placeholder="Country" value={d.country||''} onChange={e=>{
+                      const v=e.target.value;
+                      const cap=v.length?v.charAt(0).toUpperCase()+v.slice(1):v;
+                      setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],country:cap};return{...f,destinations:ds};});
+                    }}/>
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
                     <div>
@@ -2949,7 +3074,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
       </div>
 
       {/* Sticky Pill Nav */}
-      <div style={{position:'sticky',top:0,zIndex:100,background:'var(--color-surface)',borderBottom:'1px solid var(--color-border)',padding:'12px 20px',overflowX:'auto',whiteSpace:'nowrap'}}>
+      <div style={{position:'sticky',top:0,zIndex:100,background:'var(--color-surface)',padding:'12px 20px',overflowX:'auto',whiteSpace:'nowrap'}}>
         <div style={{display:'inline-flex',gap:8,maxWidth:720,margin:'0 auto'}}>
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`pill ${activeTab===t.id?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>
