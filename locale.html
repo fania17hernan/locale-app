@@ -2159,7 +2159,7 @@ CRITICAL RULES about the user's request:
 3. If lodging is listed above, always start arrival day with "Check-in at [hotel name]" and end last day with "Check-out from [hotel name]".
 4. If flights are listed above, include departure flight prep (travel to airport, check-in time) on the appropriate days.
 5. After placing all non-negotiables, fill remaining slots with suggestions that complement their stated plans — same neighborhood, logical geography, similar vibe.
-6. Never replace a user-specified activity with a generic one.`;
+6. Never replace a user-specified activity with a generic one.
 
 Return ONLY a valid JSON array of day objects. No markdown, no explanation - just the raw JSON array starting with [ and ending with ].
 
@@ -2167,34 +2167,34 @@ Each day object must follow this exact shape:
 {
   "id": "day-1",
   "date": "YYYY-MM-DD",
-  "label": "Day 1 — Arrival & Disneyland",
+  "label": "Day 1 - Arrival",
   "destinationId": "${trip.destinations[0]?.id || 'd1'}",
   "notes": "",
   "activities": [
     {
       "id": "a1",
-      "name": "Disneyland Park",
+      "name": "Example Venue",
       "emoji": "🎢",
-      "address": "1313 Disneyland Dr, Anaheim, CA 92802",
-      "neighborhood": "Anaheim",
+      "address": "123 Main St, City, ST 00000",
+      "neighborhood": "Downtown",
       "bucket": "must-do",
       "category": "entertainment",
       "bookingRequired": true,
-      "bookingUrl": "https://disneyland.disney.go.com/tickets/",
-      "notes": "Buy tickets in advance. Arrive at rope drop (8am) for shorter lines.",
-      "thingsToConsider": ["Download Disneyland app for wait times", "Book Genie+ for popular rides"],
+      "bookingUrl": "",
+      "notes": "Example note.",
+      "thingsToConsider": ["Tip 1", "Tip 2"],
       "sortOrder": 0
     }
   ],
   "restaurants": [
     {
       "id": "r1",
-      "name": "Ralph Brennan's Jazz Kitchen",
+      "name": "Example Restaurant",
       "emoji": "🍽️",
-      "address": "1590 S Disneyland Dr, Anaheim, CA",
-      "neighborhood": "Downtown Disney",
+      "address": "456 Food St, City, ST 00000",
+      "neighborhood": "Downtown",
       "bucket": "must-do",
-      "cuisine": "Cajun/Creole",
+      "cuisine": "American",
       "mealType": "dinner",
       "reservationRequired": true,
       "priceRange": "$$$",
@@ -2207,8 +2207,8 @@ Each day object must follow this exact shape:
 
 Rules:
 - Generate one day object per day of the trip (from startDate to endDate inclusive)
-- Include 2–4 activities and 1–2 restaurants per day
-- Spread activities logically by geography — cluster nearby things on the same day
+- Include 2-4 activities and 1-2 restaurants per day
+- Spread activities logically by geography - cluster nearby things on the same day
 - First day: arrival + light activities. Last day: checkout + departure-friendly spots.
 - Use real, specific venue names and addresses
 - Emojis should match the activity type
