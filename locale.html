@@ -12,10 +12,22 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" onerror="console.warn('SortableJS failed to load — drag-to-reorder will be unavailable.');"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"
+  integrity="sha384-tMH8h3BGESGckSAVGZ82T9n90ztNXxvdwvdM6UoR56cYcf+0iGXBlIJ29D+WZ/x8"
+  crossorigin="anonymous"
+  onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"
+  integrity="sha384-bm7MnzvK++ykSwVJ2tynSE5TRdN+xL418osEVF2DE/L/gfWHj91J2Sphe582B1Bh"
+  crossorigin="anonymous"
+  onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"
+  integrity="sha384-aG1MNK3U/x0wl41EH5jD1PGhJ1X9hApuPmIiA5gtiYCOQ1J8ejIdC0btaU/TMoBD"
+  crossorigin="anonymous"
+  onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"
+  integrity="sha384-BSxuMLxX+FCbTdYec3TbXlnMGEEM2QXTFdtDaveen71o+jswm2J36+xFqp8k4VHM"
+  crossorigin="anonymous"
+  onerror="console.warn('SortableJS failed to load — drag-to-reorder will be unavailable.');"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
@@ -232,6 +244,7 @@ select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://ww
 /* ── Keyframes ── */
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes fadeInUp { from{opacity:0;transform:translateX(-50%) translateY(12px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
 @keyframes cardReveal { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
 @keyframes checkPop { 0%{transform:scale(0)} 70%{transform:scale(1.2)} 100%{transform:scale(1)} }
 @keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:1} }
@@ -603,7 +616,7 @@ const CITY_LOCAL_TIPS={
 };
 
 // ── APP VERSION & FEATURE FLAGS ────────────────────────────────────────────────
-const APP_VERSION = '0.3';
+const APP_VERSION = '0.4';
 const SCHEMA_VERSION = 3; // increment when trip data shape changes
 
 // Feature flags — set to false to disable a feature for all users without a deploy
@@ -967,7 +980,36 @@ function loadTrips(){
   localStorage.setItem(SK,JSON.stringify(MOCK_TRIPS));
   return MOCK_TRIPS;
 }
-function saveTrips(trips){try{localStorage.setItem(SK,JSON.stringify(trips));}catch(e){}}
+function showToast(msg, type='info', duration=4000){
+  const existing = document.getElementById('locale-toast');
+  if(existing) existing.remove();
+  const t = document.createElement('div');
+  t.id = 'locale-toast';
+  const bg = type==='error'?'#8B3A2A':type==='warn'?'#C4892A':'#2B5F6E';
+  Object.assign(t.style,{
+    position:'fixed',bottom:'80px',left:'50%',transform:'translateX(-50%)',
+    background:bg,color:'#fff',padding:'10px 20px',borderRadius:'20px',
+    fontSize:'14px',fontFamily:'var(--font-body)',zIndex:9999,
+    boxShadow:'0 4px 16px rgba(0,0,0,.25)',whiteSpace:'nowrap',
+    animation:'fadeInUp .2s ease',pointerEvents:'none',
+  });
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, duration);
+}
+
+function saveTrips(trips){
+  try{
+    localStorage.setItem(SK,JSON.stringify(trips));
+  }catch(e){
+    if(e && (e.name==='QuotaExceededError'||e.code===22)){
+      showToast('Could not save — storage is full. Try deleting old trips.','error',6000);
+    } else {
+      showToast('Save failed — please refresh and try again.','error',5000);
+    }
+    console.error('saveTrips failed:',e);
+  }
+}
 
 // ── SHARED COMPONENTS ──────────────────────────────────────────────────────────
 function AvatarStack({collaborators,max=4}){
@@ -1817,7 +1859,7 @@ function ShareSheet({trip,onClose}){
             <button className="btn btn-secondary" style={{flex:1}} onClick={copy}>{copied?'✅ Copied':'Copy'}</button>
           </div>
           <div style={{height:1,background:'var(--color-border)',margin:'16px 0'}}/>
-          <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',textAlign:'center',lineHeight:1.5}}>Real-time collaborative sharing coming in a future update. For now, share this file via AirDrop, iCloud Drive, or Google Drive. 🚀</p>
+          <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',textAlign:'center',lineHeight:1.5}}>This shares a <strong>read-only snapshot</strong> — recipients can view your itinerary but can't edit or sync changes. Real-time collaboration is coming in a future update.</p>
         </div>
       </div>
     </div>
@@ -2117,12 +2159,12 @@ function generateTripPDF(trip) {
   const checklistHTML = checklist.length === 0 ? '' : `
     <section class="section">
       <h2 class="section-title">Checklist</h2>
-      <p class="meta">${checklist.filter(i=>i.checked).length} of ${checklist.length} items complete</p>
+      <p class="meta">${checklist.filter(i=>i.completed).length} of ${checklist.length} items complete</p>
       ${cats.map(cat=>`
         <div class="cat-label">${cat}</div>
         ${checklist.filter(i=>i.category===cat).map(item=>`
-          <div class="checklist-row ${item.checked?'done':''}">
-            <span class="cb">${item.checked?'✓':''}</span>
+          <div class="checklist-row ${item.completed?'done':''}">
+            <span class="cb">${item.completed?'✓':''}</span>
             <span>${item.label}</span>
           </div>
         `).join('')}
@@ -2504,7 +2546,7 @@ Only include fields you can actually read from the document. Use null for anythi
           Locale uses Claude to generate your itinerary. Your key is stored on this device only and only sent to Anthropic's API.
         </p>
         <div style={{background:'#FEF3C7',border:'1px solid #D97706',borderRadius:8,padding:'8px 12px',marginBottom:12,fontSize:'.78rem',color:'#92400E',lineHeight:1.5,textAlign:'left'}}>
-          <strong>⚠️ Beta testers:</strong> Use only the test key provided by Stephanie — do not enter your personal API key. This key is visible in browser DevTools.
+          <strong>⚠️ Security notice:</strong> Your key is saved in this browser's local storage and is visible in DevTools. Do not use a production key with unrestricted spending. Beta testers: use only the test key provided by Stephanie.
         </div>
         <input
           className="input"
@@ -2520,6 +2562,13 @@ Only include fields you can actually read from the document. Use null for anythi
             Save key & continue
           </button>
         </div>
+        {apiKey && (
+          <button
+            onClick={()=>{ setAIKey(''); setApiKeyState(''); showToast('API key cleared.','info',3000); }}
+            style={{marginTop:10,width:'100%',background:'none',border:'none',color:'var(--color-ink-muted)',fontSize:'.78rem',cursor:'pointer',textDecoration:'underline',padding:'4px 0'}}>
+            Clear saved key
+          </button>
+        )}
       </div>
     </div>
   );
@@ -2864,10 +2913,10 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
               if(!encoded){alert('Could not encode trip.');return;}
               const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
               if(navigator.share){
-                navigator.share({title: trip.title, text: `Join me on ${trip.title}!`, url});
+                navigator.share({title: trip.title, text: `Check out my trip to ${(trip.destinations||[]).map(d=>d.city).join(' & ')||trip.title} on Locale! (Read-only snapshot)`, url});
               } else {
-                navigator.clipboard.writeText(url).then(()=>alert('Link copied! Share it with your group.')).catch(()=>{
-                  prompt('Copy this link and share it:', url);
+                navigator.clipboard.writeText(url).then(()=>showToast('Link copied — recipients can view but not edit.','info',4000)).catch(()=>{
+                  prompt('Copy this read-only snapshot link:', url);
                 });
               }
             }} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',gap:6}}>
@@ -3080,6 +3129,46 @@ function Dashboard({trips, onSelectTrip, onNewTrip}) {
             ))}
           </div>
         )}
+      </div>
+      {/* Backup / Restore footer */}
+      <div style={{maxWidth:720,margin:'0 auto',padding:'0 20px 48px',display:'flex',justifyContent:'center',gap:16}}>
+        <button
+          onClick={()=>{
+            const data = JSON.stringify(trips, null, 2);
+            const blob = new Blob([data], {type:'application/json'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `locale-backup-${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showToast('Backup downloaded.','info',3000);
+          }}
+          style={{background:'none',border:'1px solid var(--color-border)',borderRadius:20,padding:'6px 14px',color:'var(--color-ink-muted)',fontSize:'.78rem',cursor:'pointer'}}>
+          Download backup
+        </button>
+        <label style={{background:'none',border:'1px solid var(--color-border)',borderRadius:20,padding:'6px 14px',color:'var(--color-ink-muted)',fontSize:'.78rem',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:4}}>
+          Restore from backup
+          <input type="file" accept=".json" style={{display:'none'}} onChange={e=>{
+            const file = e.target.files?.[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+              try {
+                const imported = JSON.parse(ev.target.result);
+                if(!Array.isArray(imported)) throw new Error('Not an array');
+                const restored = imported.map(t=>normalizeTrip({...t, isDemo:false}));
+                const existing = trips.filter(t=>!t.isDemo);
+                const merged = [...existing, ...restored.filter(r=>!existing.find(e=>e.id===r.id))];
+                saveTrips(merged);
+                window.location.reload();
+              } catch(err) {
+                showToast('Could not restore — invalid backup file.','error',5000);
+              }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+          }}/>
+        </label>
       </div>
       {/* FAB removed — use "+ New trip" button in header */}
     </div>
@@ -3521,7 +3610,7 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v2';
+const CACHE = 'locale-v5';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
