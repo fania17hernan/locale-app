@@ -106,7 +106,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-eyebrow">Focus Group Brief · Beta v0.4</div>
+  <div class="hero-eyebrow">Focus Group Brief · Beta v0.5</div>
   <div class="hero-title">Locale</div>
   <div class="hero-sub">Your trips, beautifully kept. — A POC brief for focus group testers.</div>
   <div class="hero-pills">
@@ -294,8 +294,8 @@
     </div>
     <div class="card">
       <div class="card-title">🌍 International entry flags</div>
-      <div class="card-desc">Alerts for international trips — EES registration, passport requirements, visa reminders — shown on the dashboard card and trip header.</div>
-      <span class="card-tag tag-live">Live · Demo trips only</span>
+      <div class="card-desc">Smart entry alerts for any trip — EES (Schengen), UK entry, Australia eTA, ESTA for non-US travelers to the US, and US visa requirements. Flags auto-dismiss from the dashboard and trip header once you complete the matching checklist item.</div>
+      <span class="card-tag tag-live">Live · All trips</span>
     </div>
     <div class="card">
       <div class="card-title">✏️ Update itinerary</div>
@@ -321,6 +321,86 @@
   <div class="section-title">What's being worked on</div>
 
   <p>This is an honest view of what's broken, what's coming, and what's planned for later phases. Fixed items are marked — see <strong>Release Notes</strong> for the full history.</p>
+
+  <div class="divider"></div>
+  <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:12px">✅ Fixed in v0.5 — June 4, 2026</p>
+
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Entry flags (EES, UK, AU) always showing even after checklist is done</div>
+      <div class="backlog-desc">Fixed — flags now auto-dismiss once the matching checklist item is marked complete. Works on dashboard card and trip hero.</div>
+      <span class="card-tag tag-fixed">Fixed v0.5</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Non-US travelers to the US had no entry requirement flags or checklist items</div>
+      <div class="backlog-desc">Fixed — ESTA flag shown for Visa Waiver Program passport holders; US Visa flag shown for all others. Both auto-generate matching checklist items and dismiss when completed.</div>
+      <span class="card-tag tag-fixed">Fixed v0.5</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Passport selector only showed 6 countries</div>
+      <div class="backlog-desc">Fixed — now covers all 195 countries alphabetically. Label also clarified to "Your Passport / Citizenship" with helper text.</div>
+      <span class="card-tag tag-fixed">Fixed v0.5</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Typing "Japan" (or any country name) in the city field caused wrong country to auto-fill</div>
+      <div class="backlog-desc">Fixed — city lookup now recognizes country names as well as city names (25+ countries added as aliases).</div>
+      <span class="card-tag tag-fixed">Fixed v0.5</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Packing tab showed empty "Generate" prompt instead of a pre-built list</div>
+      <div class="backlog-desc">Fixed — packing list now auto-generates on first open using trip destination, dates, and occasion. Seasonal logic (beach, mountain, cold/rainy, Northern EU), power adapter recommendations, and Mexico/Japan/India specific items included.</div>
+      <span class="card-tag tag-fixed">Fixed v0.5</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Preset emoji picker felt limiting and cluttered the trip creation form</div>
+      <div class="backlog-desc">Fixed — emoji picker removed. Users now type any emoji directly in the trip name using their keyboard. The trip card automatically extracts the leading emoji from the title for display.</div>
+      <span class="card-tag tag-fixed">Fixed v0.5</span>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:12px">✅ Bugs — Fixed in v0.4</p>
+
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">PDF checklist items always showed as unchecked</div>
+      <div class="backlog-desc">Fixed — PDF now correctly reflects completed checklist items.</div>
+      <span class="card-tag tag-fixed">Fixed v0.4</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Storage full error was silent — app appeared to save but data was lost</div>
+      <div class="backlog-desc">Fixed — localStorage quota errors now surface as a visible toast notification.</div>
+      <span class="card-tag tag-fixed">Fixed v0.4</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">No way to back up or recover trips if browser data was cleared</div>
+      <div class="backlog-desc">Fixed — dashboard now has "Download backup" (JSON export) and "Restore from backup" (file import) so trips are never permanently lost.</div>
+      <span class="card-tag tag-fixed">Fixed v0.4</span>
+    </div>
+  </div>
 
   <div class="divider"></div>
   <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:12px">✅ Bugs — Fixed in v0.2</p>
@@ -500,6 +580,54 @@
 
   <div class="divider"></div>
 
+  <!-- v0.5 -->
+  <div class="release-block">
+    <div class="release-header">
+      <div class="release-version">v0.5</div>
+      <div class="release-date">June 4, 2026</div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#2B5F6E;margin-bottom:8px">✨ New features</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>🌍 Entry flags auto-dismiss on completion</strong> — EES, UK entry, Australia eTA, ESTA, and US visa flags now disappear from the dashboard card and trip hero the moment you check off the matching item on your checklist. No more stale alerts cluttering trips you've already prepared for.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>🇺🇸 US entry requirements for non-US travelers</strong> — If your passport country is not the US and you're visiting the US, Locale now generates the right entry flag and checklist item automatically: ESTA for Visa Waiver Program countries (UK, France, Japan, Australia, etc.), or a US Visa prompt for everyone else.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>🧳 Packing list auto-generates on first open</strong> — No more "Generate" button to click. Opening the Packing tab for the first time now instantly builds a smart starter list tailored to your destination, trip length, season, and occasion — with seasonal clothing, power adapters by region, and destination-specific items.</div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#B45309;margin-bottom:8px">🔧 Bug fixes & polish</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Passport selector expanded to all 195 countries</strong> — Previously only showed 6 options (US, UK, Canada, Australia, EU, India). Now covers every country alphabetically. Label also updated from "Passport Country" to "Your Passport / Citizenship" with clarifying helper text.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Typing a country name in the city field caused wrong auto-fill</strong> — "Japan" was resolving to US, "France" had no match. Fixed — 25+ country name aliases added to the city lookup so both "Tokyo" and "Japan" correctly set Japan as the destination country.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-polish"></div>
+        <span class="release-label label-polish">Polish</span>
+        <div><strong>Emoji picker replaced with free-form keyboard input</strong> — The preset emoji grid (✈️🏖️🏔️ etc.) is removed. Trip name field now hints to users they can type any emoji directly from their keyboard. The trip card automatically picks up the leading emoji from the title for display.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
   <!-- v0.4 -->
   <div class="release-block">
     <div class="release-header">
@@ -566,6 +694,26 @@
         <div class="release-dot dot-fix"></div>
         <span class="release-label label-fix">Test</span>
         <div><strong>Inline test suite</strong> — 23 <code>console.assert</code> checks run on every page load, covering <code>uuid</code>, <code>normalizeTrip</code>, <code>generateChecklist</code>, <code>buildPackingDefaults</code>, and city lookup maps. Failures log to <code>locale_error_log</code> in localStorage and print clearly in DevTools.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Security</span>
+        <div><strong>Content Security Policy headers</strong> — <code>_headers</code> file added for Cloudflare/Netlify deployment with CSP, X-Frame-Options, X-Content-Type-Options, and Referrer-Policy to harden the app against common web attacks.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Security</span>
+        <div><strong>API key moved to session-only storage</strong> — Keys are no longer persisted in localStorage between sessions. A "Clear saved key" button is available for testers who previously saved one.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>PDF checklist items always showed unchecked</strong> — Fixed a field name mismatch (<code>item.checked</code> → <code>item.completed</code>) that caused all packing and checklist items to render as unchecked in exported PDFs.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>JSON backup &amp; restore</strong> — "Download backup" saves all your trips as a JSON file. "Restore from backup" merges them back in — even after clearing browser data. Available from the dashboard.</div>
       </div>
     </div>
   </div>
@@ -807,7 +955,7 @@
 </div>
 
 <div class="footer">
-  Locale — Focus Group Brief · Beta v0.4 · Built by Stephanie · June 2026
+  Locale — Focus Group Brief · Beta v0.5 · Built by Stephanie · June 2026
 </div>
 
 <script>
