@@ -1493,14 +1493,20 @@ function buildPackingDefaults(trip){
 }
 
 function PackingView({trip, onUpdateTrip}){
-  const packingList = trip.packingList || null;
   const [newItem, setNewItem] = useState('');
   const [newCat, setNewCat] = useState('clothing');
   const [collapsed, setCollapsed] = useState({});
 
-  // Initialise from trip or generate defaults on first open
-  const items = packingList || [];
+  // Auto-generate on first open if list not yet initialised
   const initialised = trip.packingList != null;
+  useEffect(()=>{
+    if(!initialised){
+      onUpdateTrip({...trip, packingList: buildPackingDefaults(trip)});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  const items = trip.packingList || [];
 
   function saveItems(updated){
     onUpdateTrip({...trip, packingList: updated});
@@ -1545,20 +1551,10 @@ function PackingView({trip, onUpdateTrip}){
     return acc;
   },{});
 
-  if(!initialised){
+  if(items.length === 0 && !initialised){
     return(
-      <div style={{padding:'0 16px 32px'}}>
-        <div style={{textAlign:'center',padding:'48px 24px'}}>
-          <div style={{fontSize:'2.5rem',marginBottom:12}}>🧳</div>
-          <h2 className="font-display" style={{fontSize:'1.4rem',fontWeight:600,marginBottom:8}}>Build your packing list</h2>
-          <p style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.6,marginBottom:24,maxWidth:320,margin:'0 auto 24px'}}>
-            Locale will generate a smart starter list based on your destination, trip length, and occasion. You can add, remove, or edit anything.
-          </p>
-          <button className="btn btn-primary" style={{padding:'12px 28px',fontSize:'.95rem'}} onClick={initDefaults}>
-            ✨ Generate my packing list
-          </button>
-          <p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',marginTop:12}}>Or add items manually after generating</p>
-        </div>
+      <div style={{padding:'48px 16px',textAlign:'center',color:'var(--color-ink-light)',fontSize:'.9rem'}}>
+        Building your packing list…
       </div>
     );
   }
