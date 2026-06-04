@@ -2161,7 +2161,7 @@ CRITICAL RULES about the user's request:
 5. After placing all non-negotiables, fill remaining slots with suggestions that complement their stated plans — same neighborhood, logical geography, similar vibe.
 6. Never replace a user-specified activity with a generic one.`;
 
-Return ONLY a valid JSON array of day objects. No markdown, no explanation — just the raw JSON array starting with [ and ending with ].
+Return ONLY a valid JSON array of day objects. No markdown, no explanation - just the raw JSON array starting with [ and ending with ].
 
 Each day object must follow this exact shape:
 {
@@ -3030,7 +3030,125 @@ function App() {
         <TripDetail trip={activeTrip} onBack={()=>setView('dashboard')} onUpdateTrip={handleUpdateTrip} onDelete={handleDeleteTrip}/>
       )}
       {showNew && <NewTripSheet onClose={()=>setShowNew(false)} onSave={handleNewTrip}/>}
+
+      {/* ── Bug Report Button ── */}
+      <BugReportButton currentView={view}/>
     </div>
+  );
+}
+
+// ── Bug Report Button ────────────────────────────────────────────────────────
+function BugReportButton({ currentView }) {
+  const [open, setOpen] = React.useState(false);
+  const [desc, setDesc] = React.useState('');
+  const [sent, setSent] = React.useState(false);
+
+  const deviceInfo = (() => {
+    try {
+      return [
+        `App: Locale v${APP_VERSION}`,
+        `Screen: ${currentView}`,
+        `UA: ${navigator.userAgent}`,
+        `Viewport: ${window.innerWidth}×${window.innerHeight}`,
+        `Date: ${new Date().toISOString()}`,
+      ].join('\n');
+    } catch(_) { return 'Device info unavailable'; }
+  })();
+
+  const errorLog = (() => {
+    try {
+      const log = JSON.parse(localStorage.getItem('locale_error_log') || '[]');
+      if (!log.length) return 'No errors logged.';
+      return log.slice(0, 5).map(e => `[${e.time}] ${e.type}: ${e.message}`).join('\n');
+    } catch(_) { return 'Could not read error log.'; }
+  })();
+
+  const sendReport = () => {
+    const body = [
+      '## Bug Description',
+      desc || '(no description provided)',
+      '',
+      '## Device Info',
+      deviceInfo,
+      '',
+      '## Recent Error Log',
+      errorLog,
+    ].join('\n');
+
+    const mailto = `mailto:s.borboa9@gmail.com?subject=${encodeURIComponent(`[Locale Bug] v${APP_VERSION} – ${currentView} screen`)}&body=${encodeURIComponent(body)}`;
+    window.open(mailto, '_blank');
+    setSent(true);
+    setTimeout(() => { setOpen(false); setSent(false); setDesc(''); }, 2500);
+  };
+
+  return (
+    <>
+      {/* Floating button */}
+      <button
+        onClick={() => setOpen(true)}
+        title="Report a bug"
+        style={{
+          position: 'fixed', bottom: 80, right: 16, zIndex: 9000,
+          width: 40, height: 40, borderRadius: '50%',
+          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+          boxShadow: '0 2px 10px rgba(0,0,0,.12)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '1rem', cursor: 'pointer', color: 'var(--color-ink-light)',
+          transition: 'transform .15s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.transform='scale(1.1)'}
+        onMouseLeave={e => e.currentTarget.style.transform='scale(1)'}
+      >🐞</button>
+
+      {/* Modal */}
+      {open && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9100,
+          background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          padding: '0 0 env(safe-area-inset-bottom,0)',
+        }} onClick={e=>{ if(e.target===e.currentTarget) setOpen(false); }}>
+          <div style={{
+            background: 'var(--color-canvas)', borderRadius: '20px 20px 0 0',
+            width: '100%', maxWidth: 480, padding: '24px 20px 32px',
+            boxShadow: '0 -4px 30px rgba(0,0,0,.15)',
+          }}>
+            {sent ? (
+              <div style={{textAlign:'center',padding:'20px 0'}}>
+                <div style={{fontSize:'2rem',marginBottom:8}}>✅</div>
+                <p style={{fontWeight:600,color:'var(--color-ink)'}}>Thanks! Report sent.</p>
+                <p style={{fontSize:'.82rem',color:'var(--color-ink-light)',marginTop:4}}>Your email app will open with the details pre-filled.</p>
+              </div>
+            ) : (
+              <>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+                  <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.1rem',fontWeight:600,color:'var(--color-ink)'}}>🐞 Report a Bug</h3>
+                  <button onClick={()=>setOpen(false)} style={{background:'none',border:'none',fontSize:'1.2rem',cursor:'pointer',color:'var(--color-ink-light)',lineHeight:1}}>×</button>
+                </div>
+
+                <label className="section-label" style={{display:'block',marginBottom:6}}>What happened?</label>
+                <textarea
+                  className="input"
+                  rows={4}
+                  placeholder="Describe what you were doing and what went wrong…"
+                  value={desc}
+                  onChange={e=>setDesc(e.target.value)}
+                  style={{resize:'vertical',marginBottom:12,fontSize:'.875rem',lineHeight:1.5}}
+                />
+
+                <div style={{background:'var(--color-surface)',borderRadius:8,padding:'10px 12px',marginBottom:16,fontSize:'.72rem',color:'var(--color-ink-muted)',fontFamily:'monospace',lineHeight:1.6,whiteSpace:'pre-wrap',wordBreak:'break-all'}}>
+                  <strong style={{fontFamily:'var(--font-body)',fontSize:'.7rem',color:'var(--color-ink-light)',letterSpacing:'.05em',textTransform:'uppercase'}}>Auto-attached info</strong>{'\n'}{deviceInfo}
+                </div>
+
+                <button className="btn btn-primary" style={{width:'100%'}} onClick={sendReport}>
+                  Send bug report →
+                </button>
+                <p style={{textAlign:'center',fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:8}}>Opens your email app with details pre-filled</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -3088,6 +3206,85 @@ class ErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
+
+// ── Inline Test Suite ───────────────────────────────────────────────────────
+(function runTests() {
+  let passed = 0, failed = 0;
+  function assert(label, condition) {
+    if (condition) {
+      passed++;
+    } else {
+      failed++;
+      console.error(`❌ TEST FAILED: ${label}`);
+      try {
+        const log = JSON.parse(localStorage.getItem('locale_error_log') || '[]');
+        log.unshift({ time: new Date().toISOString(), type: 'test_failure', message: label });
+        localStorage.setItem('locale_error_log', JSON.stringify(log.slice(0, 50)));
+      } catch(_) {}
+    }
+  }
+
+  // uuid
+  const id1 = uuid(), id2 = uuid();
+  assert('uuid returns string', typeof id1 === 'string');
+  assert('uuid has length 36', id1.length === 36);
+  assert('uuid is unique', id1 !== id2);
+  assert('uuid matches pattern', /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id1));
+
+  // normalizeTrip
+  const bare = { title: 'Test Trip', startDate: '2026-09-01', endDate: '2026-09-05' };
+  const normed = normalizeTrip(bare);
+  assert('normalizeTrip sets schemaVersion', normed.schemaVersion === SCHEMA_VERSION);
+  assert('normalizeTrip preserves title', normed.title === 'Test Trip');
+  assert('normalizeTrip adds empty destinations array', Array.isArray(normed.destinations));
+  assert('normalizeTrip adds empty days array', Array.isArray(normed.days));
+  assert('normalizeTrip adds collaborators array', Array.isArray(normed.collaborators));
+  assert('normalizeTrip adds lodging array', Array.isArray(normed.lodging));
+  assert('normalizeTrip adds flights array', Array.isArray(normed.flights));
+
+  // normalizeTrip legacy fields
+  const legacy = { name: 'Old Trip', travelPeriod: { depart: '2026-10-01', return: '2026-10-07' } };
+  const normedLegacy = normalizeTrip(legacy);
+  assert('normalizeTrip maps name→title', normedLegacy.title === 'Old Trip');
+  assert('normalizeTrip maps travelPeriod.depart→startDate', normedLegacy.startDate === '2026-10-01');
+  assert('normalizeTrip maps travelPeriod.return→endDate', normedLegacy.endDate === '2026-10-07');
+
+  // generateChecklist
+  const cl = generateChecklist({ title: 'Paris Trip', startDate: '2026-09-15', endDate: '2026-09-20', destinations: [{ city: 'Paris', country: 'France' }] });
+  assert('generateChecklist returns array', Array.isArray(cl));
+  assert('generateChecklist has items', cl.length > 0);
+  assert('generateChecklist items have id', cl.every(c => c.id));
+  assert('generateChecklist items have label', cl.every(c => typeof c.label === 'string'));
+  assert('generateChecklist items have checked bool', cl.every(c => typeof c.checked === 'boolean'));
+  assert('generateChecklist items have category', cl.every(c => c.category));
+
+  // buildPackingDefaults
+  const packing = buildPackingDefaults({ startDate: '2026-09-15', endDate: '2026-09-20', destinations: [{ city: 'London', country: 'UK' }] });
+  assert('buildPackingDefaults returns array', Array.isArray(packing));
+  assert('buildPackingDefaults has items', packing.length > 0);
+  assert('buildPackingDefaults items have label', packing.every(p => typeof p.label === 'string'));
+
+  // CITY_TO_COUNTRY lookup
+  assert('CITY_TO_COUNTRY has london→GB', CITY_TO_COUNTRY['london'] === 'GB');
+  assert('CITY_TO_COUNTRY has paris→FR', CITY_TO_COUNTRY['paris'] === 'FR');
+
+  // CITY_DATA lookup
+  assert('CITY_DATA has GB entry', !!CITY_DATA['GB']);
+  assert('CITY_DATA has FR entry', !!CITY_DATA['FR']);
+  assert('CITY_DATA.GB has transport', typeof CITY_DATA['GB'].transport === 'string');
+
+  // CITY_LOCAL_TIPS
+  assert('CITY_LOCAL_TIPS has london', !!CITY_LOCAL_TIPS['london']);
+  assert('CITY_LOCAL_TIPS has paris', !!CITY_LOCAL_TIPS['paris']);
+  assert('CITY_LOCAL_TIPS london is array', Array.isArray(CITY_LOCAL_TIPS['london']));
+
+  // Summary
+  if (failed === 0) {
+    console.log(`%c✅ All ${passed} Locale tests passed`, 'color:#2B5F6E;font-weight:bold;font-size:13px');
+  } else {
+    console.warn(`%c⚠️ ${failed} of ${passed + failed} Locale tests FAILED — check errors above`, 'color:#C05621;font-weight:bold;font-size:13px');
+  }
+})();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <ErrorBoundary>
