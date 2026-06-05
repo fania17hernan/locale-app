@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Locale Beta v0.4 — Tester Checklist</title>
+<title>Locale Beta v0.5 — Tester Checklist</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
@@ -64,7 +64,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-word">Locale Beta v0.4</div>
+  <div class="hero-word">Locale Beta v0.5</div>
   <div class="hero-title">Help us test! 🧪</div>
   <div class="hero-sub">Stephanie is building a trip planning app and needs your feedback. Try it out and check off what works!</div>
   <a class="hero-link" href="https://fania17hernan.github.io/locale-app/locale.html" target="_blank">Open Locale ↗</a>
@@ -82,7 +82,7 @@
 <div class="section" style="padding-bottom:12px">
   <div class="section-label">Your progress</div>
   <div class="progress-wrap">
-    <div class="progress-label"><span>Tasks completed</span><span id="prog-text">0 of 27</span></div>
+    <div class="progress-label"><span>Tasks completed</span><span id="prog-text">0 of 35</span></div>
     <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
   </div>
 </div>
@@ -365,6 +365,91 @@
   </div>
 </div>
 
+<!-- Group v0.5: Entry Flags & International -->
+<div class="task-group">
+  <div class="task-group-label">Entry Flags — Smart Dismiss <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.5</span></div>
+  <div class="card-group">
+    <div class="task" data-id="tv5a" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">EES flag shows only once on a multi-stop Europe trip</div>
+        <div class="task-desc">Create a trip with Paris → Versailles → Paris (all French stops). On the trip header, does the EES flag appear just once — not duplicated for each stop?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv5b" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Entry flag disappears after completing checklist item</div>
+        <div class="task-desc">On a Paris trip, go to the Checklist tab and check off "Complete EES pre-registration." Go back to the trip header — does the EES flag disappear?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv5c" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Versailles shows French flag, not US</div>
+        <div class="task-desc">Create a trip with Versailles as a stop. Does the destination card show the French 🇫🇷 flag? Does the EES flag appear in the trip header?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group v0.5: Trip Creation Fixes -->
+<div class="task-group">
+  <div class="task-group-label">Trip Creation — v0.5 Fixes <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.5</span></div>
+  <div class="card-group">
+    <div class="task" data-id="tv5d" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">City field does not show contacts icon</div>
+        <div class="task-desc">Start creating a new trip → step 2 (When & Where). Tap the "City" field. Does it show a plain text keyboard without the iOS contacts suggestion icon?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv5e" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Typing a country name auto-fills correctly</div>
+        <div class="task-desc">In the City field, type "Japan" — does it auto-fill Japan as the country and set the correct flag? Try "France," "Italy," and "Mexico" too.</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv5f" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Passport selector shows all countries</div>
+        <div class="task-desc">In step 1, tap "Your Passport / Citizenship." Does the dropdown show a full country list (Afghanistan through Zimbabwe), not just 6 options?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group v0.5: Mobile Hero & Packing -->
+<div class="task-group">
+  <div class="task-group-label">Mobile Hero & Packing — v0.5 Fixes <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.5</span></div>
+  <div class="card-group">
+    <div class="task" data-id="tv5g" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Trip header looks good on iPhone</div>
+        <div class="task-desc">Open any trip on your phone. Does the trip title display clearly without being cut off? Are the Back, Share, PDF, and Delete buttons all visible and tappable without overlapping?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv5h" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Packing list auto-generates on first open</div>
+        <div class="task-desc">Create a new trip, then tap the Packing tab immediately. Does a pre-filled list appear automatically (no "Generate" button to click)? Does the list include clothing appropriate for the destination and season?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Group 7 -->
 <div class="task-group">
   <div class="task-group-label">Overall feel</div>
@@ -391,7 +476,7 @@
 </div>
 
 <script>
-  const TOTAL = 27;
+  const TOTAL = 35;
 
   function toggle(el) {
     el.classList.toggle('done');
@@ -428,7 +513,7 @@
     if(!text){ alert('Please add a note before sending!'); return; }
     const done = document.querySelectorAll('.task.done').length;
     const subject = encodeURIComponent('Locale Beta Feedback');
-    const body = encodeURIComponent(`Hi Stephanie!\n\nHere's my Locale v0.4 beta feedback:\n\n${text}\n\n---\nCompleted ${done} of ${TOTAL} tasks.`);
+    const body = encodeURIComponent(`Hi Stephanie!\n\nHere's my Locale v0.5 beta feedback:\n\n${text}\n\n---\nCompleted ${done} of ${TOTAL} tasks.`);
     window.location.href = `mailto:s.borboa9@gmail.com?subject=${subject}&body=${body}`;
   }
 

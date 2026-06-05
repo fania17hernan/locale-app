@@ -373,6 +373,38 @@
       <span class="card-tag tag-fixed">Fixed v0.5</span>
     </div>
   </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">AI generator fails with JSON parse error — returns valid JSON but wrapped in markdown fences</div>
+      <div class="backlog-desc">Fixed — JSON extraction now strips ```json``` fences before parsing, uses indexOf/lastIndexOf for robust array detection, and moves the system prompt to the API system parameter so Claude returns raw JSON by default.</div>
+      <span class="card-tag tag-fixed">Fixed v0.5</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">City input field shows iOS contacts icon / autocomplete</div>
+      <div class="backlog-desc">Fixed — city and country fields now use autocomplete="off", autocorrect="off", autocapitalize="words" to suppress iOS contact suggestions and show the right keyboard mode.</div>
+      <span class="card-tag tag-fixed">Fixed v0.5</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Trip hero layout cramped on iPhone — Back/Share/PDF/Delete all competing in one row</div>
+      <div class="backlog-desc">Fixed — hero redesigned for mobile-first. Back stays top-left. Share, PDF, Delete grouped in a compact right-side row. Title uses clamp() for responsive sizing and truncates cleanly. No more overlapping buttons.</div>
+      <span class="card-tag tag-fixed">Fixed v0.5</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Tab bar still shows a shadow/border line after prior fix</div>
+      <div class="backlog-desc">Fixed — sticky pill nav now explicitly sets boxShadow: none and borderBottom: none.</div>
+      <span class="card-tag tag-fixed">Fixed v0.5</span>
+    </div>
+  </div>
 
   <div class="divider"></div>
   <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:12px">✅ Bugs — Fixed in v0.4</p>
@@ -622,6 +654,26 @@
         <div class="release-dot dot-polish"></div>
         <span class="release-label label-polish">Polish</span>
         <div><strong>Emoji picker replaced with free-form keyboard input</strong> — The preset emoji grid (✈️🏖️🏔️ etc.) is removed. Trip name field now hints to users they can type any emoji directly from their keyboard. The trip card automatically picks up the leading emoji from the title for display.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>AI itinerary generator parse failure</strong> — Generator was failing when Claude returned valid JSON wrapped in markdown fences. Fixed with a more robust extractor (strips fences, uses indexOf/lastIndexOf) and moved system instructions to the API system parameter so Claude defaults to raw JSON output.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>City field shows iOS contacts autocomplete icon</strong> — Stop/city inputs now use <code>autocomplete="off"</code>, <code>autocorrect="off"</code>, <code>autocapitalize="words"</code> to suppress the contacts icon and show the correct keyboard on iPhone.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Trip hero layout cramped on mobile</strong> — Redesigned for iPhone-first. Back button stays top-left. Share, PDF, and Delete are grouped in a compact right row. Title uses <code>clamp()</code> for responsive sizing and truncates cleanly on narrow screens.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>Tab bar shadow persisting after prior fix</strong> — Sticky pill nav now explicitly sets <code>boxShadow: none</code> and <code>borderBottom: none</code>. Clean separator-free tabs on all screens.</div>
       </div>
     </div>
   </div>

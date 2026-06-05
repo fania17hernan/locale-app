@@ -271,6 +271,16 @@ const CITY_TO_COUNTRY={
   // Europe
   'london':{countryCode:'GB',country:'United Kingdom',isInternational:true},
   'paris':{countryCode:'FR',country:'France',isInternational:true},
+  'versailles':{countryCode:'FR',country:'France',isInternational:true},
+  'nice':{countryCode:'FR',country:'France',isInternational:true},
+  'cannes':{countryCode:'FR',country:'France',isInternational:true},
+  'lyon':{countryCode:'FR',country:'France',isInternational:true},
+  'bordeaux':{countryCode:'FR',country:'France',isInternational:true},
+  'strasbourg':{countryCode:'FR',country:'France',isInternational:true},
+  'marseille':{countryCode:'FR',country:'France',isInternational:true},
+  'mont saint-michel':{countryCode:'FR',country:'France',isInternational:true},
+  'giverny':{countryCode:'FR',country:'France',isInternational:true},
+  'champagne':{countryCode:'FR',country:'France',isInternational:true},
   'rome':{countryCode:'IT',country:'Italy',isInternational:true},
   'milan':{countryCode:'IT',country:'Italy',isInternational:true},
   'florence':{countryCode:'IT',country:'Italy',isInternational:true},
@@ -299,9 +309,45 @@ const CITY_TO_COUNTRY={
   'dublin':{countryCode:'IE',country:'Ireland',isInternational:true},
   'edinburgh':{countryCode:'GB',country:'United Kingdom',isInternational:true},
   'manchester':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'bruges':{countryCode:'BE',country:'Belgium',isInternational:true},
+  'ghent':{countryCode:'BE',country:'Belgium',isInternational:true},
   'brussels':{countryCode:'BE',country:'Belgium',isInternational:true},
   'warsaw':{countryCode:'PL',country:'Poland',isInternational:true},
   'krakow':{countryCode:'PL',country:'Poland',isInternational:true},
+  'salzburg':{countryCode:'AT',country:'Austria',isInternational:true},
+  'innsbruck':{countryCode:'AT',country:'Austria',isInternational:true},
+  'interlaken':{countryCode:'CH',country:'Switzerland',isInternational:true},
+  'lucerne':{countryCode:'CH',country:'Switzerland',isInternational:true},
+  'seville':{countryCode:'ES',country:'Spain',isInternational:true},
+  'granada':{countryCode:'ES',country:'Spain',isInternational:true},
+  'bilbao':{countryCode:'ES',country:'Spain',isInternational:true},
+  'valencia':{countryCode:'ES',country:'Spain',isInternational:true},
+  'ibiza':{countryCode:'ES',country:'Spain',isInternational:true},
+  'mallorca':{countryCode:'ES',country:'Spain',isInternational:true},
+  'naples':{countryCode:'IT',country:'Italy',isInternational:true},
+  'amalfi':{countryCode:'IT',country:'Italy',isInternational:true},
+  'positano':{countryCode:'IT',country:'Italy',isInternational:true},
+  'cinque terre':{countryCode:'IT',country:'Italy',isInternational:true},
+  'sicily':{countryCode:'IT',country:'Italy',isInternational:true},
+  'tuscany':{countryCode:'IT',country:'Italy',isInternational:true},
+  'bath':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'oxford':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'cambridge':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'york':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'glasgow':{countryCode:'GB',country:'United Kingdom',isInternational:true},
+  'reykjavik':{countryCode:'IS',country:'Iceland',isInternational:true},
+  'dubrovnik':{countryCode:'HR',country:'Croatia',isInternational:true},
+  'split':{countryCode:'HR',country:'Croatia',isInternational:true},
+  'kotor':{countryCode:'ME',country:'Montenegro',isInternational:true},
+  'crete':{countryCode:'GR',country:'Greece',isInternational:true},
+  'rhodes':{countryCode:'GR',country:'Greece',isInternational:true},
+  'tallinn':{countryCode:'EE',country:'Estonia',isInternational:true},
+  'riga':{countryCode:'LV',country:'Latvia',isInternational:true},
+  'vilnius':{countryCode:'LT',country:'Lithuania',isInternational:true},
+  'marrakech':{countryCode:'MA',country:'Morocco',isInternational:true},
+  'casablanca':{countryCode:'MA',country:'Morocco',isInternational:true},
+  'cairo':{countryCode:'EG',country:'Egypt',isInternational:true},
+  'nairobi':{countryCode:'KE',country:'Kenya',isInternational:true},
   // Americas
   'new york':{countryCode:'US',country:'United States',isInternational:false},
   'los angeles':{countryCode:'US',country:'United States',isInternational:false},
@@ -698,37 +744,38 @@ function getCountdownInfo(d){
 }
 function getIntlFlags(trip){
   const flags=[];
+  const seen=new Set();
   const checklist=trip.checklist||[];
-  // Helper: is a checklist item with keyword completed?
   const isDone=(kw)=>checklist.some(i=>i.completed&&i.label&&i.label.toLowerCase().includes(kw.toLowerCase()));
   const passport=trip.travelerPassportCountry||'US';
+  const VWP=['GB','DE','FR','IT','ES','AU','NZ','JP','KR','SG','NL','BE','AT','CH','SE','NO','DK','FI','IE','PT','CZ','SK','HU','PL','LU','LI','MC','SM','IS','EE','LV','LT','SI','MT','CY','GR','HR','BG','RO','BN','TW','CL'];
+  const push=(f)=>{ if(!seen.has(f.label)){seen.add(f.label);flags.push(f);} };
 
-  (trip.destinations||[]).filter(d=>d.isInternational||(d.countryCode&&d.countryCode!=='US')).forEach(dest=>{
-    // EES — Schengen entry for non-EU passport holders (currently US-focused)
-    if(SCHENGEN.includes(dest.countryCode)&&passport==='US'&&!isDone('EES pre-registration'))
-      flags.push({severity:'critical',emoji:'🚨',label:'EES Registration Required',
-        desc:`Required for all non-EU nationals entering Schengen Area (${dest.city}). Register before travel.`,
+  // Collect unique country codes across all destinations
+  const countryCodes=[...new Set((trip.destinations||[])
+    .filter(d=>d.isInternational||(d.countryCode&&d.countryCode!=='US'))
+    .map(d=>d.countryCode).filter(Boolean))];
+
+  countryCodes.forEach(cc=>{
+    if(SCHENGEN.includes(cc)&&passport==='US'&&!isDone('EES pre-registration'))
+      push({severity:'critical',emoji:'🚨',label:'EES Registration Required',
+        desc:'Required for all non-EU nationals entering the Schengen Area. Register before travel.',
         url:'https://eu-entry.europa.eu'});
-    // UK entry info for US passport holders
-    if(dest.countryCode==='GB'&&passport==='US'&&!isDone('UK entry requirements'))
-      flags.push({severity:'info',emoji:'ℹ️',label:'UK Entry — No Visa Required',
+    if(cc==='GB'&&passport==='US'&&!isDone('UK entry requirements'))
+      push({severity:'info',emoji:'ℹ️',label:'UK Entry — No Visa Required',
         desc:'US passport holders can visit the UK for up to 6 months without a visa. Ensure passport is valid.',url:null});
-    // Australia eTA for US passport holders
-    if(dest.countryCode==='AU'&&passport==='US'&&!isDone('Australia eTA'))
-      flags.push({severity:'warning',emoji:'⚠️',label:'Australia eTA Required',
+    if(cc==='AU'&&passport==='US'&&!isDone('Australia eTA'))
+      push({severity:'warning',emoji:'⚠️',label:'Australia eTA Required',
         desc:'Electronic Travel Authority required before departure. Apply online — typically instant.',
         url:'https://eta.homeaffairs.gov.au'});
-    // US entry requirements for non-US passport holders
-    if(dest.countryCode==='US'&&passport!=='US'){
-      // ESTA for Visa Waiver Program countries
-      const VWP=['GB','DE','FR','IT','ES','AU','NZ','JP','KR','SG','NL','BE','AT','CH','SE','NO','DK','FI','IE','PT','CZ','SK','HU','PL','LU','LI','MC','SM','IS','EE','LV','LT','SI','MT','CY','GR','HR','BG','RO','BN','TW','CL','HU'];
+    if(cc==='US'&&passport!=='US'){
       if(VWP.includes(passport)&&!isDone('ESTA'))
-        flags.push({severity:'warning',emoji:'⚠️',label:'US Entry — ESTA Required',
+        push({severity:'warning',emoji:'⚠️',label:'US Entry — ESTA Required',
           desc:'Citizens of Visa Waiver Program countries must apply for ESTA before traveling to the US.',
           url:'https://esta.cbp.dhs.gov'});
       else if(!VWP.includes(passport)&&!isDone('US visa'))
-        flags.push({severity:'critical',emoji:'🚨',label:'US Visa Required',
-          desc:'Your passport country requires a US visa to enter. Apply well in advance at travel.state.gov.',
+        push({severity:'critical',emoji:'🚨',label:'US Visa Required',
+          desc:'Your passport country requires a US visa to enter. Apply well in advance.',
           url:'https://travel.state.gov/content/travel/en/us-visas.html'});
     }
   });
@@ -1496,15 +1543,17 @@ function PackingView({trip, onUpdateTrip}){
   const [newItem, setNewItem] = useState('');
   const [newCat, setNewCat] = useState('clothing');
   const [collapsed, setCollapsed] = useState({});
+  const didInit = useRef(false);
 
-  // Auto-generate on first open if list not yet initialised
+  // Auto-generate on first open if list not yet initialised — ref guards against double-fire
   const initialised = trip.packingList != null;
   useEffect(()=>{
-    if(!initialised){
+    if(!initialised && !didInit.current){
+      didInit.current = true;
       onUpdateTrip({...trip, packingList: buildPackingDefaults(trip)});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
+  },[initialised]);
 
   const items = trip.packingList || [];
 
@@ -2106,7 +2155,6 @@ function NewTripSheet({onClose, onSave}) {
             <div>
               <label className="section-label">Trip Name *</label>
               <input className={`input ${errors.title?'input-error':''}`} value={form.title} onChange={e=>set('title',e.target.value)} placeholder="e.g. 🌍 London & Paris 2026"/>
-              <p style={{fontSize:'0.72rem',color:'var(--color-ink-light)',margin:'4px 0 0',fontFamily:'var(--font-body)'}}>Feel free to add an emoji from your keyboard ✈️</p>
               {errors.title&&<p style={{color:'var(--color-flag)',fontSize:'.75rem',marginTop:4}}>{errors.title}</p>}
             </div>
             <div>
@@ -2128,7 +2176,6 @@ function NewTripSheet({onClose, onSave}) {
               </div>
               <div>
                 <label className="section-label">Your Passport / Citizenship</label>
-                <p style={{fontSize:'0.72rem',color:'var(--color-ink-light)',margin:'-4px 0 6px',fontFamily:'var(--font-body)'}}>The country whose passport you'll travel on</p>
                 <select className="input" value={form.travelerPassportCountry} onChange={e=>set('travelerPassportCountry',e.target.value)}>
                   {PASSPORTS.map(p=><option key={p.code} value={p.code}>{p.label}</option>)}
                 </select>
@@ -2173,22 +2220,26 @@ function NewTripSheet({onClose, onSave}) {
                     {form.destinations.length>1&&<button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'2px 8px',color:'var(--color-flag)'}} onClick={()=>removeDest(i)}>Remove</button>}
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8,marginBottom:8}}>
-                    <input className="input" placeholder="City (e.g. Tokyo)" value={d.city} onChange={e=>{
-                      const v=e.target.value;
-                      const cap=v.length?v.charAt(0).toUpperCase()+v.slice(1):v;
-                      const key=v.toLowerCase().trim();
-                      const cityMatch=CITY_TO_COUNTRY[key];
-                      if(cityMatch){
-                        setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],city:cap,...cityMatch};return{...f,destinations:ds};});
-                      } else {
-                        setDest(i,'city',cap);
-                      }
-                    }}/>
-                    <input className="input" placeholder="Country" value={d.country||''} onChange={e=>{
-                      const v=e.target.value;
-                      const cap=v.length?v.charAt(0).toUpperCase()+v.slice(1):v;
-                      setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],country:cap};return{...f,destinations:ds};});
-                    }}/>
+                    <input className="input" placeholder="City (e.g. Tokyo)"
+                      autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck="false"
+                      value={d.city} onChange={e=>{
+                        const v=e.target.value;
+                        const cap=v.length?v.charAt(0).toUpperCase()+v.slice(1):v;
+                        const key=v.toLowerCase().trim();
+                        const cityMatch=CITY_TO_COUNTRY[key];
+                        if(cityMatch){
+                          setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],city:cap,...cityMatch};return{...f,destinations:ds};});
+                        } else {
+                          setDest(i,'city',cap);
+                        }
+                      }}/>
+                    <input className="input" placeholder="Country"
+                      autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck="false"
+                      value={d.country||''} onChange={e=>{
+                        const v=e.target.value;
+                        const cap=v.length?v.charAt(0).toUpperCase()+v.slice(1):v;
+                        setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],country:cap};return{...f,destinations:ds};});
+                      }}/>
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
                     <div>
@@ -2572,7 +2623,6 @@ Only include fields you can actually read from the document. Use null for anythi
     setLoading(true); setError(''); setStreamText('');
 
     try {
-      const fullPrompt = buildSystemPrompt() + '\n\nUser request: ' + prompt;
       const res = await fetch(
         'https://api.anthropic.com/v1/messages',
         {
@@ -2586,7 +2636,8 @@ Only include fields you can actually read from the document. Use null for anythi
           body: JSON.stringify({
             model: 'claude-haiku-4-5-20251001',
             max_tokens: 8000,
-            messages: [{ role: 'user', content: fullPrompt }],
+            system: buildSystemPrompt(),
+            messages: [{ role: 'user', content: 'User request: ' + prompt }],
           }),
         }
       );
@@ -2601,15 +2652,18 @@ Only include fields you can actually read from the document. Use null for anythi
       if (!full) throw new Error('Claude returned an empty response. Please try again.');
       setStreamText(full);
 
-      // Parse the JSON from the response — hardened against malformed output
+      // Parse the JSON — strip markdown fences, find the outermost array
       let days;
       try {
-        const jsonMatch = full.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) throw new Error('No JSON array found in response.');
-        days = JSON.parse(jsonMatch[0]);
+        // Strip ```json ... ``` or ``` ... ``` fences if present
+        let cleaned = full.replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
+        // Find the first [ and last ] to extract the array robustly
+        const start = cleaned.indexOf('[');
+        const end = cleaned.lastIndexOf(']');
+        if (start === -1 || end === -1 || end <= start) throw new Error('No JSON array found in response.');
+        days = JSON.parse(cleaned.slice(start, end + 1));
         if (!Array.isArray(days) || days.length === 0) throw new Error('Response contained an empty or invalid itinerary.');
       } catch(parseErr) {
-        // Log for debugging, show friendly message
         console.error('AI response parse failed:', parseErr, '\nRaw response:', full.slice(0, 500));
         try {
           const log = JSON.parse(localStorage.getItem('locale_error_log') || '[]');
@@ -3014,38 +3068,38 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
             {Array(20).fill(null).map((_,i)=><span key={i} style={{animationDelay:`${i*.15}s`}}>{['✨','🎉','🥂','💫','🎊'][i%5]}</span>)}
           </div>
         )}
-        <div style={{position:'relative',zIndex:1,padding:'60px 20px 24px',maxWidth:720,margin:'0 auto'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div style={{position:'relative',zIndex:1,padding:'52px 16px 20px',maxWidth:720,margin:'0 auto'}}>
+          {/* Top bar: Back + action buttons */}
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
             <button onClick={onBack} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>← Back</button>
-            <button onClick={()=>{
-              const encoded = encodeTrip(trip);
-              if(!encoded){alert('Could not encode trip.');return;}
-              const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
-              if(navigator.share){
-                navigator.share({title: trip.title, text: `Check out my trip to ${(trip.destinations||[]).map(d=>d.city).join(' & ')||trip.title} on Locale! (Read-only snapshot)`, url});
-              } else {
-                navigator.clipboard.writeText(url).then(()=>showToast('Link copied — recipients can view but not edit.','info',4000)).catch(()=>{
-                  prompt('Copy this read-only snapshot link:', url);
-                });
-              }
-            }} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',gap:6}}>
-              🔗 Share Trip
-            </button>
-          </div>
-          <div style={{display:'flex',alignItems:'flex-start',gap:16}}>
-            <span style={{fontSize:'2.5rem'}}>{trip.emoji}</span>
-            <div style={{flex:1}}>
-              <h1 style={{fontFamily:'var(--font-display)',fontSize:'2rem',fontWeight:700,color:'#fff',lineHeight:1.2,marginBottom:4}}>{trip.title}</h1>
-              <p style={{color:'rgba(255,255,255,.85)',fontSize:'.9rem'}}>{formatDate(trip.startDate)} – {formatDate(trip.endDate)} · {countdown}</p>
-              <div style={{marginTop:10,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-                <AvatarStack collaborators={trip.collaborators}/>
-                <span className="occasion-pill">{getOccasionEmoji(trip.occasion)} {getOccasionLabel(trip.occasion)}</span>
-              </div>
-            </div>
-            <div style={{display:'flex',gap:8}}>
+            <div style={{display:'flex',gap:8,alignItems:'center'}}>
+              <button onClick={()=>{
+                const encoded = encodeTrip(trip);
+                if(!encoded){alert('Could not encode trip.');return;}
+                const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
+                if(navigator.share){
+                  navigator.share({title: trip.title, text: `Check out my trip to ${(trip.destinations||[]).map(d=>d.city).join(' & ')||trip.title} on Locale! (Read-only snapshot)`, url});
+                } else {
+                  navigator.clipboard.writeText(url).then(()=>showToast('Link copied — recipients can view but not edit.','info',4000)).catch(()=>{
+                    prompt('Copy this read-only snapshot link:', url);
+                  });
+                }
+              }} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>🔗 Share</button>
               <button onClick={()=>generateTripPDF(trip)} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>↓ PDF</button>
-              <button onClick={()=>{ if(window.confirm(`Delete "${trip.title}"? This can't be undone.`)) onDelete(trip.id); }} style={{background:'rgba(255,80,80,.25)',border:'none',borderRadius:20,padding:'6px 12px',color:'#fff',fontSize:'1rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>🗑</button>
+              <button onClick={()=>{ if(window.confirm(`Delete "${trip.title}"? This can't be undone.`)) onDelete(trip.id); }} style={{background:'rgba(255,80,80,.3)',border:'none',borderRadius:20,padding:'6px 12px',color:'#fff',fontSize:'1rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>🗑</button>
             </div>
+          </div>
+          {/* Title + meta */}
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:8}}>
+            <span style={{fontSize:'2rem',lineHeight:1}}>{(()=>{const m=(trip.title||'').match(/^\p{Emoji}/u);return m?m[0]:(trip.emoji||'✈️');})()}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <h1 style={{fontFamily:'var(--font-display)',fontSize:'clamp(1.4rem,5vw,2rem)',fontWeight:700,color:'#fff',lineHeight:1.15,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{trip.title}</h1>
+              <p style={{color:'rgba(255,255,255,.8)',fontSize:'.82rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{formatDate(trip.startDate)} – {formatDate(trip.endDate)} · {countdown}</p>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:flags.length>0?12:0}}>
+            <AvatarStack collaborators={trip.collaborators}/>
+            <span className="occasion-pill">{getOccasionEmoji(trip.occasion)} {getOccasionLabel(trip.occasion)}</span>
           </div>
           {flags.length>0&&(
             <div style={{marginTop:16,display:'flex',gap:8,flexWrap:'wrap'}}>
@@ -3070,7 +3124,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
       </div>
 
       {/* Sticky Pill Nav */}
-      <div style={{position:'sticky',top:0,zIndex:100,background:'var(--color-surface)',padding:'12px 20px',overflowX:'auto',whiteSpace:'nowrap'}}>
+      <div style={{position:'sticky',top:0,zIndex:100,background:'var(--color-surface)',padding:'12px 20px',overflowX:'auto',whiteSpace:'nowrap',borderBottom:'none',boxShadow:'none'}}>
         <div style={{display:'inline-flex',gap:8,maxWidth:720,margin:'0 auto'}}>
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`pill ${activeTab===t.id?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>
