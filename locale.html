@@ -349,7 +349,18 @@ const CITY_TO_COUNTRY={
   'cairo':{countryCode:'EG',country:'Egypt',isInternational:true},
   'nairobi':{countryCode:'KE',country:'Kenya',isInternational:true},
   // Americas
+  'brooklyn':{'new york':true},
+  'queens':{'new york':true},
+  'manhattan':{'new york':true},
+  'bronx':{'new york':true},
   'new york':{countryCode:'US',country:'United States',isInternational:false},
+  'brooklyn':{countryCode:'US',country:'United States',isInternational:false},
+  'manhattan':{countryCode:'US',country:'United States',isInternational:false},
+  'queens':{countryCode:'US',country:'United States',isInternational:false},
+  'bronx':{countryCode:'US',country:'United States',isInternational:false},
+  'harlem':{countryCode:'US',country:'United States',isInternational:false},
+  'jersey city':{countryCode:'US',country:'United States',isInternational:false},
+  'hoboken':{countryCode:'US',country:'United States',isInternational:false},
   'los angeles':{countryCode:'US',country:'United States',isInternational:false},
   'chicago':{countryCode:'US',country:'United States',isInternational:false},
   'miami':{countryCode:'US',country:'United States',isInternational:false},
@@ -1049,7 +1060,9 @@ function normalizeTrip(t){
   const destinations = t.destinations || [];
   const days = t.days || [];
   // v2→v3: packingList, lodging, flights
-  const packingList = t.packingList || [];
+  // null or [] = never generated → PackingView will auto-generate
+  // Only treat as initialised if it actually has items
+  const packingList = (Array.isArray(t.packingList) && t.packingList.length > 0) ? t.packingList : null;
   const lodging = t.lodging || [];
   const flights = t.flights || [];
 
@@ -1185,7 +1198,9 @@ function CityTidbits({destinations}){
   const toggle=k=>setOpen(o=>({...o,[k]:!o[k]}));
 
   const dests=(destinations||[]).filter(d=>{
-    const cityKey=(d.city||'').toLowerCase();
+    let cityKey=(d.city||'').toLowerCase();
+    const resolved=CITY_LOCAL_TIPS[cityKey];
+    if(resolved&&resolved['new york']) cityKey='new york';
     const hasLocal=!!CITY_LOCAL_TIPS[cityKey];
     const hasIntl=CITY_DATA[d.countryCode];
     return hasLocal||hasIntl;
@@ -1202,7 +1217,10 @@ function CityTidbits({destinations}){
   return(
     <div style={{padding:'0 0 32px'}}>
       {dests.map(dest=>{
-        const cityKey=(dest.city||'').toLowerCase();
+        let cityKey=(dest.city||'').toLowerCase();
+        // Resolve borough/alias to parent city entry
+        const resolved=CITY_LOCAL_TIPS[cityKey];
+        if(resolved&&resolved['new york']) cityKey='new york';
         const localData=CITY_LOCAL_TIPS[cityKey];
         const intlData=CITY_DATA[dest.countryCode];
         const sections=[];
@@ -1545,8 +1563,8 @@ function PackingView({trip, onUpdateTrip}){
   const [collapsed, setCollapsed] = useState({});
   const didInit = useRef(false);
 
-  // Auto-generate on first open if list not yet initialised — ref guards against double-fire
-  const initialised = trip.packingList != null;
+  // Auto-generate on first open — treat null OR empty [] as "not yet generated"
+  const initialised = Array.isArray(trip.packingList) && trip.packingList.length > 0;
   useEffect(()=>{
     if(!initialised && !didInit.current){
       didInit.current = true;
@@ -1600,10 +1618,12 @@ function PackingView({trip, onUpdateTrip}){
     return acc;
   },{});
 
-  if(items.length === 0 && !initialised){
+  if(!initialised && items.length === 0){
     return(
-      <div style={{padding:'48px 16px',textAlign:'center',color:'var(--color-ink-light)',fontSize:'.9rem'}}>
-        Building your packing list…
+      <div style={{padding:'48px 16px',textAlign:'center'}}>
+        <div style={{fontSize:'2rem',marginBottom:8}}>🧳</div>
+        <p style={{fontSize:'.9rem',color:'var(--color-ink-light)',marginBottom:16}}>Building your packing list…</p>
+        <button className="btn btn-primary" style={{padding:'10px 24px'}} onClick={initDefaults}>Generate packing list</button>
       </div>
     );
   }
@@ -1982,7 +2002,7 @@ function TripCard({trip, onClick, animDelay=0}) {
           <span className="occasion-pill">{getOccasionEmoji(occasion)} {getOccasionLabel(occasion)}</span>
         </div>
         <div className="trip-card-meta">
-          <div className="trip-card-title">{title || 'My Trip'}</div>
+          <div className="trip-card-title">{(()=>{const t=title||'My Trip';return t.replace(/^\p{Emoji}\s*/u,'');})()}</div>
           <div className="trip-card-dates">
             {formatDateShort(startDate)} – {formatDateShort(endDate)}
             {nightCount ? ` · ${nightCount} nights` : ''}
@@ -3100,7 +3120,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
           <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:8}}>
             <span style={{fontSize:'2rem',lineHeight:1}}>{(()=>{const m=(trip.title||'').match(/^\p{Emoji}/u);return m?m[0]:(trip.emoji||'✈️');})()}</span>
             <div style={{flex:1,minWidth:0}}>
-              <h1 style={{fontFamily:'var(--font-display)',fontSize:'clamp(1.4rem,5vw,2rem)',fontWeight:700,color:'#fff',lineHeight:1.15,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{trip.title}</h1>
+              <h1 style={{fontFamily:'var(--font-display)',fontSize:'clamp(1.4rem,5vw,2rem)',fontWeight:700,color:'#fff',lineHeight:1.15,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{(trip.title||'').replace(/^\p{Emoji}\s*/u,'')}</h1>
               <p style={{color:'rgba(255,255,255,.8)',fontSize:'.82rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{formatDate(trip.startDate)} – {formatDate(trip.endDate)} · {countdown}</p>
             </div>
           </div>
@@ -3131,7 +3151,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
       </div>
 
       {/* Sticky Pill Nav */}
-      <div style={{position:'sticky',top:0,zIndex:100,background:'var(--color-surface)',padding:'12px 20px',overflowX:'auto',whiteSpace:'nowrap',borderBottom:'none',boxShadow:'none'}}>
+      <div style={{position:'sticky',top:0,zIndex:100,background:'var(--color-surface)',padding:'10px 16px',overflowX:'auto',whiteSpace:'nowrap',borderBottom:'1px solid var(--color-border)',boxShadow:'none'}}>
         <div style={{display:'inline-flex',gap:8,maxWidth:720,margin:'0 auto'}}>
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`pill ${activeTab===t.id?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>
@@ -3153,13 +3173,13 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
         </div>
       )}
       {/* Tab Content */}
-      <div style={{maxWidth:1100,margin:'0 auto',padding:'24px 28px 80px'}}>
+      <div style={{maxWidth:720,margin:'0 auto',padding:'20px 16px 80px'}}>
         {activeTab==='overview' && (
           <div>
             {/* ── Edit Trip Dates ── */}
             <TripDateEditor trip={trip} onUpdateTrip={onUpdateTrip}/>
             {/* Trip Color Picker */}
-            <div style={{background:'var(--color-surface)',borderRadius:12,padding:16,border:'1px solid var(--color-border)',marginBottom:20}}>
+            <div style={{background:'var(--color-surface)',borderRadius:12,padding:'16px 18px',border:'1px solid var(--color-border)',marginBottom:12}}>
               <p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',marginBottom:10,fontWeight:600}}>Trip Color</p>
               <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                 {[
@@ -3183,9 +3203,9 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
                 })}
               </div>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:24}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:10,marginBottom:12}}>
               {trip.destinations.map(d=>(
-                <div key={d.id} style={{background:'var(--color-surface)',borderRadius:12,padding:16,border:'1px solid var(--color-border)',textAlign:'center'}}>
+                <div key={d.id} style={{background:'var(--color-surface)',borderRadius:12,padding:'14px 12px',border:'1px solid var(--color-border)',textAlign:'center'}}>
                   <div style={{fontSize:'1.5rem',marginBottom:4}}>{getCountryFlag(d.countryCode)}</div>
                   <div style={{fontFamily:'var(--font-display)',fontSize:'1rem',fontWeight:600}}>{d.city}</div>
                   {d.arrivalDate&&<div style={{fontSize:'.72rem',color:'var(--color-ink-light)',marginTop:4}}>{formatDateShort(d.arrivalDate)} – {formatDateShort(d.departureDate)}</div>}
@@ -3780,7 +3800,7 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v6';
+const CACHE = 'locale-v7';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
