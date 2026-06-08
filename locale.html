@@ -656,32 +656,43 @@ const CITY_LOCAL_TIPS={
     ],
   },
   'london':{
+    transport:'The Tube (Underground) is the fastest way around London. Tap any contactless bank card or Apple Pay directly on the yellow reader — no Oyster card needed. Buses are cheaper and great for sightseeing. Uber and black cabs are widely available. For the Thames, take the Uber Boat (Thames Clipper) — a scenic alternative that stops near major attractions. Wembley: take the Metropolitan or Jubilee line to Wembley Park station.',
     nearby:[
-      {name:'Columbia Road Flower Market',emoji:'🌸',desc:'Sunday morning only — one of London\'s most beautiful and atmospheric markets. Arrive by 9am.',address:'Columbia Rd, London E2'},
-      {name:'Greenwich & the Meridian Line',emoji:'🌍',desc:'Half-day trip by Uber Boat on the Thames. Royal Observatory, Cutty Sark, and great park views of the city.',address:'Greenwich, London SE10'},
-      {name:'Maltby Street Market',emoji:'🧀',desc:'Saturday and Sunday — Bermondsey\'s artisan food market. Less touristy than Borough Market, same quality.',address:'Maltby St, London SE1'},
-      {name:'Little Venice',emoji:'⛵',desc:'Canals in London — surprisingly lovely. Rent a narrowboat or walk the towpath to Camden.',address:'Little Venice, London W9'},
+      {name:'Columbia Road Flower Market',emoji:'🌸',desc:'Sunday morning only — one of London\'s most beautiful and atmospheric markets. Arrive by 9am.',address:'Columbia Rd, London E2',url:'https://columbiaroad.info'},
+      {name:'Greenwich & the Meridian Line',emoji:'🌍',desc:'Half-day trip by Uber Boat on the Thames. Royal Observatory, Cutty Sark, and great park views of the city.',address:'Greenwich, London SE10',url:'https://www.rmg.co.uk/royal-observatory'},
+      {name:'Maltby Street Market',emoji:'🧀',desc:'Saturday and Sunday — Bermondsey\'s artisan food market. Less touristy than Borough Market, same quality.',address:'Maltby St, London SE1',url:'https://maltby.st'},
+      {name:'Little Venice',emoji:'⛵',desc:'Canals in London — surprisingly lovely. Walk the towpath to Camden Market or rent a narrowboat.',address:'Little Venice, London W9',url:null},
+      {name:'Sky Garden',emoji:'🌿',desc:'Free rooftop garden at the Walkie Talkie building (20 Fenchurch St) — stunning 360° city views. Book free tickets online in advance.',address:'20 Fenchurch St, London EC3M 8AF',url:'https://skygarden.london'},
+      {name:'Hampstead Heath & Highgate',emoji:'🌳',desc:'London\'s most beloved green escape — swim in the ponds, walk to Parliament Hill for the best skyline view in the city.',address:'Hampstead Heath, London NW3',url:null},
     ],
     food:[
-      {name:'Dishoom',emoji:'🍛',desc:'The best Indian food in London, full stop. Bacon naniis at breakfast are legendary. Book ahead.',address:'12 Upper St Martin\'s Ln, London WC2H'},
-      {name:'Padella',emoji:'🍝',desc:'Handmade pasta near Borough Market. No reservations — queue is worth it. Lunch only on weekdays.',address:'6 Southwark St, London SE1'},
+      {name:'Dishoom',emoji:'🍛',desc:'The best Indian food in London, full stop. Bacon naan at breakfast are legendary. Book ahead — fills fast.',address:'12 Upper St Martin\'s Ln, London WC2H',url:'https://www.dishoom.com'},
+      {name:'Padella',emoji:'🍝',desc:'Handmade fresh pasta near Borough Market. No reservations — queue is worth it. Portions are generous.',address:'6 Southwark St, London SE1',url:'https://padella.co'},
+      {name:'Bao Soho',emoji:'🥙',desc:'Taiwanese steamed buns and rice bowls in a tiny, minimalist space. Queue before it opens.',address:'53 Lexington St, London W1F',url:'https://baolondon.com'},
+      {name:'The Clove Club',emoji:'🍽️',desc:'One of London\'s best tasting menu restaurants — creative British cuisine in a former town hall. Book weeks ahead.',address:'Shoreditch Town Hall, 380 Old St, London EC1V',url:'https://thecloveclub.com'},
+      {name:'Flat Iron',emoji:'🥩',desc:'One flat iron steak, one price — always great value. Cosy and unpretentious. No reservations, so go early.',address:'17 Beak St, London W1F',url:'https://flatironsteak.co.uk'},
     ],
     tips:[
       'Tap your contactless bank card directly on the Tube reader — no Oyster card needed.',
-      'Most West End shows release day tickets at the box office from 10am — huge savings.',
-      'Borough Market is best Thursday–Saturday. Avoid Sunday — tourist crowds only.',
-      'The Walkie Talkie building (20 Fenchurch St) has a free rooftop Sky Garden with stunning views.',
+      'Most West End shows release day tickets at the box office from 10am — huge savings on top shows.',
+      'Borough Market is best Thursday–Saturday. Avoid Sunday — tourist crowds with fewer vendors.',
+      'The Sky Garden at 20 Fenchurch St has free rooftop access with incredible views — book online in advance.',
+      'For families with kids: the Natural History Museum, Science Museum, and V&A are all free and world-class.',
     ],
   },
   'paris':{
+    transport:'The Paris Métro is cheap, fast, and covers the whole city. Buy a carnet (10 tickets) or use a Navigo Easy card. Vélib\' bike-share stations are everywhere — great for flat neighborhoods like Le Marais. For Versailles, take the RER C from any central station (~35 min). Uber works well and is often cheaper than taxis. Note: strike action can disrupt transit — always have a backup plan.',
     nearby:[
-      {name:'Château de Fontainebleau',emoji:'🏰',desc:'45 min by train from Gare de Lyon. More intimate than Versailles, often crowd-free. Stunning forest.',address:'Fontainebleau, France'},
-      {name:'Marché des Enfants Rouges',emoji:'🥗',desc:'Paris\'s oldest covered market (1615). Amazing international food stalls — Moroccan, Japanese, Italian.',address:'39 Rue de Bretagne, Paris 75003'},
-      {name:'Parc des Buttes-Chaumont',emoji:'🌿',desc:'The most beautiful park in Paris that tourists never visit. Rocky cliffs, a lake, and a temple on an island.',address:'Parc des Buttes-Chaumont, Paris 75019'},
+      {name:'Château de Fontainebleau',emoji:'🏰',desc:'45 min by train from Gare de Lyon. More intimate than Versailles, often crowd-free. Stunning royal forest.',address:'Fontainebleau, France',url:'https://www.chateaudefontainebleau.fr'},
+      {name:'Marché des Enfants Rouges',emoji:'🥗',desc:'Paris\'s oldest covered market (1615). Amazing international food stalls — Moroccan, Japanese, Italian.',address:'39 Rue de Bretagne, Paris 75003',url:null},
+      {name:'Parc des Buttes-Chaumont',emoji:'🌿',desc:'The most beautiful park in Paris that tourists never visit. Rocky cliffs, a lake, and a temple on an island.',address:'Parc des Buttes-Chaumont, Paris 75019',url:null},
+      {name:'Rue Crémieux',emoji:'🌈',desc:'The most photographed street in Paris — pastel-painted townhouses in the 12th. Best early morning before crowds.',address:'Rue Crémieux, Paris 75012',url:null},
     ],
     food:[
-      {name:'Breizh Café',emoji:'🥞',desc:'The best crêpes in Paris, made with buckwheat and quality fillings. Le Marais location is most accessible.',address:'109 Rue Vieille du Temple, Paris 75003'},
-      {name:'L\'As du Fallafel',emoji:'🧆',desc:'Legendary falafel in Le Marais. Long line but moves fast. Get the special with everything.',address:'34 Rue des Rosiers, Paris 75004'},
+      {name:'Breizh Café',emoji:'🥞',desc:'The best crêpes in Paris, made with buckwheat and quality fillings. Le Marais location is most accessible.',address:'109 Rue Vieille du Temple, Paris 75003',url:'https://breizhcafe.com'},
+      {name:'L\'As du Fallafel',emoji:'🧆',desc:'Legendary falafel in Le Marais. Long line but moves fast. Get the special with everything.',address:'34 Rue des Rosiers, Paris 75004',url:null},
+      {name:'Du Pain et des Idées',emoji:'🥐',desc:'Paris\'s most beloved artisan bakery. The chausson aux pommes is extraordinary. Opens at 6:45am, closes at 8pm — closed weekends.',address:'34 Rue Yves Toudic, Paris 75010',url:'https://dupainetdesidees.com'},
+      {name:'Septime',emoji:'🍽️',desc:'One of Paris\'s most exciting modern bistros — seasonal French cooking at its best. Reservations open 2 weeks out exactly at midnight.',address:'80 Rue de Charonne, Paris 75011',url:'https://www.septime-charonne.fr'},
     ],
     tips:[
       'Book museum tickets online before you go — most have timed entry and sell out days ahead.',
@@ -693,7 +704,7 @@ const CITY_LOCAL_TIPS={
 };
 
 // ── APP VERSION & FEATURE FLAGS ────────────────────────────────────────────────
-const APP_VERSION = '0.5';
+const APP_VERSION = '0.7';
 const SCHEMA_VERSION = 3; // increment when trip data shape changes
 
 // Feature flags — set to false to disable a feature for all users without a deploy
@@ -775,6 +786,10 @@ function getIntlFlags(trip){
     if(cc==='GB'&&passport==='US'&&!isDone('UK entry requirements'))
       push({severity:'info',emoji:'ℹ️',label:'UK Entry — No Visa Required',
         desc:'US passport holders can visit the UK for up to 6 months without a visa. Ensure passport is valid.',url:null});
+    if(cc==='GB'&&passport==='US'&&!isDone('UK ETA'))
+      push({severity:'warning',emoji:'⚠️',label:'UK ETA Required',
+        desc:'US citizens must obtain an Electronic Travel Authorisation (ETA) before traveling to the UK. Apply online — typically approved within minutes.',
+        url:'https://www.gov.uk/apply-uk-visa-or-eta'});
     if(cc==='AU'&&passport==='US'&&!isDone('Australia eTA'))
       push({severity:'warning',emoji:'⚠️',label:'Australia eTA Required',
         desc:'Electronic Travel Authority required before departure. Apply online — typically instant.',
@@ -811,8 +826,10 @@ function generateChecklist(trip){
   (trip.destinations||[]).filter(d=>d.isInternational||(d.countryCode&&d.countryCode!=='US')).forEach(dest=>{
     if(SCHENGEN.includes(dest.countryCode))
       add(`Complete EES pre-registration for Schengen entry (${dest.city})`,'documents',30,'Required for US passport holders entering the EU. Register at travel-europe.europa.eu');
-    if(dest.countryCode==='GB')
-      add('Check UK entry requirements — no ETA needed for US citizens but confirm current rules','documents',30,'See gov.uk/check-uk-visa');
+    if(dest.countryCode==='GB'){
+      add('Apply for UK Electronic Travel Authorisation (ETA) — required for US citizens','documents',30,'Apply at gov.uk/apply-uk-visa-or-eta — typically approved in minutes. Required before boarding.','https://www.gov.uk/apply-uk-visa-or-eta');
+      add('No UK visa required for US citizens (up to 6 months) — but ETA above is mandatory','documents',30,'Confirm current rules at gov.uk/check-uk-visa');
+    }
     if(dest.countryCode==='AU') add('Apply for Australia eTA (Electronic Travel Authority)','documents',30,'Apply at eta.homeaffairs.gov.au — takes minutes, valid 12 months');
     if(dest.countryCode==='IN') add('Apply for India e-Visa','documents',45,'Apply at indianvisaonline.gov.in — allow 3-5 business days');
     if(dest.countryCode==='JP') add('Check Japan entry requirements — visa-free for US citizens up to 90 days','documents',30,'Confirm at mofa.go.jp');
@@ -1193,9 +1210,36 @@ function CurrencyConverter({destinations}){
 }
 
 // ── CITY TIDBITS ──────────────────────────────────────────────────────────────
-function CityTidbits({destinations}){
+function CityTidbits({destinations,trip,onUpdateTrip}){
   const [open,setOpen]=useState({});
+  const [addModal,setAddModal]=useState(null); // {place, sectionLabel}
+  const [addedDay,setAddedDay]=useState(null); // dayId after add
   const toggle=k=>setOpen(o=>({...o,[k]:!o[k]}));
+  function onAddToDay(place,sectionLabel){setAddModal({place,sectionLabel});setAddedDay(null);}
+  function confirmAddToDay(dayId){
+    if(!trip||!onUpdateTrip||!addModal)return;
+    const isFood=addModal.sectionLabel&&addModal.sectionLabel.toLowerCase().includes('food');
+    const newItem={
+      id:uuid(),
+      name:addModal.place.name,
+      emoji:addModal.place.emoji||'📍',
+      address:addModal.place.address||'',
+      neighborhood:'',
+      notes:addModal.place.desc||'',
+      bucket:'nice-to-have',
+      sortOrder:999,
+      thingsToConsider:[],
+      ...(isFood?{cuisine:'',mealType:'dinner',reservationRequired:false,priceRange:'$$'}:{category:'sightseeing',bookingRequired:false,bookingUrl:addModal.place.url||''}),
+    };
+    const updatedDays=trip.days.map(d=>{
+      if(d.id!==dayId)return d;
+      if(isFood)return{...d,restaurants:[...(d.restaurants||[]),newItem]};
+      return{...d,activities:[...(d.activities||[]),newItem]};
+    });
+    onUpdateTrip({...trip,days:updatedDays});
+    setAddedDay(dayId);
+    setTimeout(()=>setAddModal(null),1200);
+  }
 
   const dests=(destinations||[]).filter(d=>{
     let cityKey=(d.city||'').toLowerCase();
@@ -1285,6 +1329,19 @@ function CityTidbits({destinations}){
                           </div>
                           <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.55,marginLeft:24}}>{p.desc}</p>
                           {p.address&&<p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',marginTop:2,marginLeft:24}}>📍 {p.address}</p>}
+                          <div style={{display:'flex',gap:8,marginTop:8,marginLeft:24,flexWrap:'wrap'}}>
+                            <a href={`https://maps.google.com/?q=${encodeURIComponent(p.address||p.name)}`} target="_blank" rel="noopener noreferrer"
+                              style={{display:'inline-flex',alignItems:'center',gap:4,background:'var(--color-accent-soft)',color:'var(--color-accent)',borderRadius:20,padding:'4px 10px',fontSize:'.72rem',fontWeight:500,textDecoration:'none'}}>
+                              🗺️ Map
+                            </a>
+                            {p.url&&<a href={p.url} target="_blank" rel="noopener noreferrer"
+                              style={{display:'inline-flex',alignItems:'center',gap:4,background:'var(--color-cream-dark)',color:'var(--color-ink-light)',borderRadius:20,padding:'4px 10px',fontSize:'.72rem',fontWeight:500,textDecoration:'none'}}>
+                              🔗 Website
+                            </a>}
+                            <button onClick={()=>onAddToDay&&onAddToDay(p,s.label)} style={{display:'inline-flex',alignItems:'center',gap:4,background:'var(--color-cream-dark)',color:'var(--color-ink-light)',borderRadius:20,padding:'4px 10px',fontSize:'.72rem',fontWeight:500,border:'none',cursor:'pointer'}}>
+                              ➕ Add to my trip
+                            </button>
+                          </div>
                         </div>
                       ))}
                       {s.type==='phrases'&&s.items.map((p,j)=>(
@@ -1301,6 +1358,28 @@ function CityTidbits({destinations}){
           </div>
         );
       })}
+    {/* Add to Day modal */}
+    {addModal&&(
+      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:999,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setAddModal(null)}>
+        <div style={{background:'var(--color-surface)',borderRadius:'20px 20px 0 0',padding:24,width:'100%',maxWidth:520,maxHeight:'70vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+            <div>
+              <p style={{fontFamily:'var(--font-display)',fontSize:'1.1rem',fontWeight:600}}>Add to a day</p>
+              <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginTop:2}}>{addModal.place.emoji} {addModal.place.name}</p>
+            </div>
+            <button onClick={()=>setAddModal(null)} style={{background:'none',border:'none',fontSize:'1.2rem',cursor:'pointer',color:'var(--color-ink-light)',padding:4}}>✕</button>
+          </div>
+          {(!trip?.days?.length)&&<p style={{fontSize:'.85rem',color:'var(--color-ink-light)',textAlign:'center',padding:'20px 0'}}>No days planned yet — generate your itinerary first.</p>}
+          {(trip?.days||[]).map(day=>(
+            <button key={day.id} onClick={()=>confirmAddToDay(day.id)}
+              style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',background:addedDay===day.id?'var(--color-accent)':'var(--color-cream)',borderRadius:12,border:'1px solid var(--color-border)',marginBottom:8,cursor:'pointer',color:addedDay===day.id?'#fff':'var(--color-ink)',fontFamily:'var(--font-body)',fontSize:'.875rem',fontWeight:500,transition:'background .15s'}}>
+              <span>{day.label||formatDateShort(day.date)}</span>
+              <span style={{fontSize:'.78rem',opacity:.7}}>{addedDay===day.id?'✅ Added!':formatDateShort(day.date)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    )}
     </div>
   );
 }
@@ -1310,8 +1389,8 @@ function ChecklistView({trip,onUpdate}){
   const checklist=trip.checklist||[];
   const [collapsed,setCollapsed]=useState({});
   const [newItem,setNewItem]=useState('');
-  const catLabels={documents:'📄 Documents',bookings:'✈️ Bookings',finance:'💰 Finance',tech:'📱 Tech',health:'🏥 Health',packing:'🧳 Packing',custom:'⭐ Custom'};
-  const catOrder=['documents','bookings','finance','tech','health','packing','custom'];
+  const catLabels={documents:'📄 Documents & Entry',flights:'✈️ Flights',lodging:'🏨 Lodging',bookings:'📌 Advance Bookings',group:'👥 Group',finance:'💰 Finance',health:'🏥 Health',tech:'📱 Tech',custom:'⭐ Custom'};
+  const catOrder=['documents','flights','lodging','bookings','group','finance','health','tech','custom'];
   const done=checklist.filter(i=>i.completed).length,total=checklist.length;
   const pct=total>0?Math.round((done/total)*100):0;
   function toggle(id){onUpdate(checklist.map(i=>i.id===id?{...i,completed:!i.completed}:i));}
@@ -1429,10 +1508,15 @@ function buildPackingDefaults(trip){
   const isWinter = hemiMonth>=12 || hemiMonth<=2;
   const isSummer = hemiMonth>=6 && hemiMonth<=8;
   const isSpringFall = !isWinter && !isSummer;
-  // "Cold" means genuinely cold — winter OR mountain OR northern European cities in fall/winter
+  const isFallMonth = hemiMonth>=9 && hemiMonth<=11;   // Sep, Oct, Nov
+  const isSpringMonth = hemiMonth>=3 && hemiMonth<=5;  // Mar, Apr, May
+  // "Cold" means genuinely cold — true winter OR mountain (not just cool fall)
   const NORTHERN_EU_CITIES = ['London','Paris','Amsterdam','Berlin','Copenhagen','Stockholm','Edinburgh','Dublin','Brussels','Vienna','Prague','Warsaw'];
   const isNorthernEu = dests.some(d=>NORTHERN_EU_CITIES.includes(d.city));
-  const isCold = isWinter || isMountain || (isNorthernEu && (isWinter || isSpringFall));
+  // True winter cold — Dec-Feb, or mountain year-round
+  const isCold = isWinter || isMountain;
+  // Cool-but-not-freezing: Northern EU in spring or early-mid fall (not dead of winter)
+  const isCoolEu = isNorthernEu && (isSpringMonth || isFallMonth) && !isWinter;
   const isRainy = isNorthernEu && !isSummer; // UK/Paris/etc — always pack a rain layer
 
   // ── Power adapter logic ───────────────────────────────────────────────────
@@ -1462,16 +1546,29 @@ function buildPackingDefaults(trip){
 
   const clothing = [
     ...(isCold ? [
+      // True winter or mountain cold
       item(`Thermal base layer tops (x${Math.min(topCount,4)})`, 'clothing', Math.min(topCount,4)),
       item(`Thermal base layer bottoms (x2)`, 'clothing', 2),
       item('Heavy/puffer jacket (waterproof)', 'clothing'),
-      item('Warm sweater or fleece', 'clothing'),
+      item('Warm sweater or fleece (x2)', 'clothing', 2),
       item('Waterproof boots', 'clothing'),
       item('Gloves', 'clothing'),
       item('Beanie / warm hat', 'clothing'),
       item('Scarf', 'clothing'),
       ...(isMountain ? [item('Snow pants / ski pants', 'clothing'), item('Ski socks (wool, x3)', 'clothing', 3)] : []),
+    ] : isCoolEu ? [
+      // Cool Northern European city trip (Sep–Nov or Mar–May) — layered, rainy
+      item(`Long-sleeve tops / shirts (x${topCount})`, 'clothing', topCount),
+      item('Medium-weight jacket or trench coat', 'clothing'),
+      item('Warm sweater or cardigan (x2)', 'clothing', 2),
+      item('Waterproof outer layer or rain jacket', 'clothing'),
+      item('Waterproof walking shoes or ankle boots', 'clothing'),
+      item('Jeans or travel pants', 'clothing'),
+      item('Compact travel umbrella (keep in bag)', 'clothing'),
+      ...(isNorthernEu && needsUK  ? [item('Scarf (London evenings are chilly)', 'clothing')] : []),
+      ...(isNorthernEu && !needsUK ? [item('Scarf', 'clothing')] : []),
     ] : isBeach ? [
+      // Beach / tropical
       item(`Lightweight shirts/tops (x${topCount})`, 'clothing', topCount),
       item('Swimsuit', 'clothing'),
       item('Swimsuit (spare)', 'clothing'),
@@ -1480,6 +1577,7 @@ function buildPackingDefaults(trip){
       item('Light linen pants or shorts', 'clothing'),
       item('Comfortable walking shoes', 'clothing'),
     ] : [
+      // Generic / mild / summer
       item(`T-shirts / tops (x${topCount})`, 'clothing', topCount),
       item('Comfortable walking shoes', 'clothing'),
       item('Casual outfit for evenings', 'clothing'),
@@ -1490,7 +1588,8 @@ function buildPackingDefaults(trip){
     item(`Underwear (x${undCount})`, 'clothing', undCount),
     item(`Socks (x${sockCount})`, 'clothing', sockCount),
     ...(isBiz ? [item('Business attire (x2)', 'clothing', 2), item('Dress shoes', 'clothing')] : []),
-    ...(isIntl && !isBeach && !isCold ? [item('Nicer outfit for dinners out', 'clothing')] : []),
+    ...(isIntl && !isBeach && !isCold && !isCoolEu ? [item('Nicer outfit for dinners out', 'clothing')] : []),
+    ...(isCoolEu && isIntl ? [item('One smart-casual outfit for nicer restaurants', 'clothing')] : []),
   ];
 
   // ── Toiletries ────────────────────────────────────────────────────────────
@@ -1555,6 +1654,111 @@ function buildPackingDefaults(trip){
   ];
 
   return [...clothing,...toiletries,...tech,...documents,...health,...misc];
+}
+
+// ── WEATHER CONTEXT FOR PACKING TAB ──────────────────────────────────────────
+// Returns an array of {city, emoji, headline, tips[]} for each destination,
+// based on the trip month and destination city/country. Used to surface a
+// "What to expect" banner in the Packing tab so users understand WHY
+// certain clothing items appear.
+function getWeatherContext(trip){
+  const dests = trip.destinations || [];
+  if(dests.length === 0) return [];
+
+  let month = 6; // fallback: June
+  if(trip.startDate) month = new Date(trip.startDate).getMonth()+1; // 1–12
+
+  const SOUTHERN = ['Australia','New Zealand','Argentina','Chile','South Africa','Brazil','Peru','Bolivia','Uruguay'];
+  const isSouthern = dests.some(d=>SOUTHERN.includes(d.country));
+  const hMonth = isSouthern ? ((month+6-1)%12)+1 : month;
+
+  const isWinter    = hMonth<=2 || hMonth===12;
+  const isSpring    = hMonth>=3 && hMonth<=5;
+  const isSummer    = hMonth>=6 && hMonth<=8;
+  const isFall      = hMonth>=9 && hMonth<=11;
+
+  // Per-city overrides: {emoji, headline, tips[]}
+  // Month is 1-indexed. Keys are lowercase city names.
+  const CITY_WEATHER = {
+    london:{
+      winter:  {emoji:'🥶',headline:'Cold & grey — bundle up',tips:['Heavy coat or puffer jacket','Thermal layers under everything','Waterproof boots','Warm hat, gloves & scarf','Compact umbrella (always)']},
+      spring:  {emoji:'🌧️',headline:'Cool with frequent rain showers',tips:['Light-to-medium jacket','Layers — mornings are chilly','Waterproof layer or rain jacket','Comfortable waterproof walking shoes','Umbrella (daily carry)']},
+      summer:  {emoji:'⛅',headline:'Mild & occasionally sunny',tips:['Light layers — evenings cool down','One sweater or cardigan','Rain jacket or compact umbrella','Comfortable walking shoes','Sunglasses (for those rare sunny days)']},
+      fall:    {emoji:'🍂',headline:'Cool, rainy & layered',tips:['Medium-weight jacket or trench coat','Warm layers (sweaters, long sleeves)','Waterproof outer layer essential','Waterproof shoes or ankle boots','Umbrella — it will rain']},
+    },
+    paris:{
+      winter:  {emoji:'🥶',headline:'Cold, damp & grey',tips:['Heavy coat','Thermal base layers','Scarf & warm hat','Waterproof boots','Compact umbrella']},
+      spring:  {emoji:'🌸',headline:'Cool mornings, pleasant afternoons',tips:['Light jacket or blazer','Layerable tops','One nicer outfit (Parisians dress up)','Rain jacket or umbrella','Comfortable walking shoes — cobblestones!']},
+      summer:  {emoji:'☀️',headline:'Warm & sunny — with occasional storms',tips:['Light breathable tops','Comfortable walking shoes','Sunglasses & sunscreen','One cardigan for air-conditioned museums','Chic casual clothes — dress the part']},
+      fall:    {emoji:'🌧️',headline:'Cool, damp, and romantic',tips:['Warm jacket or trench coat','Sweaters & layers','Waterproof outer layer or raincoat','Umbrella (expect showers)','Waterproof shoes or ankle boots']},
+    },
+    rome:{
+      summer:  {emoji:'🌞',headline:'Hot & sunny — very hot in July/Aug',tips:['Lightweight breathable tops','Comfortable walking shoes (no sandals inside churches)','Sunscreen SPF 50+','Sunglasses & hat','Light layers for air-conditioned restaurants']},
+      fall:    {emoji:'🍂',headline:'Warm & pleasant — ideal weather',tips:['Light layers — evenings cool','Comfortable walking shoes','Light jacket for evenings','Sunglasses']},
+      spring:  {emoji:'🌷',headline:'Warm & beautiful',tips:['Light to medium layers','Comfortable walking shoes','Light rain jacket (occasional showers)','Sunglasses']},
+      winter:  {emoji:'❄️',headline:'Cool and quiet — off-season charm',tips:['Medium coat','Warm layers','Waterproof shoes']},
+    },
+    barcelona:{
+      summer:  {emoji:'☀️',headline:'Hot, sunny & festive',tips:['Lightweight tops & shorts','Swimsuit','Sandals + comfortable walking shoes','Sunscreen SPF 50+','Sunglasses']},
+      fall:    {emoji:'🌤️',headline:'Warm & comfortable',tips:['Light layers','Comfortable shoes for walking','Light jacket for evenings']},
+      spring:  {emoji:'🌸',headline:'Mild & lovely',tips:['Light layers','One rain jacket','Comfortable walking shoes']},
+      winter:  {emoji:'🌤️',headline:'Cool but mild compared to Northern Europe',tips:['Medium jacket','Layers','Comfortable shoes']},
+    },
+    amsterdam:{
+      fall:    {emoji:'🌧️',headline:'Cool, rainy — bring a real raincoat',tips:['Waterproof jacket (essential)','Warm layers','Waterproof shoes or boots','Umbrella','Scarf']},
+      spring:  {emoji:'🌷',headline:'Tulip season — cool & occasionally rainy',tips:['Light to medium jacket','Umbrella or rain layer','Comfortable walking shoes']},
+      summer:  {emoji:'⛅',headline:'Mild with some sun',tips:['Light layers','Rain jacket (summer showers are common)','Comfortable walking shoes']},
+      winter:  {emoji:'🥶',headline:'Cold, grey & wet',tips:['Heavy jacket','Warm layers','Waterproof boots','Gloves & scarf']},
+    },
+    tokyo:{
+      spring:  {emoji:'🌸',headline:'Cherry blossom season — mild & lovely',tips:['Light to medium layers','Comfortable walking shoes (you\'ll walk A LOT)','Light rain jacket (spring showers)','Dress layers — mornings are cool']},
+      summer:  {emoji:'🥵',headline:'Very hot, humid & rainy season',tips:['Lightweight, breathable fabrics','Portable fan & hand towel','Sunscreen','Comfortable walking shoes','Rain jacket or umbrella (tsuyu rainy season)']},
+      fall:    {emoji:'🍁',headline:'Beautiful — crisp and colourful',tips:['Light to medium layers','Comfortable shoes','Light jacket for evenings']},
+      winter:  {emoji:'❄️',headline:'Cold & dry',tips:['Warm jacket','Layers','Comfortable boots','Gloves & scarf']},
+    },
+    miami:{
+      summer:  {emoji:'🌧️',headline:'Hot, humid & afternoon thunderstorms daily',tips:['Lightweight tops','Swimsuit','Sunscreen SPF 50+','Rain jacket or umbrella (brief but heavy storms)','Sandals + walking shoes']},
+      winter:  {emoji:'🌤️',headline:'Warm & dry — peak season',tips:['Light tops & shorts','Light layer for evenings','Sunscreen','Sunglasses','Swimsuit']},
+      fall:    {emoji:'⛅',headline:'Warm with occasional storms',tips:['Light layers','Rain jacket','Swimsuit','Sunscreen']},
+      spring:  {emoji:'☀️',headline:'Warm & pleasant',tips:['Light tops','Swimsuit','Sunscreen','Comfortable shoes']},
+    },
+    'new york':{
+      fall:    {emoji:'🍂',headline:'Cool & crisp — beautiful foliage',tips:['Medium-weight jacket','Warm layers','Comfortable walking shoes (lots of walking)','One nicer outfit for dinners']},
+      winter:  {emoji:'🥶',headline:'Cold — can be very cold with wind chill',tips:['Heavy coat','Thermal base layers','Warm hat, scarf & gloves','Waterproof boots','Warm socks']},
+      spring:  {emoji:'🌸',headline:'Variable — can be cold or warm',tips:['Layers — check forecast','Medium jacket','Umbrella (April showers)','Comfortable shoes']},
+      summer:  {emoji:'☀️',headline:'Hot & humid',tips:['Light breathable tops','Comfortable walking shoes','Sunscreen','One light layer for subway A/C']},
+    },
+    chicago:{
+      fall:    {emoji:'🍂',headline:'Cool & windy — the Windy City earns its name',tips:['Warm jacket','Layers','Scarf & hat']},
+      winter:  {emoji:'🥶',headline:'Brutally cold — layer aggressively',tips:['Heavy coat (not optional)','Thermal base layers','Waterproof boots','Gloves, hat & scarf — all essential']},
+      spring:  {emoji:'🌧️',headline:'Unpredictable — pack layers',tips:['Medium jacket','Layers','Rain jacket or umbrella']},
+      summer:  {emoji:'☀️',headline:'Warm & lively',tips:['Light tops','Comfortable shoes','Light layer for evenings by the lake']},
+    },
+    nashville:{
+      fall:    {emoji:'🍂',headline:'Beautiful & mild',tips:['Light-medium layers','Comfortable walking/boot shoes','One nicer outfit for live music']},
+      summer:  {emoji:'🌞',headline:'Hot & humid',tips:['Lightweight tops','Sunscreen','Comfortable shoes','Light layer for honky-tonks (A/C blasting)']},
+      spring:  {emoji:'🌸',headline:'Warm & lovely',tips:['Light layers','Rain jacket (spring storms)','Comfortable shoes']},
+      winter:  {emoji:'❄️',headline:'Cool — milder than Northern cities',tips:['Medium jacket','Layers','Comfortable shoes']},
+    },
+  };
+
+  const seasonKey = isWinter?'winter':isSpring?'spring':isSummer?'summer':'fall';
+
+  return dests.map(dest=>{
+    const cityKey = (dest.city||'').toLowerCase();
+    const cityData = CITY_WEATHER[cityKey];
+    if(cityData && cityData[seasonKey]){
+      return {city: dest.city, ...cityData[seasonKey]};
+    }
+    // Generic fallback by season only
+    const fallbacks = {
+      winter:{emoji:'❄️',headline:'Cold weather expected',tips:['Heavy coat','Warm layers','Gloves & hat','Waterproof boots']},
+      spring:{emoji:'🌸',headline:'Mild & variable — pack layers',tips:['Light to medium jacket','Layers','Rain jacket or umbrella','Comfortable walking shoes']},
+      summer:{emoji:'☀️',headline:'Warm to hot',tips:['Lightweight tops','Sunscreen SPF 30+','Comfortable walking shoes','Sunglasses']},
+      fall:  {emoji:'🍂',headline:'Cool & crisp — layer up',tips:['Medium jacket','Warm layers','Comfortable shoes']},
+    };
+    return {city: dest.city, ...fallbacks[seasonKey]};
+  }).filter(Boolean);
 }
 
 function PackingView({trip, onUpdateTrip}){
@@ -1643,6 +1847,33 @@ function PackingView({trip, onUpdateTrip}){
         {pct===100&&<p style={{color:'var(--color-success)',fontSize:'.85rem',fontWeight:500,marginTop:8}}>✅ All packed — you're ready to go!</p>}
       </div>
 
+      {/* ── What to expect: per-destination weather context ── */}
+      {(()=>{
+        const wx = getWeatherContext(trip);
+        if(wx.length === 0) return null;
+        return(
+          <div style={{marginBottom:16}}>
+            <p className="section-label" style={{marginBottom:8,paddingLeft:2}}>🌤️ What to expect — clothing guide</p>
+            {wx.map((w,i)=>(
+              <div key={i} className="card" style={{padding:'14px 16px',marginBottom:8,borderLeft:'3px solid var(--color-accent)'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                  <span style={{fontSize:'1.25rem'}}>{w.emoji}</span>
+                  <div>
+                    <span style={{fontWeight:600,fontSize:'.85rem'}}>{w.city}</span>
+                    <span style={{color:'var(--color-ink-light)',fontSize:'.8rem',marginLeft:8}}>{w.headline}</span>
+                  </div>
+                </div>
+                <ul style={{margin:0,padding:'0 0 0 20px',listStyle:'disc'}}>
+                  {w.tips.map((t,j)=>(
+                    <li key={j} style={{fontSize:'.8rem',color:'var(--color-ink-light)',lineHeight:1.6}}>{t}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* Category sections */}
       {PACK_CATS.map(cat=>{
         const catItems = byCat[cat.id] || [];
@@ -1725,12 +1956,15 @@ function PackingView({trip, onUpdateTrip}){
 }
 
 // ── ACTIVITY CARD ──────────────────────────────────────────────────────────────
-function ActivityCard({item,type,draggable}){
+function ActivityCard({item,type,draggable,onDelete,onEdit}){
   const [exp,setExp]=useState(false);
+  const [editing,setEditing]=useState(false);
+  const [draft,setDraft]=useState(item);
   const mapsUrl=`https://maps.google.com/?q=${encodeURIComponent(item.address||item.name)}`;
+  function saveEdit(){if(onEdit){onEdit(draft);}setEditing(false);}
   return(
     <div className="card sortable-item" data-id={item.id} style={{marginBottom:10,overflow:'hidden'}}>
-      <button onClick={()=>setExp(e=>!e)}
+      <button onClick={()=>!editing&&setExp(e=>!e)}
         style={{width:'100%',padding:'13px 16px',display:'flex',alignItems:'flex-start',gap:12,background:'none',border:'none',cursor:'pointer',textAlign:'left'}}>
         {draggable&&<span className="drag-handle" title="Drag to reorder">⠿</span>}
         <span style={{fontSize:'1.2rem',lineHeight:1,flexShrink:0,marginTop:2}}>{item.emoji}</span>
@@ -1749,7 +1983,7 @@ function ActivityCard({item,type,draggable}){
         </div>
         <span style={{color:'var(--color-ink-light)',fontSize:'.75rem',flexShrink:0,marginTop:2}}>{exp?'▲':'▼'}</span>
       </button>
-      {exp&&(
+      {exp&&!editing&&(
         <div style={{padding:'0 16px 16px',borderTop:'1px solid var(--color-border)'}}>
           {item.address&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)',margin:'10px 0 4px'}}>📍 {item.address}</p>}
           {item.hours&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>🕐 {item.hours}</p>}
@@ -1764,6 +1998,31 @@ function ActivityCard({item,type,draggable}){
           <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
             <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">🗺️ Maps</a>
             {(item.bookingUrl||item.reservationUrl)&&<a href={item.bookingUrl||item.reservationUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">Book Now →</a>}
+            {onEdit&&<button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();setDraft(item);setEditing(true);}}>✏️ Edit</button>}
+            {onDelete&&<button className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)'}} onClick={e=>{e.stopPropagation();if(window.confirm(`Remove "${item.name}" from this day?`))onDelete(item.id);}}>🗑️ Remove</button>}
+          </div>
+        </div>
+      )}
+      {editing&&(
+        <div style={{padding:'0 16px 16px',borderTop:'1px solid var(--color-border)'}}>
+          <div style={{display:'grid',gap:8,marginTop:10}}>
+            <div style={{display:'flex',gap:8}}>
+              <input className="input-field" value={draft.emoji||''} onChange={e=>setDraft(d=>({...d,emoji:e.target.value}))} style={{width:52,textAlign:'center',fontSize:'1.1rem'}} placeholder="emoji"/>
+              <input className="input-field" value={draft.name||''} onChange={e=>setDraft(d=>({...d,name:e.target.value}))} placeholder="Name" style={{flex:1}}/>
+            </div>
+            <input className="input-field" value={draft.address||''} onChange={e=>setDraft(d=>({...d,address:e.target.value}))} placeholder="Address (optional)"/>
+            <textarea className="input-field" value={draft.notes||''} onChange={e=>setDraft(d=>({...d,notes:e.target.value}))} placeholder="Notes (optional)" style={{minHeight:56,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem'}}/>
+            <div style={{display:'flex',gap:6}}>
+              {['must-do','nice-to-have','if-time'].map(b=>(
+                <button key={b} onClick={()=>setDraft(d=>({...d,bucket:b}))} style={{flex:1,padding:'6px 4px',borderRadius:8,border:`1.5px solid ${draft.bucket===b?'var(--color-accent)':'var(--color-border)'}`,background:draft.bucket===b?'var(--color-accent-soft)':'transparent',color:draft.bucket===b?'var(--color-accent)':'var(--color-ink-light)',fontSize:'.72rem',fontWeight:600,cursor:'pointer'}}>
+                  {b==='must-do'?'★ Must Do':b==='nice-to-have'?'✨ Nice':'⏱ If Time'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{display:'flex',gap:8,marginTop:10}}>
+            <button className="btn btn-secondary" style={{flex:1}} onClick={()=>setEditing(false)}>Cancel</button>
+            <button className="btn btn-primary" style={{flex:2}} onClick={saveEdit}>Save changes</button>
           </div>
         </div>
       )}
@@ -1776,9 +2035,33 @@ function DayView({trip,day,onUpdateTrip}){
   const [notes,setNotes]=useState(day.notes||'');
   const [filter,setFilter]=useState('all');
   const [copied,setCopied]=useState(false);
+  const [showAddActivity,setShowAddActivity]=useState(false);
+  const [showAddRestaurant,setShowAddRestaurant]=useState(false);
+  const [newAct,setNewAct]=useState({name:'',emoji:'',address:'',notes:'',bucket:'nice-to-have'});
+  const [newRest,setNewRest]=useState({name:'',emoji:'',address:'',cuisine:'',mealType:'dinner',notes:'',bucket:'nice-to-have',priceRange:'$$'});
   const actsRef=useRef(null);
   const restsRef=useRef(null);
   const dest=trip.destinations.find(d=>d.id===day.destinationId);
+  function deleteActivity(id){const updatedDays=trip.days.map(d=>d.id===day.id?{...d,activities:(d.activities||[]).filter(a=>a.id!==id)}:d);onUpdateTrip({...trip,days:updatedDays});}
+  function editActivity(updated){const updatedDays=trip.days.map(d=>d.id===day.id?{...d,activities:(d.activities||[]).map(a=>a.id===updated.id?updated:a)}:d);onUpdateTrip({...trip,days:updatedDays});}
+  function deleteRestaurant(id){const updatedDays=trip.days.map(d=>d.id===day.id?{...d,restaurants:(d.restaurants||[]).filter(r=>r.id!==id)}:d);onUpdateTrip({...trip,days:updatedDays});}
+  function editRestaurant(updated){const updatedDays=trip.days.map(d=>d.id===day.id?{...d,restaurants:(d.restaurants||[]).map(r=>r.id===updated.id?updated:r)}:d);onUpdateTrip({...trip,days:updatedDays});}
+  function addActivity(){
+    if(!newAct.name.trim())return;
+    const item={...newAct,id:uuid(),sortOrder:(day.activities||[]).length,thingsToConsider:[],bookingRequired:false,category:'sightseeing'};
+    const updatedDays=trip.days.map(d=>d.id===day.id?{...d,activities:[...(d.activities||[]),item]}:d);
+    onUpdateTrip({...trip,days:updatedDays});
+    setNewAct({name:'',emoji:'',address:'',notes:'',bucket:'nice-to-have'});
+    setShowAddActivity(false);
+  }
+  function addRestaurant(){
+    if(!newRest.name.trim())return;
+    const item={...newRest,id:uuid(),sortOrder:(day.restaurants||[]).length,thingsToConsider:[],reservationRequired:false};
+    const updatedDays=trip.days.map(d=>d.id===day.id?{...d,restaurants:[...(d.restaurants||[]),item]}:d);
+    onUpdateTrip({...trip,days:updatedDays});
+    setNewRest({name:'',emoji:'',address:'',cuisine:'',mealType:'dinner',notes:'',bucket:'nice-to-have',priceRange:'$$'});
+    setShowAddRestaurant(false);
+  }
   const acts=(day.activities||[]).filter(a=>filter==='all'||a.bucket===filter);
   const rests=(day.restaurants||[]).filter(r=>filter==='all'||r.bucket===filter);
 
@@ -1849,14 +2132,75 @@ function DayView({trip,day,onUpdateTrip}){
           </button>
         ))}
       </div>
-      {acts.length>0&&<div style={{marginBottom:16}}><p className="section-label">Activities {acts.length>1&&<span style={{fontSize:'.7rem',color:'var(--color-ink-light)',fontWeight:400}}>· drag to reorder</span>}</p><div ref={actsRef}>{acts.map(a=><ActivityCard key={a.id} item={a} type="activity" draggable={acts.length>1}/>)}</div></div>}
-      {rests.length>0&&<div style={{marginBottom:16}}><p className="section-label">Food & Drinks {rests.length>1&&<span style={{fontSize:'.7rem',color:'var(--color-ink-light)',fontWeight:400}}>· drag to reorder</span>}</p><div ref={restsRef}>{rests.map(r=><ActivityCard key={r.id} item={r} type="restaurant" draggable={rests.length>1}/>)}</div></div>}
-      {acts.length===0&&rests.length===0&&(
-        <div style={{textAlign:'center',padding:'32px 0',color:'var(--color-ink-light)'}}>
-          <p style={{fontSize:'1.5rem',marginBottom:8}}>🗺️</p>
-          <p style={{fontSize:'.9rem'}}>No activities planned for this day yet.</p>
+      {/* Activities section */}
+      <div style={{marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+          <p className="section-label" style={{marginBottom:0}}>Activities {acts.length>1&&<span style={{fontSize:'.7rem',color:'var(--color-ink-light)',fontWeight:400}}>· drag to reorder</span>}</p>
+          <button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'4px 10px'}} onClick={()=>{setShowAddActivity(s=>!s);setShowAddRestaurant(false);}}>
+            {showAddActivity?'✕ Cancel':'+ Add'}
+          </button>
         </div>
-      )}
+        <div ref={actsRef}>{acts.map(a=><ActivityCard key={a.id} item={a} type="activity" draggable={acts.length>1} onDelete={deleteActivity} onEdit={editActivity}/>)}</div>
+        {acts.length===0&&!showAddActivity&&<p style={{fontSize:'.83rem',color:'var(--color-ink-muted)',paddingLeft:4,marginBottom:8}}>No activities yet — tap + Add to add one.</p>}
+        {showAddActivity&&(
+          <div className="card" style={{padding:14,marginTop:8,border:'1.5px dashed var(--color-accent-warm)'}}>
+            <p style={{fontSize:'.78rem',fontWeight:600,color:'var(--color-accent)',marginBottom:8}}>Add activity</p>
+            <div style={{display:'flex',gap:8,marginBottom:8}}>
+              <input className="input-field" value={newAct.emoji} onChange={e=>setNewAct(n=>({...n,emoji:e.target.value}))} style={{width:52,textAlign:'center',fontSize:'1.1rem'}} placeholder="📍"/>
+              <input className="input-field" value={newAct.name} onChange={e=>setNewAct(n=>({...n,name:e.target.value}))} placeholder="Activity name *" style={{flex:1}}/>
+            </div>
+            <input className="input-field" value={newAct.address} onChange={e=>setNewAct(n=>({...n,address:e.target.value}))} placeholder="Address (optional)" style={{marginBottom:8}}/>
+            <textarea className="input-field" value={newAct.notes} onChange={e=>setNewAct(n=>({...n,notes:e.target.value}))} placeholder="Notes (optional)" style={{minHeight:48,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem',marginBottom:8}}/>
+            <div style={{display:'flex',gap:6,marginBottom:10}}>
+              {['must-do','nice-to-have','if-time'].map(b=>(
+                <button key={b} onClick={()=>setNewAct(n=>({...n,bucket:b}))} style={{flex:1,padding:'5px 4px',borderRadius:8,border:`1.5px solid ${newAct.bucket===b?'var(--color-accent)':'var(--color-border)'}`,background:newAct.bucket===b?'var(--color-accent-soft)':'transparent',color:newAct.bucket===b?'var(--color-accent)':'var(--color-ink-light)',fontSize:'.72rem',fontWeight:600,cursor:'pointer'}}>
+                  {b==='must-do'?'★ Must':b==='nice-to-have'?'✨ Nice':'⏱ If Time'}
+                </button>
+              ))}
+            </div>
+            <button className="btn btn-primary" style={{width:'100%'}} onClick={addActivity} disabled={!newAct.name.trim()}>Add activity</button>
+          </div>
+        )}
+      </div>
+
+      {/* Restaurants section */}
+      <div style={{marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+          <p className="section-label" style={{marginBottom:0}}>Food & Drinks {rests.length>1&&<span style={{fontSize:'.7rem',color:'var(--color-ink-light)',fontWeight:400}}>· drag to reorder</span>}</p>
+          <button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'4px 10px'}} onClick={()=>{setShowAddRestaurant(s=>!s);setShowAddActivity(false);}}>
+            {showAddRestaurant?'✕ Cancel':'+ Add'}
+          </button>
+        </div>
+        <div ref={restsRef}>{rests.map(r=><ActivityCard key={r.id} item={r} type="restaurant" draggable={rests.length>1} onDelete={deleteRestaurant} onEdit={editRestaurant}/>)}</div>
+        {rests.length===0&&!showAddRestaurant&&<p style={{fontSize:'.83rem',color:'var(--color-ink-muted)',paddingLeft:4,marginBottom:8}}>No restaurants yet — tap + Add to add one.</p>}
+        {showAddRestaurant&&(
+          <div className="card" style={{padding:14,marginTop:8,border:'1.5px dashed var(--color-accent-warm)'}}>
+            <p style={{fontSize:'.78rem',fontWeight:600,color:'var(--color-accent)',marginBottom:8}}>Add restaurant</p>
+            <div style={{display:'flex',gap:8,marginBottom:8}}>
+              <input className="input-field" value={newRest.emoji} onChange={e=>setNewRest(n=>({...n,emoji:e.target.value}))} style={{width:52,textAlign:'center',fontSize:'1.1rem'}} placeholder="🍽️"/>
+              <input className="input-field" value={newRest.name} onChange={e=>setNewRest(n=>({...n,name:e.target.value}))} placeholder="Restaurant name *" style={{flex:1}}/>
+            </div>
+            <div style={{display:'flex',gap:8,marginBottom:8}}>
+              <input className="input-field" value={newRest.cuisine} onChange={e=>setNewRest(n=>({...n,cuisine:e.target.value}))} placeholder="Cuisine" style={{flex:1}}/>
+              <select className="input-field" value={newRest.mealType} onChange={e=>setNewRest(n=>({...n,mealType:e.target.value}))} style={{flex:1}}>
+                <option value="breakfast">Breakfast</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
+                <option value="cafe">Café</option>
+                <option value="drinks">Drinks</option>
+              </select>
+              <select className="input-field" value={newRest.priceRange} onChange={e=>setNewRest(n=>({...n,priceRange:e.target.value}))} style={{flex:1}}>
+                <option value="$">$</option>
+                <option value="$$">$$</option>
+                <option value="$$$">$$$</option>
+                <option value="$$$$">$$$$</option>
+              </select>
+            </div>
+            <textarea className="input-field" value={newRest.notes} onChange={e=>setNewRest(n=>({...n,notes:e.target.value}))} placeholder="Notes (optional)" style={{minHeight:48,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem',marginBottom:8}}/>
+            <button className="btn btn-primary" style={{width:'100%'}} onClick={addRestaurant} disabled={!newRest.name.trim()}>Add restaurant</button>
+          </div>
+        )}
+      </div>
       <div className="card" style={{padding:16}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
           <p className="section-label" style={{marginBottom:0}}>📝 Group Notes</p>
@@ -2445,82 +2789,95 @@ function ItineraryAIPlanner({trip, onUpdateTrip}) {
   const buildSystemPrompt = () => {
     const lodgingLines = (trip.lodging||[]).map(l=>`  • ${l.name}${l.address?' at '+l.address:''}${l.checkIn?' · Check-in: '+l.checkIn:''}${l.checkOut?' · Check-out: '+l.checkOut:''}`).join('\n');
     const flightLines = (trip.flights||[]).map(f=>`  • ${f.direction||''} ${f.flightNumber||''} ${f.departureAirport||''}→${f.arrivalAirport||''} on ${f.departureTime?.slice(0,10)||''} at ${f.departureTime?.slice(11,16)||''}${f.confirmationNumber?' (conf: '+f.confirmationNumber+')':''}`).join('\n');
-    return `You are a travel itinerary planner. Given a trip description, generate a detailed day-by-day itinerary as a JSON array.
+    const destInfo = trip.destinations.map((d,i) => {
+      const arrDate = d.arrivalDate || trip.startDate;
+      const depDate = d.departureDate || trip.endDate;
+      return `  Stop ${i+1}: ${d.city}, ${d.country} (${d.countryCode}) · Arrive ${arrDate} → Depart ${depDate}`;
+    }).join('\n');
+    return `You are an expert travel planner who creates personalized, practical day-by-day itineraries. Generate a JSON array of day objects based on the trip context and user's request below.
 
-Trip context:
+TRIP CONTEXT (use this to build the skeleton):
 - Name: ${trip.title}
-- Destinations: ${trip.destinations.map(d=>`${d.city} (${d.countryCode})`).join(', ')}
-- Dates: ${trip.startDate} to ${trip.endDate} (${nightCount} nights)
+- Destinations:\n${destInfo}
+- Full trip dates: ${trip.startDate} to ${trip.endDate} (${nightCount} nights)
 - Occasion: ${trip.occasion}
 - Travelers: ${trip.travelerCount || 2}
-${lodgingLines ? `- Lodging (MUST include check-in/check-out in itinerary):\n${lodgingLines}` : ''}
-${flightLines ? `- Flights (MUST include in itinerary with exact times and confirmation numbers):\n${flightLines}` : ''}
+${lodgingLines ? `- Lodging (confirmed — include check-in/out on the correct days):\n${lodgingLines}` : `- Lodging: Not yet booked. Suggest neighborhoods/areas the group should consider staying in, as a note on the first day for each city.`}
+${flightLines ? `- Flights (confirmed — include exactly in the itinerary with real times):\n${flightLines}` : ''}
 
-CRITICAL RULES about the user's request:
-1. The user's message contains their NON-NEGOTIABLE activities, restaurants, and plans. You MUST include every specific place, activity, or event they mention — do not skip or replace them.
-2. If they mention a hotel or where they're staying, include hotel check-in on arrival day and check-out on departure day as activities.
-3. If lodging is listed above, always start arrival day with "Check-in at [hotel name]" and end last day with "Check-out from [hotel name]".
-4. If flights are listed above, include departure flight prep (travel to airport, check-in time) on the appropriate days.
-5. After placing all non-negotiables, fill remaining slots with suggestions that complement their stated plans — same neighborhood, logical geography, similar vibe.
-6. Never replace a user-specified activity with a generic one.
+MULTI-CITY & TRAIN TRAVEL RULES:
+- Each destination has its own arrivalDate and departureDate. RESPECT these — do not jumble city days.
+- If travel between cities is by train (e.g. Eurostar London→Paris), create a dedicated travel day: morning checkout, train journey as a must-do activity (with bookingRequired:true), early afternoon arrival at next city. Use the departure date from city 1 (= arrival date of city 2) for this day.
+- Assign each day's destinationId to the correct destination based on the date range above.
+- Do NOT place Paris activities on London days or vice versa.
 
-Return ONLY a valid JSON array of day objects. No markdown, no explanation - just the raw JSON array starting with [ and ending with ].
+FAMILY & CHILD TRAVEL:
+- If the user mentions traveling with children, toddlers, or kids: prioritize child-friendly venues, include rest time (naps, slow mornings), choose walkable neighborhoods, avoid long queues without booking, and flag stroller accessibility where helpful.
+- Keep pace realistic for families — fewer activities per day with more breathing room.
 
-Each day object must follow this exact shape:
+PERSONALIZATION RULES:
+- Read the user's vibe and style from their message. If they say "wander freely", "not over-scheduled", "chill" — don't pack every hour. Leave open afternoon blocks labeled "Free time to explore."
+- If they specify must-do vs nice-to-have — mark user-specified items as bucket:"must-do", AI suggestions as bucket:"nice-to-have".
+- Respect dietary preferences, cuisine preferences, and price range hints in their message.
+- If they mention a specific event (concert, sports game, etc.) include it as must-do with the exact date, time, and venue.
+
+CRITICAL CONTENT RULES:
+1. Include EVERY specific place, restaurant, activity, or event the user mentions — never skip or replace.
+2. If lodging is listed above, start arrival day with "Check-in at [hotel name]" and end last day with "Check-out."
+3. If flights are listed, include airport departure prep on the correct day (travel to airport 2–3 hrs before domestic, 3–4 hrs before international).
+4. Fill remaining slots with suggestions that match the user's stated vibe, neighborhood, and preferences.
+5. Use real venue names and real addresses — no generic placeholders.
+6. City names in the "label" field must be spelled correctly.
+
+Return ONLY a valid JSON array. No markdown, no explanation, no preamble. Start with [ and end with ].
+
+Each day object:
 {
   "id": "day-1",
   "date": "YYYY-MM-DD",
-  "label": "Day 1 - Arrival",
+  "label": "Day 1 — City, Theme",
   "destinationId": "${trip.destinations[0]?.id || 'd1'}",
   "notes": "",
   "activities": [
     {
       "id": "a1",
-      "name": "Example Venue",
+      "name": "Venue Name",
       "emoji": "🎢",
-      "address": "123 Main St, City, ST 00000",
-      "neighborhood": "Downtown",
+      "address": "123 Main St, City",
+      "neighborhood": "Neighborhood",
       "bucket": "must-do",
       "category": "entertainment",
       "bookingRequired": true,
-      "bookingUrl": "",
-      "notes": "Example note.",
-      "thingsToConsider": ["Tip 1", "Tip 2"],
+      "bookingUrl": "https://...",
+      "notes": "One key fact.",
+      "thingsToConsider": ["One tip"],
       "sortOrder": 0
     }
   ],
   "restaurants": [
     {
       "id": "r1",
-      "name": "Example Restaurant",
+      "name": "Restaurant Name",
       "emoji": "🍽️",
-      "address": "456 Food St, City, ST 00000",
-      "neighborhood": "Downtown",
+      "address": "456 Food St, City",
+      "neighborhood": "Neighborhood",
       "bucket": "must-do",
-      "cuisine": "American",
+      "cuisine": "Indian",
       "mealType": "dinner",
       "reservationRequired": true,
       "priceRange": "$$$",
-      "notes": "Great atmosphere, book ahead.",
+      "notes": "Why it's worth it.",
       "thingsToConsider": [],
       "sortOrder": 0
     }
   ]
 }
 
-Rules:
-- Generate one day object per day of the trip (from startDate to endDate inclusive)
-- For trips up to 7 nights: include 3 activities and 2 restaurants per day
-- For trips 8-14 nights: include 2 activities and 1 restaurant per day (keep responses compact)
-- For trips 15+ nights: include 2 activities and 1 restaurant per day
-- Spread activities logically by geography — cluster nearby things on the same day
-- First day: arrival + light activities. Last day: checkout + departure-friendly spots.
-- Use real, specific venue names and addresses
-- Emojis should match the activity type
-- bucket is "must-do", "nice-to-have", or "if-time"
-- category is one of: sightseeing, food, outdoor, shopping, entertainment, culture, tour, other
-- mealType is one of: breakfast, lunch, dinner, cafe, drinks
-- Keep notes and thingsToConsider brief (1 sentence max) to stay within token limits`;
+VOLUME RULES:
+- For trips ≤7 nights: 2–3 activities and 1–2 restaurants per day
+- For trips 8–14 nights: 2 activities and 1 restaurant per day
+- Travel days (airport or train): 1 transport activity + 1 light arrival activity, no restaurants required
+- Keep notes and thingsToConsider to 1 sentence each — brevity is critical to stay within token limits`;
   };
 
   const [generated, setGenerated] = React.useState(false);
@@ -3074,7 +3431,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
 
   const TABS = [
     {id:'overview',label:'Overview',icon:''},
-    {id:'checklist',label:'Checklist',icon:''},
+    {id:'checklist',label:'Getting Ready',icon:''},
     {id:'days',label:'Days',icon:''},
     {id:'packing',label:'Packing',icon:''},
     {id:'tidbits',label:'City Tips',icon:''},
@@ -3131,8 +3488,9 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
           {flags.length>0&&(
             <div style={{marginTop:16,display:'flex',gap:8,flexWrap:'wrap'}}>
               {flags.map((f,i)=>(
-                <div key={i} style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)'}}>
+                <div key={i} style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',gap:6}}>
                   <span style={{color:'#fff',fontSize:'.8rem'}}>{f.emoji} <strong>{f.label}</strong> · {f.desc}</span>
+                  {f.url&&<a href={f.url} target="_blank" rel="noopener noreferrer" style={{color:'rgba(255,255,255,.8)',fontSize:'.75rem',textDecoration:'underline',flexShrink:0,whiteSpace:'nowrap'}}>Apply →</a>}
                 </div>
               ))}
             </div>
@@ -3259,7 +3617,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
         )}
         {activeTab==='checklist' && <ChecklistView trip={trip} onUpdate={handleChecklistUpdate}/>}
         {activeTab==='packing' && <PackingView trip={trip} onUpdateTrip={onUpdateTrip}/>}
-        {activeTab==='tidbits' && <CityTidbits destinations={trip.destinations}/>}
+        {activeTab==='tidbits' && <CityTidbits destinations={trip.destinations} trip={trip} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='celebrate' && <CelebrationSection trip={trip} onUpdateTrip={onUpdateTrip}/>}
       </div>
 
@@ -3784,7 +4142,7 @@ const manifest = {
   name: "Locale — Your trips, beautifully kept.",
   short_name: "Locale",
   description: "Your trips, beautifully kept.",
-  start_url: ".",
+  start_url: "./",
   display: "standalone",
   background_color: "#F5F2EC",
   theme_color: "#2B5F6E",
@@ -3800,7 +4158,7 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v7';
+const CACHE = 'locale-v9';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',

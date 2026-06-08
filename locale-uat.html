@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Locale Beta v0.5 — Tester Checklist</title>
+<title>Locale Beta v0.7 — Tester Checklist</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
@@ -64,7 +64,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-word">Locale Beta v0.5</div>
+  <div class="hero-word">Locale Beta v0.7</div>
   <div class="hero-title">Help us test! 🧪</div>
   <div class="hero-sub">Stephanie is building a trip planning app and needs your feedback. Try it out and check off what works!</div>
   <a class="hero-link" href="https://fania17hernan.github.io/locale-app/locale.html" target="_blank">Open Locale ↗</a>
@@ -450,6 +450,122 @@
   </div>
 </div>
 
+<!-- Group v0.6: Getting Ready & UK ETA -->
+<div class="task-group">
+  <div class="task-group-label">Getting Ready tab — v0.6 <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.6</span></div>
+  <div class="card-group">
+    <div class="task" data-id="tv6a" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Checklist tab is now called "Getting Ready"</div>
+        <div class="task-desc">Open any trip. The second tab should say "Getting Ready" — not "Checklist". Does it show only pre-trip prep tasks (documents, flights, lodging, bookings) — and NOT a Packing section?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv6b" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">UK ETA flag appears for London trips</div>
+        <div class="task-desc">Create a trip with London as a destination (US passport). Does a yellow ⚠️ "UK ETA Required" flag appear in the trip header? Does it say "Electronic Travel Authorisation" (British spelling)?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv6c" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">UK ETA checklist item appears and dismisses the flag</div>
+        <div class="task-desc">On a London trip, open "Getting Ready" → Documents section. Does "Apply for UK Electronic Travel Authorisation (ETA)" appear? Check it off — does the ⚠️ flag in the header disappear?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group v0.6: Per-day editing -->
+<div class="task-group">
+  <div class="task-group-label">Edit days inline — v0.6 <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.6</span></div>
+  <div class="card-group">
+    <div class="task" data-id="tv6d" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Add a custom activity to a day</div>
+        <div class="task-desc">Open any trip with an itinerary → Days tab → tap a day. Tap "+ Add Activity." Fill in a name and tap Add. Does the new card appear in that day's list?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv6e" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Edit an activity name or notes</div>
+        <div class="task-desc">Expand any activity card (tap it to expand). Does an "Edit" button appear? Tap it — can you change the name or notes and save it? Does the card update with the new text?</div>
+        <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv6f" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Delete an activity</div>
+        <div class="task-desc">Expand any activity card → tap "Remove." Does a confirm dialog appear? Confirm — does the card disappear from the day?</div>
+        <span class="task-tag tag-optional">Optional</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group v0.6: City Tips add-to-day -->
+<div class="task-group">
+  <div class="task-group-label">City Tips — Add to trip — v0.6 <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.6</span></div>
+  <div class="card-group">
+    <div class="task" data-id="tv6g" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Map and Website links work on a City Tip</div>
+        <div class="task-desc">Open a London or Paris trip → City Tips tab → expand Nearby or Food section. Do you see a 🗺️ Map button and a 🔗 Website button (where available) under each place? Do they open the right link in a new tab?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv6h" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Add a City Tip to your itinerary</div>
+        <div class="task-desc">Tap "➕ Add to my trip" under any Nearby or Food item. Does a day picker appear showing your trip days? Select a day — does the place get added to that day's activities or restaurants?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Group v0.7: Packing weather context -->
+<div class="task-group">
+  <div class="task-group-label">Packing — Weather context — v0.7 <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">New in v0.7</span></div>
+  <div class="card-group">
+    <div class="task" data-id="tv7a" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">"What to expect" clothing guide appears in Packing tab</div>
+        <div class="task-desc">Open a trip to London or Paris in September → Packing tab. Is there a "🌤️ What to expect — clothing guide" section near the top? Does it show a card per city with a seasonal headline and clothing bullet points?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv7b" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">September London packing list has correct clothing</div>
+        <div class="task-desc">On a September London trip, tap "Reset & regenerate from trip" in the Packing tab. Open the Clothing category. Does it show a trench coat / medium jacket, waterproof rain jacket, waterproof shoes, jeans — rather than thermals, puffer jacket, gloves, and beanie?</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+    <div class="task" data-id="tv7c" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Packing tab does not contain a "Packing" section in Getting Ready</div>
+        <div class="task-desc">Open "Getting Ready" tab on any trip. Scroll through all categories. Is there NO "Packing" category listed here? (Packing lives in the Packing tab only.)</div>
+        <span class="task-tag tag-required">Required</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Group 7 -->
 <div class="task-group">
   <div class="task-group-label">Overall feel</div>
@@ -476,7 +592,7 @@
 </div>
 
 <script>
-  const TOTAL = 35;
+  const TOTAL = 46;
 
   function toggle(el) {
     el.classList.toggle('done');

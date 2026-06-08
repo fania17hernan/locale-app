@@ -5,7 +5,7 @@
 **Source of truth for:** Architecture, technical decisions, debt, and evolution  
 **Not for:** Product vision, investor materials, user testing (see locale-brief.html)  
 **Last updated:** 2026-06-07  
-**Current version:** v0.5 · APP_VERSION `'0.5'` · CACHE `'locale-v7'` · SCHEMA_VERSION `3`
+**Current version:** v0.7 · APP_VERSION `'0.7'` · CACHE `'locale-v9'` · SCHEMA_VERSION `3`
 
 ---
 
@@ -43,12 +43,12 @@ This is an intentional architectural decision made to maximize iteration speed d
 | Deployment | GitHub Pages | — | `fania17hernan.github.io/locale-app/locale.html` |
 | CI/CD | GitHub Actions | — | Auto-deploys on push to main |
 
-### Key Constants (as of v0.5)
+### Key Constants (as of v0.7)
 
 ```
-APP_VERSION    = '0.5'
+APP_VERSION    = '0.7'
 SCHEMA_VERSION = 3        // increment when trip data shape changes
-CACHE          = 'locale-v7'
+CACHE          = 'locale-v9'
 SK             = 'locale_v4'   // localStorage key for trips array
 AI_KEY_SK      = 'locale_ai_key'  // localStorage key for API key
 ```
@@ -69,10 +69,10 @@ App
 │     ├── Sticky pill nav (tabs)
 │     └── Tab panels:
 │           ├── 'overview'   → CurrencyConverter + CityTidbits + AtAGlance
-│           ├── 'checklist'  → ChecklistView
-│           ├── 'packing'    → PackingView
-│           ├── 'itinerary'  → DayView[]
-│           └── 'ai'         → ItineraryAIPlanner
+│           ├── 'checklist'  → ChecklistView  (label: 'Getting Ready')
+│           ├── 'days'       → DayView[]  (add/edit/delete activities inline)
+│           ├── 'packing'    → PackingView  (weather context banner + isCoolEu tier)
+│           └── 'tidbits'    → CityTidbits  (Map/Website/Add-to-day on each place)
 ├── showNew? → NewTripSheet (multi-step wizard overlay)
 └── BugReportButton (floating, always visible)
 ```
@@ -370,6 +370,34 @@ No build step. The file is served as-is. In-browser Babel transpiles JSX at runt
 
 ---
 
+### 2026-06-07 — v0.6 (June 7 testing session fixes)
+
+**What was built:**
+
+- **UK ETA flag** — `getIntlFlags()` now generates an `⚠️ UK ETA Required` warning flag for US passport holders visiting the UK. Uses British spelling: "Electronic Travel Authorisation". Matching checklist item added in `generateChecklist()` for GB destinations.
+- **Tab renamed** — `'checklist'` tab label changed from `'Checklist'` to `'Getting Ready'`. Scoped to pre-trip readiness tasks only (documents, flights, lodging, bookings, group, finance, health, tech). Packing removed from checklist categories (`catLabels` / `catOrder`) — it has its own dedicated Packing tab.
+- **AI system prompt rewritten** — `buildSystemPrompt()` completely rebuilt with: per-destination `arrivalDate`/`departureDate` context; MULTI-CITY & TRAIN TRAVEL RULES section (strict day-to-destination mapping, Eurostar travel days); FAMILY & CHILD TRAVEL section (detects kids, adjusts pace, accessibility notes); PERSONALIZATION RULES (vibe-based pacing, free-time blocks); lodging neighborhood suggestions when unbooked. Stricter JSON-only enforcement to fix refinement parse failures.
+- **Per-day activity editing** — `ActivityCard` and `DayView` updated to support inline edit, delete, and add. `ActivityCard` accepts `onDelete` and `onEdit` props; has inline edit mode with emoji/name/address/notes/bucket fields. `DayView` adds `+ Activity` and `+ Restaurant` inline forms with toggle buttons. All mutations wire through `onUpdateTrip`.
+- **City Tips improvements** — `CityTidbits` now accepts `trip` and `onUpdateTrip` props. Each Nearby/Food place now has: `🗺️ Map` link (Google Maps), `🔗 Website` link (optional, if `p.url` present), `➕ Add to my trip` button that opens a day picker modal to insert the place as an activity or restaurant on a specific day. London `CITY_LOCAL_TIPS` rebuilt with expanded `nearby[]` (Sky Garden, Maltby St Market, Greenwich, Hampstead Heath, Little Venice, Columbia Road) and `food[]` (Dishoom, Padella, Bao Soho, The Clove Club, Flat Iron), all with `url` field.
+- **PWA start_url fix** — Manifest `start_url` changed from `"."` to `"./"` to fix PWA console warning.
+- **ETA spelling** — Corrected throughout from "Electronic Travel Authority" to "Electronic Travel Authorisation" (British/official UK government spelling).
+- APP_VERSION bumped to `'0.6'`, CACHE to `'locale-v8'`
+
+---
+
+### 2026-06-07 — v0.7 (Packing tab weather-awareness)
+
+**What was built:**
+
+- **`getWeatherContext(trip)` function** — New pure function that derives per-destination seasonal clothing context from `trip.startDate` and each `destination.city`. Returns `[{city, emoji, headline, tips[]}]`. Has per-city seasonal data for 10 cities (London, Paris, Rome, Barcelona, Amsterdam, Tokyo, Miami, New York, Chicago, Nashville) × 4 seasons, plus generic fallbacks. Southern hemisphere aware (flips season for AU/NZ/etc).
+- **Packing tab weather banner** — `PackingView` now renders a "🌤️ What to expect — clothing guide" section between the progress bar and category sections. Shows one card per destination with the seasonal emoji, headline (e.g. "Cool, rainy & layered"), and a bullet list of clothing tips. Implemented as a JSX IIFE `{(()=>{...})()}` inside the return to keep component logic clean.
+- **`isCoolEu` clothing tier** — `buildPackingDefaults()` previously classified all Northern EU destinations in spring/fall as `isCold`, generating full winter gear (thermals, puffer jacket, waterproof boots, gloves, beanie) for September London trips. New `isCoolEu` flag (`isNorthernEu && (isSpringMonth || isFallMonth) && !isWinter`) generates appropriate mid-weight gear instead: long-sleeve tops, medium-weight jacket/trench coat, waterproof rain jacket, waterproof walking shoes/ankle boots, jeans, compact umbrella, scarf, one smart-casual dinner outfit.
+- **`isFallMonth` / `isSpringMonth` helpers** — Added explicit month-range variables alongside the existing `isWinter`/`isSummer`/`isSpringFall` trio for finer-grained seasonal logic.
+- **`isCold` narrowed** — Now means only genuine cold: `isWinter || isMountain`. Northern EU in fall no longer triggers the full cold-weather clothing block.
+- APP_VERSION bumped to `'0.7'`, CACHE to `'locale-v9'`
+
+---
+
 ## 3. Architecture Decision Log (ADR)
 
 ### ADR-001: Single-File HTML Architecture
@@ -572,6 +600,9 @@ const newField = t.newField ?? defaultValue;
 | v0.4 | PackingView shows "Generate packing list" button on first open. | Initial UX; required explicit user action |
 | v0.5 | Auto-generation on first tab open via `useEffect`. Button retained as manual fallback. | "Generate" button was invisible to many users; list appeared empty |
 | v0.5 | `normalizeTrip` sentinel fixed: `packingList: []` → `null`. | `initialised` check was `!= null`, which passed for `[]`; auto-generate never fired for existing/demo trips |
+| v0.7 | `getWeatherContext()` added — per-city, per-season clothing guidance displayed as a banner in PackingView. | User feedback: packing list had no explanation of *why* certain items appeared; September London/Paris needed visible guidance (layers, rain jacket) |
+| v0.7 | `isCoolEu` clothing tier added. `isCold` narrowed to `isWinter \|\| isMountain`. New tier generates appropriate mid-weight fall gear for Northern EU instead of full winter thermals. | September London was generating thermal base layers + puffer jacket; incorrect for early fall |
+| v0.7 | Packing tab removed from `catLabels`/`catOrder` in `ChecklistView`. | "Getting Ready" tab should only cover pre-trip logistics, not clothing; packing has its own dedicated tab |
 
 ### Feature: City Tips
 
@@ -581,6 +612,8 @@ const newField = t.newField ?? defaultValue;
 | v0.4 | Dynamic per-city content. 9 cities: London, Paris, Austin, Anaheim, Miami, New York, Chicago, Nashville, Las Vegas. Getting Around uses city-specific transport text. | Tester reported all City Tips showed "Miami" regardless of destination |
 | v0.5 | Borough aliases: Brooklyn/Manhattan/Queens/Bronx → resolve to New York key in CITY_LOCAL_TIPS. | Users typing "Brooklyn" as their city saw no Nearby/Food/Insider sections |
 | v0.5 | CITY_TO_COUNTRY expanded with 50+ cities: Versailles, French cities, Austrian cities, Scandinavian cities, NZ cities, African cities, NYC boroughs | Versailles destination showed US flag; multi-stop European trips missing city recognition |
+| v0.6 | London `CITY_LOCAL_TIPS` rebuilt — expanded `nearby[]` (Sky Garden, Maltby St Market, Greenwich, Hampstead Heath, Little Venice, Columbia Road) and `food[]` (Dishoom, Padella, Bao Soho, The Clove Club, Flat Iron), all with optional `url` field. | London tips were sparse vs. other cities; no Nearby/Food sections |
+| v0.6 | `CityTidbits` now accepts `trip` and `onUpdateTrip` props. Each place renders Map, Website (if `url` present), and "Add to my trip" buttons. "Add to my trip" opens a day picker modal — inserts as activity or restaurant based on section label. | Requested: tap a City Tip suggestion to add it directly to the itinerary |
 
 ### Feature: PWA / Offline
 
@@ -742,22 +775,22 @@ Reference from both functions.
 
 ## 7. MVP Readiness Assessment
 
-*As of v0.5 — June 2026*
+*As of v0.7 — June 2026*
 
 | Capability | Status | Notes |
 |---|---|---|
 | Trip creation (multi-stop) | **User Tested** | Working well; date picker UX still native browser widget |
-| AI itinerary generation | **User Tested** | Works; requires user API key (friction point); hallucinations on venue details |
-| Smart checklist | **User Tested** | Auto-generates correctly; international entry logic now covers US, EU, UK, AU |
-| Packing list | **Functional** | Auto-generates on first open; custom add works; not yet user-tested post-fix |
-| Day-by-day itinerary view | **User Tested** | SortableJS drag-to-reorder works on desktop; iOS drag needs testing |
+| AI itinerary generation | **User Tested** | Works; requires user API key (friction point); hallucinations on venue details; multi-city day confusion fixed in v0.6 |
+| Smart checklist ("Getting Ready") | **User Tested** | Auto-generates correctly; UK ETA added in v0.6; packing removed from this tab |
+| Packing list | **Functional** | Auto-generates on first open; weather context banner + correct seasonal clothing tiers as of v0.7; reset & regenerate available |
+| Day-by-day itinerary view | **User Tested** | Drag-to-reorder works on desktop; inline add/edit/delete activities added in v0.6 |
 | Trip sharing (snapshot) | **User Tested** | Works; limitation (not live sync) is documented in-app |
 | PDF export | **User Tested** | Functional; styling matches app brand; not print-perfect |
-| City Tips | **Functional** | 9 cities; borough alias fix in v0.5 not yet validated post-deploy |
+| City Tips | **Functional** | 9 cities + full London rebuild in v0.6; borough alias fix confirmed; add-to-day from tips works |
 | Currency converter | **User Tested** | Fixed rates; works for quick estimates |
-| International entry flags | **User Tested** | All passport types now covered; auto-dismiss on checklist completion works |
+| International entry flags | **User Tested** | All passport types covered; UK ETA added v0.6; auto-dismiss on checklist completion works |
 | Offline mode | **Prototype** | CDN assets cached; navigation interception unreliable on Safari (Blob SW scope issue) |
-| PWA install | **Functional** | Install banner works on Android; iPhone requires manual Share → Add to Home Screen |
+| PWA install | **Functional** | Install banner works on Android; iPhone requires manual Share → Add to Home Screen; manifest start_url fixed in v0.6 |
 | Backup export/import | **Functional** | JSON download + restore works; not user-tested |
 | Confirmation upload (AI extraction) | **Functional** | Hotel + flight PDFs/images extracted correctly; requires API key |
 | Bug reporting | **Functional** | Auto-collects device/version/error log info; mailto workaround for Safari |
@@ -783,33 +816,34 @@ Reference from both functions.
 
 ## 8. Architecture Snapshots
 
-### Snapshot: June 2026 (v0.5)
+### Snapshot: June 2026 (v0.7)
 
 **Date:** 2026-06-07  
-**Version:** v0.5 · 3,885 lines
+**Version:** v0.7 · ~4,244 lines
 
 **Architecture:**
 - Single HTML file, in-browser Babel, React 18.2.0, no build step
 - localStorage (key: `locale_v4`), SCHEMA_VERSION 3
-- Service worker via Blob URL, CACHE `locale-v7`
-- PWA manifest via Blob URL
+- Service worker via Blob URL, CACHE `locale-v9`
+- PWA manifest via Blob URL, `start_url: "./"` (fixed v0.6)
 - Claude Haiku via direct browser API call, user-supplied key
 - Trip sharing via base64 URL hash (snapshot, not live)
 - GitHub Pages deployment, GitHub Actions CI/CD
 
 **Major capabilities live:**
 - Trip creation wizard (multi-step, multi-stop)
-- AI itinerary generator + confirmation upload + refinement panel
-- Day-by-day itinerary view with drag-to-reorder
-- Smart checklist + packing list (auto-generated)
+- AI itinerary generator + confirmation upload + refinement panel (multi-city system prompt rebuilt v0.6)
+- Day-by-day itinerary view with drag-to-reorder + inline add/edit/delete (v0.6)
+- "Getting Ready" checklist (pre-trip logistics; UK ETA flag added v0.6)
+- Packing list — auto-generated, weather context banner + `isCoolEu` seasonal tier (v0.7)
 - Currency converter (fixed rates)
-- City Tips for 9 cities + borough aliases
-- International entry flags (all passport types, checklist-dismissible)
+- City Tips for 9 cities; London rebuilt v0.6; Map/Website/Add-to-day on each place (v0.6)
+- International entry flags (all passport types, UK ETA, checklist-dismissible)
 - PDF export
 - Trip sharing (snapshot)
 - Backup export/import
 - PWA (install, offline partial)
-- Inline test suite (35 assertions)
+- Inline test suite
 - Bug report button (floating, auto-attaches context)
 
 **Known technical debt:**
@@ -821,10 +855,12 @@ Reference from both functions.
 - Service worker Blob URL scope limitation on Safari
 - No AI output validation/sanitization
 
-**Open testing feedback (pending validation post v0.5 push):**
-- Packing list auto-generation (sentinel fix) — not yet confirmed on live device
-- Borough City Tips (Brooklyn → New York alias) — not yet confirmed on live device
-- Overview box alignment — not yet confirmed on live device
+### Snapshot: June 2026 (v0.5) — historical
+
+**Date:** 2026-06-07  
+**Version:** v0.5 · 3,885 lines · CACHE `locale-v7`
+
+Core loop working end-to-end. Entry flags auto-dismiss, packing list auto-generates, emoji picker removed, mobile hero redesigned, AI parse hardened. All focus group testing done against this build.
 
 ---
 

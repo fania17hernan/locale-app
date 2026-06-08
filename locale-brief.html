@@ -106,7 +106,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-eyebrow">Focus Group Brief · Beta v0.5</div>
+  <div class="hero-eyebrow">Focus Group Brief · Beta v0.7</div>
   <div class="hero-title">Locale</div>
   <div class="hero-sub">Your trips, beautifully kept. — A POC brief for focus group testers.</div>
   <div class="hero-pills">
@@ -246,7 +246,7 @@
 
 <!-- FEATURES LIVE -->
 <div class="section" id="features">
-  <div class="section-eyebrow">Beta v0.1 — What's live today</div>
+  <div class="section-eyebrow">Beta v0.7 — What's live today</div>
   <div class="section-title">Features available to test</div>
 
   <p>Everything below is live in the current build. This is what you're being asked to evaluate.</p>
@@ -298,6 +298,21 @@
       <span class="card-tag tag-live">Live · All trips</span>
     </div>
     <div class="card">
+      <div class="card-title">✏️ Edit days inline</div>
+      <div class="card-desc">Add, edit, or delete individual activities and restaurants within any day — no full itinerary regeneration needed. Tap an activity to expand it, then hit Edit or Remove.</div>
+      <span class="card-tag tag-live">Live · v0.6</span>
+    </div>
+    <div class="card">
+      <div class="card-title">🗺️ City Tips — add to trip</div>
+      <div class="card-desc">Every venue in City Tips now has Map, Website (where available), and "Add to my trip" buttons. Tap Add to drop a place into any day on your itinerary directly from the tips panel.</div>
+      <span class="card-tag tag-live">Live · v0.6</span>
+    </div>
+    <div class="card">
+      <div class="card-title">🌤️ Weather-aware packing</div>
+      <div class="card-desc">The Packing tab now shows a per-destination "What to expect" clothing guide based on your city and travel month. September London? Trench coat and rain jacket — not thermals and a puffer.</div>
+      <span class="card-tag tag-live">Live · v0.7</span>
+    </div>
+    <div class="card">
       <div class="card-title">✏️ Update itinerary</div>
       <div class="card-desc">Changed your plans? Describe what's different and the AI regenerates around your updates — no full restart needed.</div>
       <span class="card-tag tag-live">Live</span>
@@ -321,6 +336,62 @@
   <div class="section-title">What's being worked on</div>
 
   <p>This is an honest view of what's broken, what's coming, and what's planned for later phases. Fixed items are marked — see <strong>Release Notes</strong> for the full history.</p>
+
+  <div class="divider"></div>
+  <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:12px">✅ New in v0.7 — June 7, 2026</p>
+
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">September London packing list defaulted to full winter gear (thermals, puffer, gloves, beanie)</div>
+      <div class="backlog-desc">Fixed — September London now correctly uses the new "isCoolEu" clothing tier: trench coat or medium jacket, waterproof rain jacket, waterproof ankle boots, jeans, compact umbrella. Thermal underlayers and cold-weather accessories are reserved for true winter (Dec–Feb).</div>
+      <span class="card-tag tag-fixed">Fixed v0.7</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Packing list gave no context for why it recommended specific clothing</div>
+      <div class="backlog-desc">Added — a "🌤️ What to expect — clothing guide" section now appears at the top of the Packing tab with a per-city weather card explaining the season, headline conditions, and specific clothing tips. London in September shows 🍂 "Cool, rainy & layered"; Paris shows 🌧️ "Cool, damp, and romantic".</div>
+      <span class="card-tag tag-fixed">Fixed v0.7</span>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:12px">✅ New in v0.6 — June 7, 2026</p>
+
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">No way to add or edit individual activities without regenerating the whole itinerary</div>
+      <div class="backlog-desc">Fixed — each activity and restaurant card now has inline Add, Edit, and Remove actions. Tap to expand a card; tap Edit to rename or update notes; tap Remove to delete with confirmation. No AI call required.</div>
+      <span class="card-tag tag-fixed">Fixed v0.6</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">UK ETA not flagged for US passport holders visiting London</div>
+      <div class="backlog-desc">Fixed — a ⚠️ "UK ETA Required" flag now appears for US passport holders on any trip including a GB destination. The matching checklist item says "Apply for UK Electronic Travel Authorisation (ETA)" (British spelling). Flag auto-dismisses once checked.</div>
+      <span class="card-tag tag-fixed">Fixed v0.6</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Getting Ready tab included a full Packing section (Packing is its own tab)</div>
+      <div class="backlog-desc">Fixed — "Packing" category removed from the Getting Ready (formerly Checklist) tab. The Getting Ready tab now covers only pre-trip prep: Documents, Flights, Lodging, Bookings, and Misc. The Packing tab is the single home for all packing-related content.</div>
+      <span class="card-tag tag-fixed">Fixed v0.6</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">City Tips had no way to act on a recommended venue — no map link, no website, no way to add to itinerary</div>
+      <div class="backlog-desc">Fixed — each Nearby and Food item in City Tips now shows: 🗺️ Map (opens Google Maps), 🔗 Website (where available), and ➕ "Add to my trip" (drops the place onto a selected day in the itinerary). London City Tips also rebuilt with more venues, better descriptions, and url fields.</div>
+      <span class="card-tag tag-fixed">Fixed v0.6</span>
+    </div>
+  </div>
 
   <div class="divider"></div>
   <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:12px">✅ Fixed in v0.5 — June 4, 2026</p>
@@ -609,6 +680,77 @@
   <div class="section-eyebrow">Changelog</div>
   <div class="section-title">Release Notes</div>
   <p>A running history of everything shipped — bugs fixed, features added, and polish applied. Newest first.</p>
+
+  <div class="divider"></div>
+
+  <!-- v0.7 -->
+  <div class="release-block">
+    <div class="release-header">
+      <div class="release-version">v0.7</div>
+      <div class="release-date">June 7, 2026</div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#2B5F6E;margin-bottom:8px">✨ New features</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>🌤️ Weather-aware clothing guide in Packing tab</strong> — A new "What to expect — clothing guide" section now appears at the top of the Packing tab, above all category sections. For each destination city, it shows a seasonal weather card with an emoji, headline (e.g. "Cool, rainy &amp; layered"), and bullet-point clothing tips tailored to that city and the specific month of travel. Covers London, Paris, Amsterdam, Rome, Barcelona, Tokyo, Miami, New York, Chicago, Nashville, and generic seasonal fallbacks.</div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#B45309;margin-bottom:8px">🔧 Bug fixes & polish</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>September Northern Europe packing list defaulted to full winter gear</strong> — <code>isCold</code> was overbroadly defined, triggering thermals, puffer jacket, waterproof boots, gloves, and beanie for September London. Fixed with a new <code>isCoolEu</code> seasonal tier (Northern EU cities in spring or fall) that generates mid-weight clothing: trench coat, waterproof rain jacket, sweaters, jeans, and umbrella. True winter gear is now reserved for Dec–Feb only.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- v0.6 -->
+  <div class="release-block">
+    <div class="release-header">
+      <div class="release-version">v0.6</div>
+      <div class="release-date">June 7, 2026</div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#2B5F6E;margin-bottom:8px">✨ New features</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>✏️ Inline add / edit / delete for days</strong> — Every day panel now has a "+ Add Activity" button and individual "Edit" and "Remove" actions on each activity and restaurant card. Edits are saved inline — no AI regeneration needed. Remove shows a confirmation before deleting.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>🗺️ City Tips actionable links</strong> — Map, Website, and "Add to my trip" buttons added to every Nearby and Food item in City Tips. Tapping "Add to my trip" opens a day picker and drops the place into the selected day as an activity or restaurant. London City Tips rebuilt with expanded venues and URL fields.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-feature"></div>
+        <span class="release-label label-feature">Feature</span>
+        <div><strong>🇬🇧 UK ETA flag for US passport holders</strong> — US passport holders visiting any GB destination (London, Edinburgh, Manchester, etc.) now see a ⚠️ "UK ETA Required" flag. The matching Getting Ready item reads "Apply for UK Electronic Travel Authorisation (ETA)" (British spelling). Auto-dismisses from trip hero once checked.</div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#B45309;margin-bottom:8px">🔧 Bug fixes & polish</p>
+    <div style="background:#fff;border-radius:12px;border:1px solid #DDD9D1;padding:4px 16px;margin-bottom:16px">
+      <div class="release-item">
+        <div class="release-dot dot-polish"></div>
+        <span class="release-label label-polish">Polish</span>
+        <div><strong>Checklist tab renamed to "Getting Ready"</strong> — The tab previously called "Checklist" is now labeled "Getting Ready" to better reflect its scope (pre-trip preparation tasks, not packing). The "Packing" category was removed from this tab — packing lives exclusively in the Packing tab.</div>
+      </div>
+      <div class="release-item">
+        <div class="release-dot dot-fix"></div>
+        <span class="release-label label-fix">Fix</span>
+        <div><strong>PWA start_url corrected to "./"</strong> — Changed from <code>"."</code> to <code>"./"</code> in the manifest for proper path resolution when the app is installed on iOS home screen.</div>
+      </div>
+    </div>
+  </div>
 
   <div class="divider"></div>
 
@@ -1007,7 +1149,7 @@
 </div>
 
 <div class="footer">
-  Locale — Focus Group Brief · Beta v0.5 · Built by Stephanie · June 2026
+  Locale — Focus Group Brief · Beta v0.7 · Built by Stephanie · June 2026
 </div>
 
 <script>
