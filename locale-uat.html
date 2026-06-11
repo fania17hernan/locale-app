@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Locale Beta v0.7 — Tester Checklist</title>
+<title>Locale Beta v0.8 — Tester Checklist</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
@@ -64,7 +64,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-word">Locale Beta v0.7</div>
+  <div class="hero-word">Locale Beta v0.8</div>
   <div class="hero-title">Help us test! 🧪</div>
   <div class="hero-sub">Stephanie is building a trip planning app and needs your feedback. Try it out and check off what works!</div>
   <a class="hero-link" href="https://fania17hernan.github.io/locale-app/locale.html" target="_blank">Open Locale ↗</a>
@@ -141,15 +141,15 @@
   </div>
 </div>
 
-<!-- Group 2b: AI Generator -->
+<!-- Group 2b: AI Generator (v0.8 — free tier, no API key) -->
 <div class="task-group">
-  <div class="task-group-label">AI Itinerary Generator</div>
+  <div class="task-group-label">AI Itinerary Generator <span style="font-size:11px;background:#EAF3F5;color:#1A5268;border-radius:20px;padding:2px 8px;margin-left:6px;font-weight:600">Updated v0.8</span></div>
   <div class="card-group">
     <div class="task" data-id="tai1" onclick="toggle(this)">
       <div class="cb"><div class="cb-check"></div></div>
       <div class="task-body">
-        <div class="task-title">Add the API key in Settings</div>
-        <div class="task-desc">Stephanie will text you an API key. Inside your trip, tap the ⚙️ Settings tab and paste it into the "Claude API Key" field. Tap Save.</div>
+        <div class="task-title">No API key needed — check the free meter</div>
+        <div class="task-desc">Open the AI Generator tab. You should NOT be asked for an API key. The header should show a pill reading "✨ 2 of 2 free itineraries left". If you're asked for a key, that's a bug — report it.</div>
         <span class="task-tag tag-required">Required for AI</span>
       </div>
     </div>
@@ -157,8 +157,24 @@
       <div class="cb"><div class="cb-check"></div></div>
       <div class="task-body">
         <div class="task-title">Generate an itinerary with AI</div>
-        <div class="task-desc">Go to the Days tab → tap "Generate Itinerary." Describe what you want (e.g. "3 days in Paris, mix of museums and food, with kids"). Does it generate a full day-by-day plan?</div>
+        <div class="task-desc">Describe what you want (e.g. "3 days in Paris, mix of museums and food, with kids") and tap Generate. Does the text stream in live while it builds? Does a full day-by-day plan appear in the Days tab after?</div>
         <span class="task-tag tag-required">Required for AI</span>
+      </div>
+    </div>
+    <div class="task" data-id="tai3" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Free meter counts down</div>
+        <div class="task-desc">After generating, does the pill now read "1 of 2 free itineraries left"?</div>
+        <span class="task-tag tag-required">Required for AI</span>
+      </div>
+    </div>
+    <div class="task" data-id="tai4" onclick="toggle(this)">
+      <div class="cb"><div class="cb-check"></div></div>
+      <div class="task-body">
+        <div class="task-title">Use up the free limit — friendly stop</div>
+        <div class="task-desc">Regenerate once more (that's your 2nd free one). The generate button should be replaced by a panel saying you've used your free itineraries — your generated days should still be fully visible and editable in the Days tab. No scary error, nothing lost.</div>
+        <span class="task-tag tag-optional">Optional</span>
       </div>
     </div>
   </div>

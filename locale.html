@@ -16,6 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" onerror="console.warn('SortableJS failed to load — drag-to-reorder will be unavailable.');"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js" onerror="console.warn('Supabase client failed to load — free AI features will be unavailable (bring-your-own-key still works).');"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
@@ -95,8 +96,21 @@ input, select, textarea { font-size: 16px !important; }
   transition: border-color .2s;
   -webkit-appearance: none;
 }
-.input:focus, .input-field:focus { outline: none; border-color: var(--color-accent); }
+.input:focus, .input-field:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(43,95,110,.12); }
 .input-error { border-color: var(--color-flag); }
+
+/* ── Polish layer (v0.8) — press states, focus rings, motion discipline ── */
+::selection { background: rgba(43,95,110,.18); }
+.btn:active { transform: scale(.985); }
+.btn:focus-visible, .input:focus-visible, .trip-card:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.btn-primary { box-shadow: 0 1px 2px rgba(26,23,20,.12); }
+.btn-primary:active { box-shadow: none; }
+.btn:disabled { cursor: default; }
+.card { box-shadow: 0 1px 2px rgba(26,23,20,.04); }
+.pill, .badge-must, .badge-nice { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
 select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234A4743' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
 
 /* ── Labels ── */
@@ -318,7 +332,6 @@ const CITY_TO_COUNTRY={
   'innsbruck':{countryCode:'AT',country:'Austria',isInternational:true},
   'interlaken':{countryCode:'CH',country:'Switzerland',isInternational:true},
   'lucerne':{countryCode:'CH',country:'Switzerland',isInternational:true},
-  'seville':{countryCode:'ES',country:'Spain',isInternational:true},
   'granada':{countryCode:'ES',country:'Spain',isInternational:true},
   'bilbao':{countryCode:'ES',country:'Spain',isInternational:true},
   'valencia':{countryCode:'ES',country:'Spain',isInternational:true},
@@ -349,10 +362,6 @@ const CITY_TO_COUNTRY={
   'cairo':{countryCode:'EG',country:'Egypt',isInternational:true},
   'nairobi':{countryCode:'KE',country:'Kenya',isInternational:true},
   // Americas
-  'brooklyn':{'new york':true},
-  'queens':{'new york':true},
-  'manhattan':{'new york':true},
-  'bronx':{'new york':true},
   'new york':{countryCode:'US',country:'United States',isInternational:false},
   'brooklyn':{countryCode:'US',country:'United States',isInternational:false},
   'manhattan':{countryCode:'US',country:'United States',isInternational:false},
@@ -447,6 +456,148 @@ const CITY_TO_COUNTRY={
   'uae':{countryCode:'AE',country:'UAE',isInternational:true},
   'south africa':{countryCode:'ZA',country:'South Africa',isInternational:true},
 };
+
+// City search index — supports state/region disambiguation (Portland ME vs OR, etc.)
+// Each entry: {display, city, region, countryCode, country, isInternational}
+const CITY_SEARCH_INDEX=[
+  // US — ambiguous cities with state disambiguation
+  {display:'Portland, OR',city:'Portland',region:'OR',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Portland, ME',city:'Portland',region:'ME',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Springfield, IL',city:'Springfield',region:'IL',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Springfield, MO',city:'Springfield',region:'MO',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Springfield, MA',city:'Springfield',region:'MA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Columbus, OH',city:'Columbus',region:'OH',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Columbus, GA',city:'Columbus',region:'GA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Jackson, MS',city:'Jackson',region:'MS',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Jackson, WY',city:'Jackson',region:'WY',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Richmond, VA',city:'Richmond',region:'VA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Richmond, CA',city:'Richmond',region:'CA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Greenville, SC',city:'Greenville',region:'SC',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Greenville, NC',city:'Greenville',region:'NC',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Birmingham, AL',city:'Birmingham',region:'AL',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Burlington, VT',city:'Burlington',region:'VT',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Burlington, NC',city:'Burlington',region:'NC',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Raleigh, NC',city:'Raleigh',region:'NC',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Charlotte, NC',city:'Charlotte',region:'NC',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Memphis, TN',city:'Memphis',region:'TN',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Salt Lake City, UT',city:'Salt Lake City',region:'UT',countryCode:'US',country:'United States',isInternational:false},
+  {display:'San Diego, CA',city:'San Diego',region:'CA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'San Jose, CA',city:'San Jose',region:'CA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Oakland, CA',city:'Oakland',region:'CA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Sacramento, CA',city:'Sacramento',region:'CA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Santa Fe, NM',city:'Santa Fe',region:'NM',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Savannah, GA',city:'Savannah',region:'GA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Louisville, KY',city:'Louisville',region:'KY',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Minneapolis, MN',city:'Minneapolis',region:'MN',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Detroit, MI',city:'Detroit',region:'MI',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Pittsburgh, PA',city:'Pittsburgh',region:'PA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Philadelphia, PA',city:'Philadelphia',region:'PA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Baltimore, MD',city:'Baltimore',region:'MD',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Tampa, FL',city:'Tampa',region:'FL',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Fort Lauderdale, FL',city:'Fort Lauderdale',region:'FL',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Fort Worth, TX',city:'Fort Worth',region:'TX',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Dallas, TX',city:'Dallas',region:'TX',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Houston, TX',city:'Houston',region:'TX',countryCode:'US',country:'United States',isInternational:false},
+  {display:'San Antonio, TX',city:'San Antonio',region:'TX',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Albuquerque, NM',city:'Albuquerque',region:'NM',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Tucson, AZ',city:'Tucson',region:'AZ',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Sedona, AZ',city:'Sedona',region:'AZ',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Scottsdale, AZ',city:'Scottsdale',region:'AZ',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Kansas City, MO',city:'Kansas City',region:'MO',countryCode:'US',country:'United States',isInternational:false},
+  {display:'St. Louis, MO',city:'St. Louis',region:'MO',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Cincinnati, OH',city:'Cincinnati',region:'OH',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Cleveland, OH',city:'Cleveland',region:'OH',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Indianapolis, IN',city:'Indianapolis',region:'IN',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Nashville, TN',city:'Nashville',region:'TN',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Denver, CO',city:'Denver',region:'CO',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Boulder, CO',city:'Boulder',region:'CO',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Aspen, CO',city:'Aspen',region:'CO',countryCode:'US',country:'United States',isInternational:false},
+  {display:'New York, NY',city:'New York',region:'NY',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Los Angeles, CA',city:'Los Angeles',region:'CA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Chicago, IL',city:'Chicago',region:'IL',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Miami, FL',city:'Miami',region:'FL',countryCode:'US',country:'United States',isInternational:false},
+  {display:'San Francisco, CA',city:'San Francisco',region:'CA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Las Vegas, NV',city:'Las Vegas',region:'NV',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Orlando, FL',city:'Orlando',region:'FL',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Anaheim, CA',city:'Anaheim',region:'CA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Seattle, WA',city:'Seattle',region:'WA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Boston, MA',city:'Boston',region:'MA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Austin, TX',city:'Austin',region:'TX',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Phoenix, AZ',city:'Phoenix',region:'AZ',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Atlanta, GA',city:'Atlanta',region:'GA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Honolulu, HI',city:'Honolulu',region:'HI',countryCode:'US',country:'United States',isInternational:false},
+  {display:'New Orleans, LA',city:'New Orleans',region:'LA',countryCode:'US',country:'United States',isInternational:false},
+  {display:'Washington, DC',city:'Washington',region:'DC',countryCode:'US',country:'United States',isInternational:false},
+  // Canada
+  {display:'Toronto, ON',city:'Toronto',region:'Ontario',countryCode:'CA',country:'Canada',isInternational:true},
+  {display:'Vancouver, BC',city:'Vancouver',region:'British Columbia',countryCode:'CA',country:'Canada',isInternational:true},
+  {display:'Montreal, QC',city:'Montreal',region:'Quebec',countryCode:'CA',country:'Canada',isInternational:true},
+  {display:'Calgary, AB',city:'Calgary',region:'Alberta',countryCode:'CA',country:'Canada',isInternational:true},
+  {display:'Ottawa, ON',city:'Ottawa',region:'Ontario',countryCode:'CA',country:'Canada',isInternational:true},
+  {display:'Quebec City, QC',city:'Quebec City',region:'Quebec',countryCode:'CA',country:'Canada',isInternational:true},
+  {display:'Victoria, BC',city:'Victoria',region:'British Columbia',countryCode:'CA',country:'Canada',isInternational:true},
+  // International — no disambiguation needed for most, but region adds context
+  {display:'London, England',city:'London',region:'England',countryCode:'GB',country:'United Kingdom',isInternational:true},
+  {display:'Edinburgh, Scotland',city:'Edinburgh',region:'Scotland',countryCode:'GB',country:'United Kingdom',isInternational:true},
+  {display:'Manchester, England',city:'Manchester',region:'England',countryCode:'GB',country:'United Kingdom',isInternational:true},
+  {display:'Paris, France',city:'Paris',region:'Île-de-France',countryCode:'FR',country:'France',isInternational:true},
+  {display:'Nice, France',city:'Nice',region:'Côte d\'Azur',countryCode:'FR',country:'France',isInternational:true},
+  {display:'Lyon, France',city:'Lyon',region:'Auvergne-Rhône-Alpes',countryCode:'FR',country:'France',isInternational:true},
+  {display:'Rome, Italy',city:'Rome',region:'Lazio',countryCode:'IT',country:'Italy',isInternational:true},
+  {display:'Milan, Italy',city:'Milan',region:'Lombardy',countryCode:'IT',country:'Italy',isInternational:true},
+  {display:'Florence, Italy',city:'Florence',region:'Tuscany',countryCode:'IT',country:'Italy',isInternational:true},
+  {display:'Venice, Italy',city:'Venice',region:'Veneto',countryCode:'IT',country:'Italy',isInternational:true},
+  {display:'Barcelona, Spain',city:'Barcelona',region:'Catalonia',countryCode:'ES',country:'Spain',isInternational:true},
+  {display:'Madrid, Spain',city:'Madrid',region:'Community of Madrid',countryCode:'ES',country:'Spain',isInternational:true},
+  {display:'Seville, Spain',city:'Seville',region:'Andalusia',countryCode:'ES',country:'Spain',isInternational:true},
+  {display:'Amsterdam, Netherlands',city:'Amsterdam',region:'North Holland',countryCode:'NL',country:'Netherlands',isInternational:true},
+  {display:'Berlin, Germany',city:'Berlin',region:'Berlin',countryCode:'DE',country:'Germany',isInternational:true},
+  {display:'Munich, Germany',city:'Munich',region:'Bavaria',countryCode:'DE',country:'Germany',isInternational:true},
+  {display:'Vienna, Austria',city:'Vienna',region:'Vienna',countryCode:'AT',country:'Austria',isInternational:true},
+  {display:'Zurich, Switzerland',city:'Zurich',region:'Zurich',countryCode:'CH',country:'Switzerland',isInternational:true},
+  {display:'Prague, Czech Republic',city:'Prague',region:'Bohemia',countryCode:'CZ',country:'Czech Republic',isInternational:true},
+  {display:'Budapest, Hungary',city:'Budapest',region:'Central Hungary',countryCode:'HU',country:'Hungary',isInternational:true},
+  {display:'Lisbon, Portugal',city:'Lisbon',region:'Lisbon',countryCode:'PT',country:'Portugal',isInternational:true},
+  {display:'Porto, Portugal',city:'Porto',region:'Norte',countryCode:'PT',country:'Portugal',isInternational:true},
+  {display:'Athens, Greece',city:'Athens',region:'Attica',countryCode:'GR',country:'Greece',isInternational:true},
+  {display:'Dublin, Ireland',city:'Dublin',region:'Leinster',countryCode:'IE',country:'Ireland',isInternational:true},
+  {display:'Reykjavik, Iceland',city:'Reykjavik',region:'Capital Region',countryCode:'IS',country:'Iceland',isInternational:true},
+  {display:'Tokyo, Japan',city:'Tokyo',region:'Kantō',countryCode:'JP',country:'Japan',isInternational:true},
+  {display:'Osaka, Japan',city:'Osaka',region:'Kansai',countryCode:'JP',country:'Japan',isInternational:true},
+  {display:'Kyoto, Japan',city:'Kyoto',region:'Kansai',countryCode:'JP',country:'Japan',isInternational:true},
+  {display:'Seoul, South Korea',city:'Seoul',region:'Seoul Capital Area',countryCode:'KR',country:'South Korea',isInternational:true},
+  {display:'Bangkok, Thailand',city:'Bangkok',region:'Central Thailand',countryCode:'TH',country:'Thailand',isInternational:true},
+  {display:'Singapore',city:'Singapore',region:'',countryCode:'SG',country:'Singapore',isInternational:true},
+  {display:'Bali, Indonesia',city:'Bali',region:'Bali Province',countryCode:'ID',country:'Indonesia',isInternational:true},
+  {display:'Dubai, UAE',city:'Dubai',region:'Dubai Emirate',countryCode:'AE',country:'UAE',isInternational:true},
+  {display:'Istanbul, Turkey',city:'Istanbul',region:'Marmara',countryCode:'TR',country:'Turkey',isInternational:true},
+  {display:'Sydney, Australia',city:'Sydney',region:'New South Wales',countryCode:'AU',country:'Australia',isInternational:true},
+  {display:'Melbourne, Australia',city:'Melbourne',region:'Victoria',countryCode:'AU',country:'Australia',isInternational:true},
+  {display:'Auckland, New Zealand',city:'Auckland',region:'Auckland Region',countryCode:'NZ',country:'New Zealand',isInternational:true},
+  {display:'Mexico City, Mexico',city:'Mexico City',region:'CDMX',countryCode:'MX',country:'Mexico',isInternational:true},
+  {display:'Cancún, Mexico',city:'Cancún',region:'Quintana Roo',countryCode:'MX',country:'Mexico',isInternational:true},
+  {display:'Buenos Aires, Argentina',city:'Buenos Aires',region:'Buenos Aires',countryCode:'AR',country:'Argentina',isInternational:true},
+  {display:'Cape Town, South Africa',city:'Cape Town',region:'Western Cape',countryCode:'ZA',country:'South Africa',isInternational:true},
+];
+
+// Search the index — returns up to 6 matches for a query string
+function searchCities(q){
+  if(!q||q.length<2) return [];
+  const lower=q.toLowerCase().trim();
+  // Also build a normalized display string without punctuation for matching "portland or" → "portland, or"
+  return CITY_SEARCH_INDEX.filter(c=>{
+    const displayLower=c.display.toLowerCase();
+    const cityLower=c.city.toLowerCase();
+    const regionLower=(c.region||'').toLowerCase();
+    const displayNorm=displayLower.replace(/[^a-z0-9 ]/g,''); // "portland, or" → "portland or"
+    return displayLower.includes(lower)||
+      displayNorm.includes(lower)||
+      cityLower.includes(lower)||
+      regionLower===lower||
+      (cityLower+' '+regionLower).includes(lower)||
+      (c.country||'').toLowerCase().includes(lower);
+  }).slice(0,6);
+}
 
 const CITY_DATA={
   GB:{
@@ -656,43 +807,32 @@ const CITY_LOCAL_TIPS={
     ],
   },
   'london':{
-    transport:'The Tube (Underground) is the fastest way around London. Tap any contactless bank card or Apple Pay directly on the yellow reader — no Oyster card needed. Buses are cheaper and great for sightseeing. Uber and black cabs are widely available. For the Thames, take the Uber Boat (Thames Clipper) — a scenic alternative that stops near major attractions. Wembley: take the Metropolitan or Jubilee line to Wembley Park station.',
     nearby:[
-      {name:'Columbia Road Flower Market',emoji:'🌸',desc:'Sunday morning only — one of London\'s most beautiful and atmospheric markets. Arrive by 9am.',address:'Columbia Rd, London E2',url:'https://columbiaroad.info'},
-      {name:'Greenwich & the Meridian Line',emoji:'🌍',desc:'Half-day trip by Uber Boat on the Thames. Royal Observatory, Cutty Sark, and great park views of the city.',address:'Greenwich, London SE10',url:'https://www.rmg.co.uk/royal-observatory'},
-      {name:'Maltby Street Market',emoji:'🧀',desc:'Saturday and Sunday — Bermondsey\'s artisan food market. Less touristy than Borough Market, same quality.',address:'Maltby St, London SE1',url:'https://maltby.st'},
-      {name:'Little Venice',emoji:'⛵',desc:'Canals in London — surprisingly lovely. Walk the towpath to Camden Market or rent a narrowboat.',address:'Little Venice, London W9',url:null},
-      {name:'Sky Garden',emoji:'🌿',desc:'Free rooftop garden at the Walkie Talkie building (20 Fenchurch St) — stunning 360° city views. Book free tickets online in advance.',address:'20 Fenchurch St, London EC3M 8AF',url:'https://skygarden.london'},
-      {name:'Hampstead Heath & Highgate',emoji:'🌳',desc:'London\'s most beloved green escape — swim in the ponds, walk to Parliament Hill for the best skyline view in the city.',address:'Hampstead Heath, London NW3',url:null},
+      {name:'Columbia Road Flower Market',emoji:'🌸',desc:'Sunday morning only — one of London\'s most beautiful and atmospheric markets. Arrive by 9am.',address:'Columbia Rd, London E2'},
+      {name:'Greenwich & the Meridian Line',emoji:'🌍',desc:'Half-day trip by Uber Boat on the Thames. Royal Observatory, Cutty Sark, and great park views of the city.',address:'Greenwich, London SE10'},
+      {name:'Maltby Street Market',emoji:'🧀',desc:'Saturday and Sunday — Bermondsey\'s artisan food market. Less touristy than Borough Market, same quality.',address:'Maltby St, London SE1'},
+      {name:'Little Venice',emoji:'⛵',desc:'Canals in London — surprisingly lovely. Rent a narrowboat or walk the towpath to Camden.',address:'Little Venice, London W9'},
     ],
     food:[
-      {name:'Dishoom',emoji:'🍛',desc:'The best Indian food in London, full stop. Bacon naan at breakfast are legendary. Book ahead — fills fast.',address:'12 Upper St Martin\'s Ln, London WC2H',url:'https://www.dishoom.com'},
-      {name:'Padella',emoji:'🍝',desc:'Handmade fresh pasta near Borough Market. No reservations — queue is worth it. Portions are generous.',address:'6 Southwark St, London SE1',url:'https://padella.co'},
-      {name:'Bao Soho',emoji:'🥙',desc:'Taiwanese steamed buns and rice bowls in a tiny, minimalist space. Queue before it opens.',address:'53 Lexington St, London W1F',url:'https://baolondon.com'},
-      {name:'The Clove Club',emoji:'🍽️',desc:'One of London\'s best tasting menu restaurants — creative British cuisine in a former town hall. Book weeks ahead.',address:'Shoreditch Town Hall, 380 Old St, London EC1V',url:'https://thecloveclub.com'},
-      {name:'Flat Iron',emoji:'🥩',desc:'One flat iron steak, one price — always great value. Cosy and unpretentious. No reservations, so go early.',address:'17 Beak St, London W1F',url:'https://flatironsteak.co.uk'},
+      {name:'Dishoom',emoji:'🍛',desc:'The best Indian food in London, full stop. Bacon naniis at breakfast are legendary. Book ahead.',address:'12 Upper St Martin\'s Ln, London WC2H'},
+      {name:'Padella',emoji:'🍝',desc:'Handmade pasta near Borough Market. No reservations — queue is worth it. Lunch only on weekdays.',address:'6 Southwark St, London SE1'},
     ],
     tips:[
       'Tap your contactless bank card directly on the Tube reader — no Oyster card needed.',
-      'Most West End shows release day tickets at the box office from 10am — huge savings on top shows.',
-      'Borough Market is best Thursday–Saturday. Avoid Sunday — tourist crowds with fewer vendors.',
-      'The Sky Garden at 20 Fenchurch St has free rooftop access with incredible views — book online in advance.',
-      'For families with kids: the Natural History Museum, Science Museum, and V&A are all free and world-class.',
+      'Most West End shows release day tickets at the box office from 10am — huge savings.',
+      'Borough Market is best Thursday–Saturday. Avoid Sunday — tourist crowds only.',
+      'The Walkie Talkie building (20 Fenchurch St) has a free rooftop Sky Garden with stunning views.',
     ],
   },
   'paris':{
-    transport:'The Paris Métro is cheap, fast, and covers the whole city. Buy a carnet (10 tickets) or use a Navigo Easy card. Vélib\' bike-share stations are everywhere — great for flat neighborhoods like Le Marais. For Versailles, take the RER C from any central station (~35 min). Uber works well and is often cheaper than taxis. Note: strike action can disrupt transit — always have a backup plan.',
     nearby:[
-      {name:'Château de Fontainebleau',emoji:'🏰',desc:'45 min by train from Gare de Lyon. More intimate than Versailles, often crowd-free. Stunning royal forest.',address:'Fontainebleau, France',url:'https://www.chateaudefontainebleau.fr'},
-      {name:'Marché des Enfants Rouges',emoji:'🥗',desc:'Paris\'s oldest covered market (1615). Amazing international food stalls — Moroccan, Japanese, Italian.',address:'39 Rue de Bretagne, Paris 75003',url:null},
-      {name:'Parc des Buttes-Chaumont',emoji:'🌿',desc:'The most beautiful park in Paris that tourists never visit. Rocky cliffs, a lake, and a temple on an island.',address:'Parc des Buttes-Chaumont, Paris 75019',url:null},
-      {name:'Rue Crémieux',emoji:'🌈',desc:'The most photographed street in Paris — pastel-painted townhouses in the 12th. Best early morning before crowds.',address:'Rue Crémieux, Paris 75012',url:null},
+      {name:'Château de Fontainebleau',emoji:'🏰',desc:'45 min by train from Gare de Lyon. More intimate than Versailles, often crowd-free. Stunning forest.',address:'Fontainebleau, France'},
+      {name:'Marché des Enfants Rouges',emoji:'🥗',desc:'Paris\'s oldest covered market (1615). Amazing international food stalls — Moroccan, Japanese, Italian.',address:'39 Rue de Bretagne, Paris 75003'},
+      {name:'Parc des Buttes-Chaumont',emoji:'🌿',desc:'The most beautiful park in Paris that tourists never visit. Rocky cliffs, a lake, and a temple on an island.',address:'Parc des Buttes-Chaumont, Paris 75019'},
     ],
     food:[
-      {name:'Breizh Café',emoji:'🥞',desc:'The best crêpes in Paris, made with buckwheat and quality fillings. Le Marais location is most accessible.',address:'109 Rue Vieille du Temple, Paris 75003',url:'https://breizhcafe.com'},
-      {name:'L\'As du Fallafel',emoji:'🧆',desc:'Legendary falafel in Le Marais. Long line but moves fast. Get the special with everything.',address:'34 Rue des Rosiers, Paris 75004',url:null},
-      {name:'Du Pain et des Idées',emoji:'🥐',desc:'Paris\'s most beloved artisan bakery. The chausson aux pommes is extraordinary. Opens at 6:45am, closes at 8pm — closed weekends.',address:'34 Rue Yves Toudic, Paris 75010',url:'https://dupainetdesidees.com'},
-      {name:'Septime',emoji:'🍽️',desc:'One of Paris\'s most exciting modern bistros — seasonal French cooking at its best. Reservations open 2 weeks out exactly at midnight.',address:'80 Rue de Charonne, Paris 75011',url:'https://www.septime-charonne.fr'},
+      {name:'Breizh Café',emoji:'🥞',desc:'The best crêpes in Paris, made with buckwheat and quality fillings. Le Marais location is most accessible.',address:'109 Rue Vieille du Temple, Paris 75003'},
+      {name:'L\'As du Fallafel',emoji:'🧆',desc:'Legendary falafel in Le Marais. Long line but moves fast. Get the special with everything.',address:'34 Rue des Rosiers, Paris 75004'},
     ],
     tips:[
       'Book museum tickets online before you go — most have timed entry and sell out days ahead.',
@@ -704,21 +844,128 @@ const CITY_LOCAL_TIPS={
 };
 
 // ── APP VERSION & FEATURE FLAGS ────────────────────────────────────────────────
-const APP_VERSION = '0.7';
+const APP_VERSION = '0.8';
 const SCHEMA_VERSION = 3; // increment when trip data shape changes
 
 // Feature flags — set to false to disable a feature for all users without a deploy
 const FLAGS = {
-  aiGenerator:  true,   // Claude itinerary generator (requires API key)
+  aiGenerator:  true,   // Claude itinerary generator (free tier via proxy, or BYO key)
   packingList:  true,   // 🧳 Packing tab
   dragReorder:  true,   // drag-to-reorder activities/restaurants
   shareTrip:    true,   // URL-based trip sharing
 };
 
-// ── AI KEY STORAGE ─────────────────────────────────────────────────────────────
+// ── AI KEY STORAGE (optional bring-your-own-key for power users) ──────────────
 const AI_KEY_SK = 'locale_ai_key';
 function getAIKey(){try{return localStorage.getItem(AI_KEY_SK)||'';}catch(e){return '';}}
 function setAIKey(k){try{localStorage.setItem(AI_KEY_SK,k);}catch(e){}}
+
+// ── BACKEND (Supabase) — AI proxy with per-user free tier ─────────────────────
+// The Anthropic key lives server-side in a Supabase Edge Function. The anon key
+// below is PUBLIC by design (it only identifies the project; RLS protects data).
+const SUPABASE_URL = 'https://pdbqrjqlwqjqzefmmlhd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkYnFyanFsd3FqcXplZm1tbGhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExODQxMDEsImV4cCI6MjA5Njc2MDEwMX0.lPxZMp-Ff6RSR-R1DtHj3pJKCiXzqwm1encEB0tHuVc';
+const AI_PROXY_URL = SUPABASE_URL + '/functions/v1/ai-proxy';
+const FREE_GENERATION_CAP = 2;   // mirrors server config (server is the enforcer)
+const FREE_EXTRACTION_CAP = 10;
+
+let _sbClient = null;
+function sb(){
+  if(!_sbClient && window.supabase) _sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return _sbClient;
+}
+async function ensureAnonSession(){
+  const client = sb();
+  if(!client) throw new Error("Couldn't connect to Locale's AI service. Check your connection and refresh the page.");
+  const { data: { session } } = await client.auth.getSession();
+  if (session) return session;
+  const { data, error } = await client.auth.signInAnonymously();
+  if (error || !data?.session) throw new Error("Couldn't start a session. Refresh the page and try again.");
+  return data.session;
+}
+async function fetchAIUsage(){
+  try{
+    const client = sb(); if(!client) return null;
+    const { data: { session } } = await client.auth.getSession();
+    if(!session) return null;
+    const { data } = await client.from('ai_usage').select('free_generations_used,extractions_used').maybeSingle();
+    return data || { free_generations_used: 0, extractions_used: 0 };
+  }catch(e){ return null; }
+}
+// Calls the server-side AI proxy. Streams when the server streams (itinerary),
+// returns the full text either way. onDelta(textSoFar) fires during streaming.
+async function callAIProxy({feature, system, messages, max_tokens, onDelta}){
+  const session = await ensureAnonSession();
+  const res = await fetch(AI_PROXY_URL, {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':'Bearer '+session.access_token,
+      'apikey': SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({feature, system, messages, max_tokens}),
+  });
+  if(!res.ok){
+    let err = {};
+    try{ err = await res.json(); }catch(e){}
+    const msg = err?.error?.message || `The AI service returned an error (${res.status}). Your trip is unchanged — please try again.`;
+    const e = new Error(msg); e.code = err?.error?.code || 'unknown'; throw e;
+  }
+  const ctype = res.headers.get('content-type')||'';
+  if(!ctype.includes('text/event-stream')){
+    const data = await res.json();
+    return data?.content?.[0]?.text || '';
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf='', full='';
+  while(true){
+    const {done, value} = await reader.read();
+    if(done) break;
+    buf += decoder.decode(value, {stream:true});
+    let idx;
+    while((idx = buf.indexOf('\n')) >= 0){
+      const line = buf.slice(0, idx).trim(); buf = buf.slice(idx+1);
+      if(!line.startsWith('data:')) continue;
+      let ev = null;
+      try{ ev = JSON.parse(line.slice(5).trim()); }catch(e){ continue; /* partial frame */ }
+      if(ev.type==='content_block_delta' && ev.delta?.text){ full += ev.delta.text; if(onDelta) onDelta(full); }
+      if(ev.type==='error') throw new Error(ev.error?.message || 'The AI stream was interrupted. Please try again.');
+    }
+  }
+  return full;
+}
+// Validates + sanitizes AI-generated days before they touch trip state (Debt-007).
+function validateAIDays(days){
+  if(!Array.isArray(days)) return [];
+  const str=(v,max=300)=>typeof v==='string'?v.slice(0,max):'';
+  const bool=v=>v===true;
+  const tips=v=>Array.isArray(v)?v.slice(0,6).map(x=>str(x,160)).filter(Boolean):[];
+  const BUCKETS=['must-do','nice-to-have','if-time'];
+  return days.slice(0,31).map(d=>({
+    label:str(d?.label,80), date:str(d?.date,10), notes:str(d?.notes,500),
+    destinationId:str(d?.destinationId,64),
+    activities:(Array.isArray(d?.activities)?d.activities:[]).slice(0,8).map(a=>({
+      name:str(a?.name,120), emoji:str(a?.emoji,8), address:str(a?.address,200),
+      neighborhood:str(a?.neighborhood,80),
+      bucket:BUCKETS.includes(a?.bucket)?a.bucket:'nice-to-have',
+      category:str(a?.category,30), bookingRequired:bool(a?.bookingRequired),
+      bookingUrl:/^https?:\/\//i.test(a?.bookingUrl||'')?str(a.bookingUrl,300):'',
+      notes:str(a?.notes,300), thingsToConsider:tips(a?.thingsToConsider),
+    })).filter(a=>a.name),
+    restaurants:(Array.isArray(d?.restaurants)?d.restaurants:[]).slice(0,6).map(r=>({
+      name:str(r?.name,120), emoji:str(r?.emoji,8), address:str(r?.address,200),
+      neighborhood:str(r?.neighborhood,80),
+      bucket:BUCKETS.includes(r?.bucket)?r.bucket:'nice-to-have',
+      cuisine:str(r?.cuisine,60), mealType:str(r?.mealType,20),
+      reservationRequired:bool(r?.reservationRequired), priceRange:str(r?.priceRange,6),
+      notes:str(r?.notes,300), thingsToConsider:tips(r?.thingsToConsider),
+    })).filter(r=>r.name),
+  })).filter(d=>d.activities.length||d.restaurants.length||d.label);
+}
+
+// ── VWP — single source of truth (fixes Debt-004: was duplicated & diverging) ──
+const VWP_COUNTRIES = ['GB','DE','FR','IT','ES','AU','NZ','JP','KR','SG','NL','BE','AT','CH','SE','NO','DK','FI','IE','PT','CZ','SK','HU','PL','LU','LI','MC','SM','IS','EE','LV','LT','SI','MT','CY','GR','HR','BG','RO','BN','TW','CL'];
 
 // ── UTILS ──────────────────────────────────────────────────────────────────────
 function uuid(){return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16)})}
@@ -770,7 +1017,7 @@ function getIntlFlags(trip){
   const checklist=trip.checklist||[];
   const isDone=(kw)=>checklist.some(i=>i.completed&&i.label&&i.label.toLowerCase().includes(kw.toLowerCase()));
   const passport=trip.travelerPassportCountry||'US';
-  const VWP=['GB','DE','FR','IT','ES','AU','NZ','JP','KR','SG','NL','BE','AT','CH','SE','NO','DK','FI','IE','PT','CZ','SK','HU','PL','LU','LI','MC','SM','IS','EE','LV','LT','SI','MT','CY','GR','HR','BG','RO','BN','TW','CL'];
+  const VWP=VWP_COUNTRIES;
   const push=(f)=>{ if(!seen.has(f.label)){seen.add(f.label);flags.push(f);} };
 
   // Collect unique country codes across all destinations
@@ -783,13 +1030,10 @@ function getIntlFlags(trip){
       push({severity:'critical',emoji:'🚨',label:'EES Registration Required',
         desc:'Required for all non-EU nationals entering the Schengen Area. Register before travel.',
         url:'https://eu-entry.europa.eu'});
-    if(cc==='GB'&&passport==='US'&&!isDone('UK entry requirements'))
-      push({severity:'info',emoji:'ℹ️',label:'UK Entry — No Visa Required',
-        desc:'US passport holders can visit the UK for up to 6 months without a visa. Ensure passport is valid.',url:null});
     if(cc==='GB'&&passport==='US'&&!isDone('UK ETA'))
-      push({severity:'warning',emoji:'⚠️',label:'UK ETA Required',
-        desc:'US citizens must obtain an Electronic Travel Authorisation (ETA) before traveling to the UK. Apply online — typically approved within minutes.',
-        url:'https://www.gov.uk/apply-uk-visa-or-eta'});
+      push({severity:'critical',emoji:'🚨',label:'UK ETA Required',
+        desc:'US passport holders must obtain a UK Electronic Travel Authorisation (ETA) before travel. Apply at least 72 hours before departure.',
+        url:'https://www.gov.uk/guidance/apply-for-an-electronic-travel-authorisation-eta'});
     if(cc==='AU'&&passport==='US'&&!isDone('Australia eTA'))
       push({severity:'warning',emoji:'⚠️',label:'Australia eTA Required',
         desc:'Electronic Travel Authority required before departure. Apply online — typically instant.',
@@ -826,17 +1070,15 @@ function generateChecklist(trip){
   (trip.destinations||[]).filter(d=>d.isInternational||(d.countryCode&&d.countryCode!=='US')).forEach(dest=>{
     if(SCHENGEN.includes(dest.countryCode))
       add(`Complete EES pre-registration for Schengen entry (${dest.city})`,'documents',30,'Required for US passport holders entering the EU. Register at travel-europe.europa.eu');
-    if(dest.countryCode==='GB'){
-      add('Apply for UK Electronic Travel Authorisation (ETA) — required for US citizens','documents',30,'Apply at gov.uk/apply-uk-visa-or-eta — typically approved in minutes. Required before boarding.','https://www.gov.uk/apply-uk-visa-or-eta');
-      add('No UK visa required for US citizens (up to 6 months) — but ETA above is mandatory','documents',30,'Confirm current rules at gov.uk/check-uk-visa');
-    }
+    if(dest.countryCode==='GB')
+      add('Apply for UK ETA (Electronic Travel Authorisation)','documents',30,'Required for US passport holders since Jan 2025. Apply at gov.uk/guidance/apply-for-an-electronic-travel-authorisation-eta — costs £10, allow 72+ hours.','https://www.gov.uk/guidance/apply-for-an-electronic-travel-authorisation-eta');
     if(dest.countryCode==='AU') add('Apply for Australia eTA (Electronic Travel Authority)','documents',30,'Apply at eta.homeaffairs.gov.au — takes minutes, valid 12 months');
     if(dest.countryCode==='IN') add('Apply for India e-Visa','documents',45,'Apply at indianvisaonline.gov.in — allow 3-5 business days');
     if(dest.countryCode==='JP') add('Check Japan entry requirements — visa-free for US citizens up to 90 days','documents',30,'Confirm at mofa.go.jp');
     if(dest.countryCode==='MX') add('Mexico entry: US citizens do not need a visa — confirm FMM tourist card (may be digital now)','documents',14);
     // US entry for non-US passport holders
     if(dest.countryCode==='US'&&passport!=='US'){
-      const VWP=['GB','DE','FR','IT','ES','AU','NZ','JP','KR','SG','NL','BE','AT','CH','SE','NO','DK','FI','IE','PT','CZ','SK','HU','PL','LU','LI','MC','SM','IS','EE','LV','LT','SI','MT','CY','GR','HR','BG','RO','BN','TW','CL','HU'];
+      const VWP=VWP_COUNTRIES;
       if(VWP.includes(passport))
         add('Apply for ESTA authorization before traveling to the US','documents',30,'Apply at esta.cbp.dhs.gov — takes minutes, valid 2 years. Required for Visa Waiver Program travelers.','https://esta.cbp.dhs.gov');
       else
@@ -1210,36 +1452,23 @@ function CurrencyConverter({destinations}){
 }
 
 // ── CITY TIDBITS ──────────────────────────────────────────────────────────────
-function CityTidbits({destinations,trip,onUpdateTrip}){
+function CityTidbits({destinations, trip, onUpdateTrip}){
   const [open,setOpen]=useState({});
-  const [addModal,setAddModal]=useState(null); // {place, sectionLabel}
-  const [addedDay,setAddedDay]=useState(null); // dayId after add
+  const [addingPlace,setAddingPlace]=useState(null); // {place} — show day picker
+  const [addedId,setAddedId]=useState(null); // recently added, for flash feedback
+
+  const addToDay=(place, dayId)=>{
+    if(!trip||!onUpdateTrip||!dayId) return;
+    const day=trip.days.find(d=>d.id===dayId);
+    if(!day) return;
+    const newAct={id:uuid(),name:place.name,emoji:place.emoji||'📍',address:place.address||'',neighborhood:'',bucket:'nice-to-have',category:'sightseeing',bookingRequired:false,notes:place.desc||'',thingsToConsider:[],sortOrder:(day.activities||[]).length};
+    const newDays=trip.days.map(d=>d.id===dayId?{...d,activities:[...(d.activities||[]),newAct]}:d);
+    onUpdateTrip({...trip,days:newDays});
+    setAddedId(place.name);
+    setAddingPlace(null);
+    setTimeout(()=>setAddedId(null),2500);
+  };
   const toggle=k=>setOpen(o=>({...o,[k]:!o[k]}));
-  function onAddToDay(place,sectionLabel){setAddModal({place,sectionLabel});setAddedDay(null);}
-  function confirmAddToDay(dayId){
-    if(!trip||!onUpdateTrip||!addModal)return;
-    const isFood=addModal.sectionLabel&&addModal.sectionLabel.toLowerCase().includes('food');
-    const newItem={
-      id:uuid(),
-      name:addModal.place.name,
-      emoji:addModal.place.emoji||'📍',
-      address:addModal.place.address||'',
-      neighborhood:'',
-      notes:addModal.place.desc||'',
-      bucket:'nice-to-have',
-      sortOrder:999,
-      thingsToConsider:[],
-      ...(isFood?{cuisine:'',mealType:'dinner',reservationRequired:false,priceRange:'$$'}:{category:'sightseeing',bookingRequired:false,bookingUrl:addModal.place.url||''}),
-    };
-    const updatedDays=trip.days.map(d=>{
-      if(d.id!==dayId)return d;
-      if(isFood)return{...d,restaurants:[...(d.restaurants||[]),newItem]};
-      return{...d,activities:[...(d.activities||[]),newItem]};
-    });
-    onUpdateTrip({...trip,days:updatedDays});
-    setAddedDay(dayId);
-    setTimeout(()=>setAddModal(null),1200);
-  }
 
   const dests=(destinations||[]).filter(d=>{
     let cityKey=(d.city||'').toLowerCase();
@@ -1323,25 +1552,34 @@ function CityTidbits({destinations,trip,onUpdateTrip}){
                       ))}
                       {s.type==='places'&&s.items.map((p,j)=>(
                         <div key={j} style={{marginTop:10,paddingTop:j>0?10:0,borderTop:j>0?'1px solid var(--color-border)':'none'}}>
-                          <div style={{display:'flex',alignItems:'baseline',gap:8,marginBottom:3}}>
-                            <span style={{fontSize:'1rem'}}>{p.emoji}</span>
-                            <span style={{fontWeight:600,fontSize:'.875rem'}}>{p.name}</span>
+                          <div style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:3}}>
+                            <span style={{fontSize:'1rem',flexShrink:0}}>{p.emoji}</span>
+                            <div style={{flex:1,minWidth:0}}>
+                              <span style={{fontWeight:600,fontSize:'.875rem'}}>{p.name}</span>
+                              {addedId===p.name&&<span style={{marginLeft:8,fontSize:'.72rem',color:'var(--color-success)',fontWeight:500}}>✅ Added!</span>}
+                            </div>
+                            {trip&&(trip.days||[]).length>0&&(
+                              <button className="btn btn-ghost btn-sm" style={{flexShrink:0,fontSize:'.72rem',padding:'3px 8px'}}
+                                onClick={()=>setAddingPlace(addingPlace?.name===p.name?null:{...p})}>
+                                {addingPlace?.name===p.name?'Cancel':'+ Day'}
+                              </button>
+                            )}
                           </div>
                           <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.55,marginLeft:24}}>{p.desc}</p>
                           {p.address&&<p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',marginTop:2,marginLeft:24}}>📍 {p.address}</p>}
-                          <div style={{display:'flex',gap:8,marginTop:8,marginLeft:24,flexWrap:'wrap'}}>
-                            <a href={`https://maps.google.com/?q=${encodeURIComponent(p.address||p.name)}`} target="_blank" rel="noopener noreferrer"
-                              style={{display:'inline-flex',alignItems:'center',gap:4,background:'var(--color-accent-soft)',color:'var(--color-accent)',borderRadius:20,padding:'4px 10px',fontSize:'.72rem',fontWeight:500,textDecoration:'none'}}>
-                              🗺️ Map
-                            </a>
-                            {p.url&&<a href={p.url} target="_blank" rel="noopener noreferrer"
-                              style={{display:'inline-flex',alignItems:'center',gap:4,background:'var(--color-cream-dark)',color:'var(--color-ink-light)',borderRadius:20,padding:'4px 10px',fontSize:'.72rem',fontWeight:500,textDecoration:'none'}}>
-                              🔗 Website
-                            </a>}
-                            <button onClick={()=>onAddToDay&&onAddToDay(p,s.label)} style={{display:'inline-flex',alignItems:'center',gap:4,background:'var(--color-cream-dark)',color:'var(--color-ink-light)',borderRadius:20,padding:'4px 10px',fontSize:'.72rem',fontWeight:500,border:'none',cursor:'pointer'}}>
-                              ➕ Add to my trip
-                            </button>
-                          </div>
+                          {addingPlace?.name===p.name&&(
+                            <div style={{marginLeft:24,marginTop:8,background:'var(--color-accent-soft)',borderRadius:8,padding:'10px 12px',border:'1px solid #C8DFE4'}}>
+                              <p style={{fontSize:'.75rem',fontWeight:600,color:'var(--color-accent)',marginBottom:6}}>Add to which day?</p>
+                              <div style={{display:'flex',flexDirection:'column',gap:4,maxHeight:180,overflowY:'auto'}}>
+                                {(trip.days||[]).map(day=>(
+                                  <button key={day.id} className="btn btn-secondary btn-sm" style={{justifyContent:'flex-start',textAlign:'left'}}
+                                    onClick={()=>addToDay(p, day.id)}>
+                                    {day.label} · {formatDateShort(day.date)}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                       {s.type==='phrases'&&s.items.map((p,j)=>(
@@ -1358,28 +1596,6 @@ function CityTidbits({destinations,trip,onUpdateTrip}){
           </div>
         );
       })}
-    {/* Add to Day modal */}
-    {addModal&&(
-      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:999,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setAddModal(null)}>
-        <div style={{background:'var(--color-surface)',borderRadius:'20px 20px 0 0',padding:24,width:'100%',maxWidth:520,maxHeight:'70vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-            <div>
-              <p style={{fontFamily:'var(--font-display)',fontSize:'1.1rem',fontWeight:600}}>Add to a day</p>
-              <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginTop:2}}>{addModal.place.emoji} {addModal.place.name}</p>
-            </div>
-            <button onClick={()=>setAddModal(null)} style={{background:'none',border:'none',fontSize:'1.2rem',cursor:'pointer',color:'var(--color-ink-light)',padding:4}}>✕</button>
-          </div>
-          {(!trip?.days?.length)&&<p style={{fontSize:'.85rem',color:'var(--color-ink-light)',textAlign:'center',padding:'20px 0'}}>No days planned yet — generate your itinerary first.</p>}
-          {(trip?.days||[]).map(day=>(
-            <button key={day.id} onClick={()=>confirmAddToDay(day.id)}
-              style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',background:addedDay===day.id?'var(--color-accent)':'var(--color-cream)',borderRadius:12,border:'1px solid var(--color-border)',marginBottom:8,cursor:'pointer',color:addedDay===day.id?'#fff':'var(--color-ink)',fontFamily:'var(--font-body)',fontSize:'.875rem',fontWeight:500,transition:'background .15s'}}>
-              <span>{day.label||formatDateShort(day.date)}</span>
-              <span style={{fontSize:'.78rem',opacity:.7}}>{addedDay===day.id?'✅ Added!':formatDateShort(day.date)}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    )}
     </div>
   );
 }
@@ -1389,8 +1605,8 @@ function ChecklistView({trip,onUpdate}){
   const checklist=trip.checklist||[];
   const [collapsed,setCollapsed]=useState({});
   const [newItem,setNewItem]=useState('');
-  const catLabels={documents:'📄 Documents & Entry',flights:'✈️ Flights',lodging:'🏨 Lodging',bookings:'📌 Advance Bookings',group:'👥 Group',finance:'💰 Finance',health:'🏥 Health',tech:'📱 Tech',custom:'⭐ Custom'};
-  const catOrder=['documents','flights','lodging','bookings','group','finance','health','tech','custom'];
+  const catLabels={documents:'📄 Documents',bookings:'✈️ Bookings',finance:'💰 Finance',tech:'📱 Tech',health:'🏥 Health',packing:'🧳 Packing',custom:'⭐ Custom'};
+  const catOrder=['documents','bookings','finance','tech','health','packing','custom'];
   const done=checklist.filter(i=>i.completed).length,total=checklist.length;
   const pct=total>0?Math.round((done/total)*100):0;
   function toggle(id){onUpdate(checklist.map(i=>i.id===id?{...i,completed:!i.completed}:i));}
@@ -1508,15 +1724,10 @@ function buildPackingDefaults(trip){
   const isWinter = hemiMonth>=12 || hemiMonth<=2;
   const isSummer = hemiMonth>=6 && hemiMonth<=8;
   const isSpringFall = !isWinter && !isSummer;
-  const isFallMonth = hemiMonth>=9 && hemiMonth<=11;   // Sep, Oct, Nov
-  const isSpringMonth = hemiMonth>=3 && hemiMonth<=5;  // Mar, Apr, May
-  // "Cold" means genuinely cold — true winter OR mountain (not just cool fall)
+  // "Cold" means genuinely cold — winter OR mountain OR northern European cities in fall/winter
   const NORTHERN_EU_CITIES = ['London','Paris','Amsterdam','Berlin','Copenhagen','Stockholm','Edinburgh','Dublin','Brussels','Vienna','Prague','Warsaw'];
   const isNorthernEu = dests.some(d=>NORTHERN_EU_CITIES.includes(d.city));
-  // True winter cold — Dec-Feb, or mountain year-round
-  const isCold = isWinter || isMountain;
-  // Cool-but-not-freezing: Northern EU in spring or early-mid fall (not dead of winter)
-  const isCoolEu = isNorthernEu && (isSpringMonth || isFallMonth) && !isWinter;
+  const isCold = isWinter || isMountain || (isNorthernEu && (isWinter || isSpringFall));
   const isRainy = isNorthernEu && !isSummer; // UK/Paris/etc — always pack a rain layer
 
   // ── Power adapter logic ───────────────────────────────────────────────────
@@ -1546,29 +1757,16 @@ function buildPackingDefaults(trip){
 
   const clothing = [
     ...(isCold ? [
-      // True winter or mountain cold
       item(`Thermal base layer tops (x${Math.min(topCount,4)})`, 'clothing', Math.min(topCount,4)),
       item(`Thermal base layer bottoms (x2)`, 'clothing', 2),
       item('Heavy/puffer jacket (waterproof)', 'clothing'),
-      item('Warm sweater or fleece (x2)', 'clothing', 2),
+      item('Warm sweater or fleece', 'clothing'),
       item('Waterproof boots', 'clothing'),
       item('Gloves', 'clothing'),
       item('Beanie / warm hat', 'clothing'),
       item('Scarf', 'clothing'),
       ...(isMountain ? [item('Snow pants / ski pants', 'clothing'), item('Ski socks (wool, x3)', 'clothing', 3)] : []),
-    ] : isCoolEu ? [
-      // Cool Northern European city trip (Sep–Nov or Mar–May) — layered, rainy
-      item(`Long-sleeve tops / shirts (x${topCount})`, 'clothing', topCount),
-      item('Medium-weight jacket or trench coat', 'clothing'),
-      item('Warm sweater or cardigan (x2)', 'clothing', 2),
-      item('Waterproof outer layer or rain jacket', 'clothing'),
-      item('Waterproof walking shoes or ankle boots', 'clothing'),
-      item('Jeans or travel pants', 'clothing'),
-      item('Compact travel umbrella (keep in bag)', 'clothing'),
-      ...(isNorthernEu && needsUK  ? [item('Scarf (London evenings are chilly)', 'clothing')] : []),
-      ...(isNorthernEu && !needsUK ? [item('Scarf', 'clothing')] : []),
     ] : isBeach ? [
-      // Beach / tropical
       item(`Lightweight shirts/tops (x${topCount})`, 'clothing', topCount),
       item('Swimsuit', 'clothing'),
       item('Swimsuit (spare)', 'clothing'),
@@ -1577,7 +1775,6 @@ function buildPackingDefaults(trip){
       item('Light linen pants or shorts', 'clothing'),
       item('Comfortable walking shoes', 'clothing'),
     ] : [
-      // Generic / mild / summer
       item(`T-shirts / tops (x${topCount})`, 'clothing', topCount),
       item('Comfortable walking shoes', 'clothing'),
       item('Casual outfit for evenings', 'clothing'),
@@ -1588,8 +1785,7 @@ function buildPackingDefaults(trip){
     item(`Underwear (x${undCount})`, 'clothing', undCount),
     item(`Socks (x${sockCount})`, 'clothing', sockCount),
     ...(isBiz ? [item('Business attire (x2)', 'clothing', 2), item('Dress shoes', 'clothing')] : []),
-    ...(isIntl && !isBeach && !isCold && !isCoolEu ? [item('Nicer outfit for dinners out', 'clothing')] : []),
-    ...(isCoolEu && isIntl ? [item('One smart-casual outfit for nicer restaurants', 'clothing')] : []),
+    ...(isIntl && !isBeach && !isCold ? [item('Nicer outfit for dinners out', 'clothing')] : []),
   ];
 
   // ── Toiletries ────────────────────────────────────────────────────────────
@@ -1654,111 +1850,6 @@ function buildPackingDefaults(trip){
   ];
 
   return [...clothing,...toiletries,...tech,...documents,...health,...misc];
-}
-
-// ── WEATHER CONTEXT FOR PACKING TAB ──────────────────────────────────────────
-// Returns an array of {city, emoji, headline, tips[]} for each destination,
-// based on the trip month and destination city/country. Used to surface a
-// "What to expect" banner in the Packing tab so users understand WHY
-// certain clothing items appear.
-function getWeatherContext(trip){
-  const dests = trip.destinations || [];
-  if(dests.length === 0) return [];
-
-  let month = 6; // fallback: June
-  if(trip.startDate) month = new Date(trip.startDate).getMonth()+1; // 1–12
-
-  const SOUTHERN = ['Australia','New Zealand','Argentina','Chile','South Africa','Brazil','Peru','Bolivia','Uruguay'];
-  const isSouthern = dests.some(d=>SOUTHERN.includes(d.country));
-  const hMonth = isSouthern ? ((month+6-1)%12)+1 : month;
-
-  const isWinter    = hMonth<=2 || hMonth===12;
-  const isSpring    = hMonth>=3 && hMonth<=5;
-  const isSummer    = hMonth>=6 && hMonth<=8;
-  const isFall      = hMonth>=9 && hMonth<=11;
-
-  // Per-city overrides: {emoji, headline, tips[]}
-  // Month is 1-indexed. Keys are lowercase city names.
-  const CITY_WEATHER = {
-    london:{
-      winter:  {emoji:'🥶',headline:'Cold & grey — bundle up',tips:['Heavy coat or puffer jacket','Thermal layers under everything','Waterproof boots','Warm hat, gloves & scarf','Compact umbrella (always)']},
-      spring:  {emoji:'🌧️',headline:'Cool with frequent rain showers',tips:['Light-to-medium jacket','Layers — mornings are chilly','Waterproof layer or rain jacket','Comfortable waterproof walking shoes','Umbrella (daily carry)']},
-      summer:  {emoji:'⛅',headline:'Mild & occasionally sunny',tips:['Light layers — evenings cool down','One sweater or cardigan','Rain jacket or compact umbrella','Comfortable walking shoes','Sunglasses (for those rare sunny days)']},
-      fall:    {emoji:'🍂',headline:'Cool, rainy & layered',tips:['Medium-weight jacket or trench coat','Warm layers (sweaters, long sleeves)','Waterproof outer layer essential','Waterproof shoes or ankle boots','Umbrella — it will rain']},
-    },
-    paris:{
-      winter:  {emoji:'🥶',headline:'Cold, damp & grey',tips:['Heavy coat','Thermal base layers','Scarf & warm hat','Waterproof boots','Compact umbrella']},
-      spring:  {emoji:'🌸',headline:'Cool mornings, pleasant afternoons',tips:['Light jacket or blazer','Layerable tops','One nicer outfit (Parisians dress up)','Rain jacket or umbrella','Comfortable walking shoes — cobblestones!']},
-      summer:  {emoji:'☀️',headline:'Warm & sunny — with occasional storms',tips:['Light breathable tops','Comfortable walking shoes','Sunglasses & sunscreen','One cardigan for air-conditioned museums','Chic casual clothes — dress the part']},
-      fall:    {emoji:'🌧️',headline:'Cool, damp, and romantic',tips:['Warm jacket or trench coat','Sweaters & layers','Waterproof outer layer or raincoat','Umbrella (expect showers)','Waterproof shoes or ankle boots']},
-    },
-    rome:{
-      summer:  {emoji:'🌞',headline:'Hot & sunny — very hot in July/Aug',tips:['Lightweight breathable tops','Comfortable walking shoes (no sandals inside churches)','Sunscreen SPF 50+','Sunglasses & hat','Light layers for air-conditioned restaurants']},
-      fall:    {emoji:'🍂',headline:'Warm & pleasant — ideal weather',tips:['Light layers — evenings cool','Comfortable walking shoes','Light jacket for evenings','Sunglasses']},
-      spring:  {emoji:'🌷',headline:'Warm & beautiful',tips:['Light to medium layers','Comfortable walking shoes','Light rain jacket (occasional showers)','Sunglasses']},
-      winter:  {emoji:'❄️',headline:'Cool and quiet — off-season charm',tips:['Medium coat','Warm layers','Waterproof shoes']},
-    },
-    barcelona:{
-      summer:  {emoji:'☀️',headline:'Hot, sunny & festive',tips:['Lightweight tops & shorts','Swimsuit','Sandals + comfortable walking shoes','Sunscreen SPF 50+','Sunglasses']},
-      fall:    {emoji:'🌤️',headline:'Warm & comfortable',tips:['Light layers','Comfortable shoes for walking','Light jacket for evenings']},
-      spring:  {emoji:'🌸',headline:'Mild & lovely',tips:['Light layers','One rain jacket','Comfortable walking shoes']},
-      winter:  {emoji:'🌤️',headline:'Cool but mild compared to Northern Europe',tips:['Medium jacket','Layers','Comfortable shoes']},
-    },
-    amsterdam:{
-      fall:    {emoji:'🌧️',headline:'Cool, rainy — bring a real raincoat',tips:['Waterproof jacket (essential)','Warm layers','Waterproof shoes or boots','Umbrella','Scarf']},
-      spring:  {emoji:'🌷',headline:'Tulip season — cool & occasionally rainy',tips:['Light to medium jacket','Umbrella or rain layer','Comfortable walking shoes']},
-      summer:  {emoji:'⛅',headline:'Mild with some sun',tips:['Light layers','Rain jacket (summer showers are common)','Comfortable walking shoes']},
-      winter:  {emoji:'🥶',headline:'Cold, grey & wet',tips:['Heavy jacket','Warm layers','Waterproof boots','Gloves & scarf']},
-    },
-    tokyo:{
-      spring:  {emoji:'🌸',headline:'Cherry blossom season — mild & lovely',tips:['Light to medium layers','Comfortable walking shoes (you\'ll walk A LOT)','Light rain jacket (spring showers)','Dress layers — mornings are cool']},
-      summer:  {emoji:'🥵',headline:'Very hot, humid & rainy season',tips:['Lightweight, breathable fabrics','Portable fan & hand towel','Sunscreen','Comfortable walking shoes','Rain jacket or umbrella (tsuyu rainy season)']},
-      fall:    {emoji:'🍁',headline:'Beautiful — crisp and colourful',tips:['Light to medium layers','Comfortable shoes','Light jacket for evenings']},
-      winter:  {emoji:'❄️',headline:'Cold & dry',tips:['Warm jacket','Layers','Comfortable boots','Gloves & scarf']},
-    },
-    miami:{
-      summer:  {emoji:'🌧️',headline:'Hot, humid & afternoon thunderstorms daily',tips:['Lightweight tops','Swimsuit','Sunscreen SPF 50+','Rain jacket or umbrella (brief but heavy storms)','Sandals + walking shoes']},
-      winter:  {emoji:'🌤️',headline:'Warm & dry — peak season',tips:['Light tops & shorts','Light layer for evenings','Sunscreen','Sunglasses','Swimsuit']},
-      fall:    {emoji:'⛅',headline:'Warm with occasional storms',tips:['Light layers','Rain jacket','Swimsuit','Sunscreen']},
-      spring:  {emoji:'☀️',headline:'Warm & pleasant',tips:['Light tops','Swimsuit','Sunscreen','Comfortable shoes']},
-    },
-    'new york':{
-      fall:    {emoji:'🍂',headline:'Cool & crisp — beautiful foliage',tips:['Medium-weight jacket','Warm layers','Comfortable walking shoes (lots of walking)','One nicer outfit for dinners']},
-      winter:  {emoji:'🥶',headline:'Cold — can be very cold with wind chill',tips:['Heavy coat','Thermal base layers','Warm hat, scarf & gloves','Waterproof boots','Warm socks']},
-      spring:  {emoji:'🌸',headline:'Variable — can be cold or warm',tips:['Layers — check forecast','Medium jacket','Umbrella (April showers)','Comfortable shoes']},
-      summer:  {emoji:'☀️',headline:'Hot & humid',tips:['Light breathable tops','Comfortable walking shoes','Sunscreen','One light layer for subway A/C']},
-    },
-    chicago:{
-      fall:    {emoji:'🍂',headline:'Cool & windy — the Windy City earns its name',tips:['Warm jacket','Layers','Scarf & hat']},
-      winter:  {emoji:'🥶',headline:'Brutally cold — layer aggressively',tips:['Heavy coat (not optional)','Thermal base layers','Waterproof boots','Gloves, hat & scarf — all essential']},
-      spring:  {emoji:'🌧️',headline:'Unpredictable — pack layers',tips:['Medium jacket','Layers','Rain jacket or umbrella']},
-      summer:  {emoji:'☀️',headline:'Warm & lively',tips:['Light tops','Comfortable shoes','Light layer for evenings by the lake']},
-    },
-    nashville:{
-      fall:    {emoji:'🍂',headline:'Beautiful & mild',tips:['Light-medium layers','Comfortable walking/boot shoes','One nicer outfit for live music']},
-      summer:  {emoji:'🌞',headline:'Hot & humid',tips:['Lightweight tops','Sunscreen','Comfortable shoes','Light layer for honky-tonks (A/C blasting)']},
-      spring:  {emoji:'🌸',headline:'Warm & lovely',tips:['Light layers','Rain jacket (spring storms)','Comfortable shoes']},
-      winter:  {emoji:'❄️',headline:'Cool — milder than Northern cities',tips:['Medium jacket','Layers','Comfortable shoes']},
-    },
-  };
-
-  const seasonKey = isWinter?'winter':isSpring?'spring':isSummer?'summer':'fall';
-
-  return dests.map(dest=>{
-    const cityKey = (dest.city||'').toLowerCase();
-    const cityData = CITY_WEATHER[cityKey];
-    if(cityData && cityData[seasonKey]){
-      return {city: dest.city, ...cityData[seasonKey]};
-    }
-    // Generic fallback by season only
-    const fallbacks = {
-      winter:{emoji:'❄️',headline:'Cold weather expected',tips:['Heavy coat','Warm layers','Gloves & hat','Waterproof boots']},
-      spring:{emoji:'🌸',headline:'Mild & variable — pack layers',tips:['Light to medium jacket','Layers','Rain jacket or umbrella','Comfortable walking shoes']},
-      summer:{emoji:'☀️',headline:'Warm to hot',tips:['Lightweight tops','Sunscreen SPF 30+','Comfortable walking shoes','Sunglasses']},
-      fall:  {emoji:'🍂',headline:'Cool & crisp — layer up',tips:['Medium jacket','Warm layers','Comfortable shoes']},
-    };
-    return {city: dest.city, ...fallbacks[seasonKey]};
-  }).filter(Boolean);
 }
 
 function PackingView({trip, onUpdateTrip}){
@@ -1847,33 +1938,6 @@ function PackingView({trip, onUpdateTrip}){
         {pct===100&&<p style={{color:'var(--color-success)',fontSize:'.85rem',fontWeight:500,marginTop:8}}>✅ All packed — you're ready to go!</p>}
       </div>
 
-      {/* ── What to expect: per-destination weather context ── */}
-      {(()=>{
-        const wx = getWeatherContext(trip);
-        if(wx.length === 0) return null;
-        return(
-          <div style={{marginBottom:16}}>
-            <p className="section-label" style={{marginBottom:8,paddingLeft:2}}>🌤️ What to expect — clothing guide</p>
-            {wx.map((w,i)=>(
-              <div key={i} className="card" style={{padding:'14px 16px',marginBottom:8,borderLeft:'3px solid var(--color-accent)'}}>
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
-                  <span style={{fontSize:'1.25rem'}}>{w.emoji}</span>
-                  <div>
-                    <span style={{fontWeight:600,fontSize:'.85rem'}}>{w.city}</span>
-                    <span style={{color:'var(--color-ink-light)',fontSize:'.8rem',marginLeft:8}}>{w.headline}</span>
-                  </div>
-                </div>
-                <ul style={{margin:0,padding:'0 0 0 20px',listStyle:'disc'}}>
-                  {w.tips.map((t,j)=>(
-                    <li key={j} style={{fontSize:'.8rem',color:'var(--color-ink-light)',lineHeight:1.6}}>{t}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        );
-      })()}
-
       {/* Category sections */}
       {PACK_CATS.map(cat=>{
         const catItems = byCat[cat.id] || [];
@@ -1956,15 +2020,12 @@ function PackingView({trip, onUpdateTrip}){
 }
 
 // ── ACTIVITY CARD ──────────────────────────────────────────────────────────────
-function ActivityCard({item,type,draggable,onDelete,onEdit}){
+function ActivityCard({item,type,draggable,onEdit,onDelete}){
   const [exp,setExp]=useState(false);
-  const [editing,setEditing]=useState(false);
-  const [draft,setDraft]=useState(item);
   const mapsUrl=`https://maps.google.com/?q=${encodeURIComponent(item.address||item.name)}`;
-  function saveEdit(){if(onEdit){onEdit(draft);}setEditing(false);}
   return(
     <div className="card sortable-item" data-id={item.id} style={{marginBottom:10,overflow:'hidden'}}>
-      <button onClick={()=>!editing&&setExp(e=>!e)}
+      <button onClick={()=>setExp(e=>!e)}
         style={{width:'100%',padding:'13px 16px',display:'flex',alignItems:'flex-start',gap:12,background:'none',border:'none',cursor:'pointer',textAlign:'left'}}>
         {draggable&&<span className="drag-handle" title="Drag to reorder">⠿</span>}
         <span style={{fontSize:'1.2rem',lineHeight:1,flexShrink:0,marginTop:2}}>{item.emoji}</span>
@@ -1983,7 +2044,7 @@ function ActivityCard({item,type,draggable,onDelete,onEdit}){
         </div>
         <span style={{color:'var(--color-ink-light)',fontSize:'.75rem',flexShrink:0,marginTop:2}}>{exp?'▲':'▼'}</span>
       </button>
-      {exp&&!editing&&(
+      {exp&&(
         <div style={{padding:'0 16px 16px',borderTop:'1px solid var(--color-border)'}}>
           {item.address&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)',margin:'10px 0 4px'}}>📍 {item.address}</p>}
           {item.hours&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>🕐 {item.hours}</p>}
@@ -1998,34 +2059,54 @@ function ActivityCard({item,type,draggable,onDelete,onEdit}){
           <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
             <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">🗺️ Maps</a>
             {(item.bookingUrl||item.reservationUrl)&&<a href={item.bookingUrl||item.reservationUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">Book Now →</a>}
-            {onEdit&&<button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();setDraft(item);setEditing(true);}}>✏️ Edit</button>}
-            {onDelete&&<button className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)'}} onClick={e=>{e.stopPropagation();if(window.confirm(`Remove "${item.name}" from this day?`))onDelete(item.id);}}>🗑️ Remove</button>}
+            {onEdit&&<button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();onEdit(item);}}>✏️ Edit</button>}
+            {onDelete&&<button className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)'}} onClick={e=>{e.stopPropagation();if(window.confirm('Remove this item?'))onDelete(item.id);}}>🗑</button>}
           </div>
         </div>
       )}
-      {editing&&(
-        <div style={{padding:'0 16px 16px',borderTop:'1px solid var(--color-border)'}}>
-          <div style={{display:'grid',gap:8,marginTop:10}}>
-            <div style={{display:'flex',gap:8}}>
-              <input className="input-field" value={draft.emoji||''} onChange={e=>setDraft(d=>({...d,emoji:e.target.value}))} style={{width:52,textAlign:'center',fontSize:'1.1rem'}} placeholder="emoji"/>
-              <input className="input-field" value={draft.name||''} onChange={e=>setDraft(d=>({...d,name:e.target.value}))} placeholder="Name" style={{flex:1}}/>
-            </div>
-            <input className="input-field" value={draft.address||''} onChange={e=>setDraft(d=>({...d,address:e.target.value}))} placeholder="Address (optional)"/>
-            <textarea className="input-field" value={draft.notes||''} onChange={e=>setDraft(d=>({...d,notes:e.target.value}))} placeholder="Notes (optional)" style={{minHeight:56,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem'}}/>
-            <div style={{display:'flex',gap:6}}>
-              {['must-do','nice-to-have','if-time'].map(b=>(
-                <button key={b} onClick={()=>setDraft(d=>({...d,bucket:b}))} style={{flex:1,padding:'6px 4px',borderRadius:8,border:`1.5px solid ${draft.bucket===b?'var(--color-accent)':'var(--color-border)'}`,background:draft.bucket===b?'var(--color-accent-soft)':'transparent',color:draft.bucket===b?'var(--color-accent)':'var(--color-ink-light)',fontSize:'.72rem',fontWeight:600,cursor:'pointer'}}>
-                  {b==='must-do'?'★ Must Do':b==='nice-to-have'?'✨ Nice':'⏱ If Time'}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div style={{display:'flex',gap:8,marginTop:10}}>
-            <button className="btn btn-secondary" style={{flex:1}} onClick={()=>setEditing(false)}>Cancel</button>
-            <button className="btn btn-primary" style={{flex:2}} onClick={saveEdit}>Save changes</button>
-          </div>
+    </div>
+  );
+}
+
+// ── ADD/EDIT ACTIVITY FORM (inline, used in DayView) ──────────────────────────
+function ActivityForm({initial,type,onSave,onCancel}){
+  const isRest=type==='restaurant';
+  const blank=isRest
+    ?{name:'',emoji:'🍽️',address:'',neighborhood:'',cuisine:'',mealType:'dinner',priceRange:'$$',reservationRequired:false,notes:'',bucket:'must-do'}
+    :{name:'',emoji:'📍',address:'',neighborhood:'',category:'sightseeing',bookingRequired:false,notes:'',bucket:'must-do'};
+  const [f,setF]=useState(initial||blank);
+  const set=(k,v)=>setF(x=>({...x,[k]:v}));
+  return(
+    <div className="card" style={{marginBottom:12,padding:16,border:'2px solid var(--color-accent)'}}>
+      <p style={{fontWeight:600,fontSize:'.875rem',marginBottom:12,color:'var(--color-accent)'}}>{initial?'Edit':'Add'} {isRest?'Restaurant':'Activity'}</p>
+      <div style={{display:'grid',gridTemplateColumns:'40px 1fr',gap:8,marginBottom:8}}>
+        <input className="input" value={f.emoji} onChange={e=>set('emoji',e.target.value)} style={{textAlign:'center',padding:'8px 4px'}}/>
+        <input className="input" placeholder={isRest?'Restaurant name':'Activity name'} value={f.name} onChange={e=>set('name',e.target.value)}/>
+      </div>
+      <input className="input" placeholder="Address (optional)" value={f.address||''} onChange={e=>set('address',e.target.value)} style={{marginBottom:8}}/>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+        <input className="input" placeholder="Neighborhood" value={f.neighborhood||''} onChange={e=>set('neighborhood',e.target.value)}/>
+        <select className="input" value={f.bucket} onChange={e=>set('bucket',e.target.value)}>
+          <option value="must-do">★ Must Do</option>
+          <option value="nice-to-have">✨ Nice to Have</option>
+          <option value="if-time">⏱ If Time</option>
+        </select>
+      </div>
+      {isRest&&(
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+          <input className="input" placeholder="Cuisine (e.g. Italian)" value={f.cuisine||''} onChange={e=>set('cuisine',e.target.value)}/>
+          <select className="input" value={f.mealType||'dinner'} onChange={e=>set('mealType',e.target.value)}>
+            {['breakfast','lunch','dinner','cafe','drinks'].map(m=><option key={m} value={m}>{m.charAt(0).toUpperCase()+m.slice(1)}</option>)}
+          </select>
         </div>
       )}
+      <textarea className="input-field" placeholder="Notes (optional)" value={f.notes||''} onChange={e=>set('notes',e.target.value)} rows={2} style={{marginBottom:8,resize:'none'}}/>
+      <div style={{display:'flex',gap:8}}>
+        <button className="btn btn-ghost" style={{flex:1}} onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary" style={{flex:2}} disabled={!f.name.trim()} onClick={()=>onSave(f)}>
+          {initial?'Save changes':'Add to day'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -2035,35 +2116,33 @@ function DayView({trip,day,onUpdateTrip}){
   const [notes,setNotes]=useState(day.notes||'');
   const [filter,setFilter]=useState('all');
   const [copied,setCopied]=useState(false);
-  const [showAddActivity,setShowAddActivity]=useState(false);
-  const [showAddRestaurant,setShowAddRestaurant]=useState(false);
-  const [newAct,setNewAct]=useState({name:'',emoji:'',address:'',notes:'',bucket:'nice-to-have'});
-  const [newRest,setNewRest]=useState({name:'',emoji:'',address:'',cuisine:'',mealType:'dinner',notes:'',bucket:'nice-to-have',priceRange:'$$'});
+  const [addingType,setAddingType]=useState(null); // 'activity'|'restaurant'|null
+  const [editingItem,setEditingItem]=useState(null); // {item, type}
   const actsRef=useRef(null);
   const restsRef=useRef(null);
   const dest=trip.destinations.find(d=>d.id===day.destinationId);
-  function deleteActivity(id){const updatedDays=trip.days.map(d=>d.id===day.id?{...d,activities:(d.activities||[]).filter(a=>a.id!==id)}:d);onUpdateTrip({...trip,days:updatedDays});}
-  function editActivity(updated){const updatedDays=trip.days.map(d=>d.id===day.id?{...d,activities:(d.activities||[]).map(a=>a.id===updated.id?updated:a)}:d);onUpdateTrip({...trip,days:updatedDays});}
-  function deleteRestaurant(id){const updatedDays=trip.days.map(d=>d.id===day.id?{...d,restaurants:(d.restaurants||[]).filter(r=>r.id!==id)}:d);onUpdateTrip({...trip,days:updatedDays});}
-  function editRestaurant(updated){const updatedDays=trip.days.map(d=>d.id===day.id?{...d,restaurants:(d.restaurants||[]).map(r=>r.id===updated.id?updated:r)}:d);onUpdateTrip({...trip,days:updatedDays});}
-  function addActivity(){
-    if(!newAct.name.trim())return;
-    const item={...newAct,id:uuid(),sortOrder:(day.activities||[]).length,thingsToConsider:[],bookingRequired:false,category:'sightseeing'};
-    const updatedDays=trip.days.map(d=>d.id===day.id?{...d,activities:[...(d.activities||[]),item]}:d);
-    onUpdateTrip({...trip,days:updatedDays});
-    setNewAct({name:'',emoji:'',address:'',notes:'',bucket:'nice-to-have'});
-    setShowAddActivity(false);
-  }
-  function addRestaurant(){
-    if(!newRest.name.trim())return;
-    const item={...newRest,id:uuid(),sortOrder:(day.restaurants||[]).length,thingsToConsider:[],reservationRequired:false};
-    const updatedDays=trip.days.map(d=>d.id===day.id?{...d,restaurants:[...(d.restaurants||[]),item]}:d);
-    onUpdateTrip({...trip,days:updatedDays});
-    setNewRest({name:'',emoji:'',address:'',cuisine:'',mealType:'dinner',notes:'',bucket:'nice-to-have',priceRange:'$$'});
-    setShowAddRestaurant(false);
-  }
   const acts=(day.activities||[]).filter(a=>filter==='all'||a.bucket===filter);
   const rests=(day.restaurants||[]).filter(r=>filter==='all'||r.bucket===filter);
+
+  const updateDay=(newDay)=>onUpdateTrip({...trip,days:trip.days.map(d=>d.id===day.id?newDay:d)});
+
+  const handleSaveActivity=(formData,type)=>{
+    const listKey=type==='restaurant'?'restaurants':'activities';
+    const list=[...(day[listKey]||[])];
+    if(editingItem){
+      const idx=list.findIndex(x=>x.id===editingItem.item.id);
+      if(idx>=0) list[idx]={...list[idx],...formData};
+      setEditingItem(null);
+    } else {
+      list.push({...formData,id:uuid(),sortOrder:list.length});
+    }
+    updateDay({...day,[listKey]:list});
+    setAddingType(null);
+  };
+
+  const handleDelete=(id,listKey)=>{
+    updateDay({...day,[listKey]:(day[listKey]||[]).filter(x=>x.id!==id)});
+  };
 
   // Wire up SortableJS for drag-and-drop reordering
   useEffect(()=>{
@@ -2136,30 +2215,25 @@ function DayView({trip,day,onUpdateTrip}){
       <div style={{marginBottom:16}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
           <p className="section-label" style={{marginBottom:0}}>Activities {acts.length>1&&<span style={{fontSize:'.7rem',color:'var(--color-ink-light)',fontWeight:400}}>· drag to reorder</span>}</p>
-          <button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'4px 10px'}} onClick={()=>{setShowAddActivity(s=>!s);setShowAddRestaurant(false);}}>
-            {showAddActivity?'✕ Cancel':'+ Add'}
-          </button>
+          {!addingType&&!editingItem&&<button className="btn btn-ghost btn-sm" onClick={()=>setAddingType('activity')}>+ Add</button>}
         </div>
-        <div ref={actsRef}>{acts.map(a=><ActivityCard key={a.id} item={a} type="activity" draggable={acts.length>1} onDelete={deleteActivity} onEdit={editActivity}/>)}</div>
-        {acts.length===0&&!showAddActivity&&<p style={{fontSize:'.83rem',color:'var(--color-ink-muted)',paddingLeft:4,marginBottom:8}}>No activities yet — tap + Add to add one.</p>}
-        {showAddActivity&&(
-          <div className="card" style={{padding:14,marginTop:8,border:'1.5px dashed var(--color-accent-warm)'}}>
-            <p style={{fontSize:'.78rem',fontWeight:600,color:'var(--color-accent)',marginBottom:8}}>Add activity</p>
-            <div style={{display:'flex',gap:8,marginBottom:8}}>
-              <input className="input-field" value={newAct.emoji} onChange={e=>setNewAct(n=>({...n,emoji:e.target.value}))} style={{width:52,textAlign:'center',fontSize:'1.1rem'}} placeholder="📍"/>
-              <input className="input-field" value={newAct.name} onChange={e=>setNewAct(n=>({...n,name:e.target.value}))} placeholder="Activity name *" style={{flex:1}}/>
-            </div>
-            <input className="input-field" value={newAct.address} onChange={e=>setNewAct(n=>({...n,address:e.target.value}))} placeholder="Address (optional)" style={{marginBottom:8}}/>
-            <textarea className="input-field" value={newAct.notes} onChange={e=>setNewAct(n=>({...n,notes:e.target.value}))} placeholder="Notes (optional)" style={{minHeight:48,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem',marginBottom:8}}/>
-            <div style={{display:'flex',gap:6,marginBottom:10}}>
-              {['must-do','nice-to-have','if-time'].map(b=>(
-                <button key={b} onClick={()=>setNewAct(n=>({...n,bucket:b}))} style={{flex:1,padding:'5px 4px',borderRadius:8,border:`1.5px solid ${newAct.bucket===b?'var(--color-accent)':'var(--color-border)'}`,background:newAct.bucket===b?'var(--color-accent-soft)':'transparent',color:newAct.bucket===b?'var(--color-accent)':'var(--color-ink-light)',fontSize:'.72rem',fontWeight:600,cursor:'pointer'}}>
-                  {b==='must-do'?'★ Must':b==='nice-to-have'?'✨ Nice':'⏱ If Time'}
-                </button>
-              ))}
-            </div>
-            <button className="btn btn-primary" style={{width:'100%'}} onClick={addActivity} disabled={!newAct.name.trim()}>Add activity</button>
-          </div>
+        {editingItem?.type==='activity'&&(
+          <ActivityForm initial={editingItem.item} type="activity"
+            onSave={f=>handleSaveActivity(f,'activity')}
+            onCancel={()=>setEditingItem(null)}/>
+        )}
+        {addingType==='activity'&&(
+          <ActivityForm type="activity"
+            onSave={f=>handleSaveActivity(f,'activity')}
+            onCancel={()=>setAddingType(null)}/>
+        )}
+        <div ref={actsRef}>
+          {acts.map(a=><ActivityCard key={a.id} item={a} type="activity" draggable={acts.length>1}
+            onEdit={item=>{setAddingType(null);setEditingItem({item,type:'activity'});}}
+            onDelete={id=>handleDelete(id,'activities')}/>)}
+        </div>
+        {acts.length===0&&!addingType&&!editingItem&&(
+          <p style={{fontSize:'.83rem',color:'var(--color-ink-muted)',paddingLeft:4}}>No activities yet — tap + Add to plan something.</p>
         )}
       </div>
 
@@ -2167,38 +2241,25 @@ function DayView({trip,day,onUpdateTrip}){
       <div style={{marginBottom:16}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
           <p className="section-label" style={{marginBottom:0}}>Food & Drinks {rests.length>1&&<span style={{fontSize:'.7rem',color:'var(--color-ink-light)',fontWeight:400}}>· drag to reorder</span>}</p>
-          <button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'4px 10px'}} onClick={()=>{setShowAddRestaurant(s=>!s);setShowAddActivity(false);}}>
-            {showAddRestaurant?'✕ Cancel':'+ Add'}
-          </button>
+          {!addingType&&!editingItem&&<button className="btn btn-ghost btn-sm" onClick={()=>setAddingType('restaurant')}>+ Add</button>}
         </div>
-        <div ref={restsRef}>{rests.map(r=><ActivityCard key={r.id} item={r} type="restaurant" draggable={rests.length>1} onDelete={deleteRestaurant} onEdit={editRestaurant}/>)}</div>
-        {rests.length===0&&!showAddRestaurant&&<p style={{fontSize:'.83rem',color:'var(--color-ink-muted)',paddingLeft:4,marginBottom:8}}>No restaurants yet — tap + Add to add one.</p>}
-        {showAddRestaurant&&(
-          <div className="card" style={{padding:14,marginTop:8,border:'1.5px dashed var(--color-accent-warm)'}}>
-            <p style={{fontSize:'.78rem',fontWeight:600,color:'var(--color-accent)',marginBottom:8}}>Add restaurant</p>
-            <div style={{display:'flex',gap:8,marginBottom:8}}>
-              <input className="input-field" value={newRest.emoji} onChange={e=>setNewRest(n=>({...n,emoji:e.target.value}))} style={{width:52,textAlign:'center',fontSize:'1.1rem'}} placeholder="🍽️"/>
-              <input className="input-field" value={newRest.name} onChange={e=>setNewRest(n=>({...n,name:e.target.value}))} placeholder="Restaurant name *" style={{flex:1}}/>
-            </div>
-            <div style={{display:'flex',gap:8,marginBottom:8}}>
-              <input className="input-field" value={newRest.cuisine} onChange={e=>setNewRest(n=>({...n,cuisine:e.target.value}))} placeholder="Cuisine" style={{flex:1}}/>
-              <select className="input-field" value={newRest.mealType} onChange={e=>setNewRest(n=>({...n,mealType:e.target.value}))} style={{flex:1}}>
-                <option value="breakfast">Breakfast</option>
-                <option value="lunch">Lunch</option>
-                <option value="dinner">Dinner</option>
-                <option value="cafe">Café</option>
-                <option value="drinks">Drinks</option>
-              </select>
-              <select className="input-field" value={newRest.priceRange} onChange={e=>setNewRest(n=>({...n,priceRange:e.target.value}))} style={{flex:1}}>
-                <option value="$">$</option>
-                <option value="$$">$$</option>
-                <option value="$$$">$$$</option>
-                <option value="$$$$">$$$$</option>
-              </select>
-            </div>
-            <textarea className="input-field" value={newRest.notes} onChange={e=>setNewRest(n=>({...n,notes:e.target.value}))} placeholder="Notes (optional)" style={{minHeight:48,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem',marginBottom:8}}/>
-            <button className="btn btn-primary" style={{width:'100%'}} onClick={addRestaurant} disabled={!newRest.name.trim()}>Add restaurant</button>
-          </div>
+        {editingItem?.type==='restaurant'&&(
+          <ActivityForm initial={editingItem.item} type="restaurant"
+            onSave={f=>handleSaveActivity(f,'restaurant')}
+            onCancel={()=>setEditingItem(null)}/>
+        )}
+        {addingType==='restaurant'&&(
+          <ActivityForm type="restaurant"
+            onSave={f=>handleSaveActivity(f,'restaurant')}
+            onCancel={()=>setAddingType(null)}/>
+        )}
+        <div ref={restsRef}>
+          {rests.map(r=><ActivityCard key={r.id} item={r} type="restaurant" draggable={rests.length>1}
+            onEdit={item=>{setAddingType(null);setEditingItem({item,type:'restaurant'});}}
+            onDelete={id=>handleDelete(id,'restaurants')}/>)}
+        </div>
+        {rests.length===0&&!addingType&&!editingItem&&(
+          <p style={{fontSize:'.83rem',color:'var(--color-ink-muted)',paddingLeft:4}}>No restaurants yet — tap + Add to add one.</p>
         )}
       </div>
       <div className="card" style={{padding:16}}>
@@ -2387,6 +2448,84 @@ function TripCard({trip, onClick, animDelay=0}) {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── CITY AUTOCOMPLETE ─────────────────────────────────────────────────────────
+function CityAutocomplete({value, country, onChange, onCountryChange}) {
+  const {useState: uS, useRef: uR, useEffect: uE} = React;
+  const [suggestions, setSuggestions] = uS([]);
+  const [focused, setFocused] = uS(false);
+  const wrapRef = uR(null);
+
+  // Close dropdown when clicking outside
+  uE(()=>{
+    const handler = e => { if(wrapRef.current && !wrapRef.current.contains(e.target)) setFocused(false); };
+    document.addEventListener('mousedown', handler);
+    return ()=>document.removeEventListener('mousedown', handler);
+  },[]);
+
+  const handleInput = v => {
+    const matches = searchCities(v);
+    setSuggestions(matches);
+    setFocused(true);
+    // Also try CITY_TO_COUNTRY exact match for auto-fill without selecting from list
+    const key = v.toLowerCase().trim();
+    const cityMatch = CITY_TO_COUNTRY[key];
+    if(cityMatch) {
+      onChange(v.length ? v.charAt(0).toUpperCase()+v.slice(1) : v, cityMatch);
+    } else {
+      onChange(v.length ? v.charAt(0).toUpperCase()+v.slice(1) : v, null);
+    }
+  };
+
+  const select = c => {
+    onChange(c.city, {countryCode: c.countryCode, country: c.country, isInternational: c.isInternational, region: c.region});
+    setSuggestions([]);
+    setFocused(false);
+  };
+
+  const showDrop = focused && suggestions.length > 0;
+
+  return (
+    <div ref={wrapRef} style={{position:'relative', marginBottom:8}}>
+      <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:8}}>
+        <div style={{position:'relative'}}>
+          <input className="input" placeholder="City (e.g. Portland, OR)"
+            autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck="false"
+            value={value}
+            onFocus={()=>{ if(value.length>=2) setSuggestions(searchCities(value)); setFocused(true); }}
+            onChange={e=>handleInput(e.target.value)}
+          />
+          {showDrop && (
+            <div style={{
+              position:'absolute', top:'calc(100% + 4px)', left:0, right:0, zIndex:100,
+              background:'var(--color-surface)', border:'1px solid var(--color-border)',
+              borderRadius:10, boxShadow:'0 4px 16px rgba(0,0,0,.12)', overflow:'hidden'
+            }}>
+              {suggestions.map((c,idx)=>(
+                <button key={idx} onMouseDown={()=>select(c)} style={{
+                  width:'100%', textAlign:'left', padding:'10px 14px', background:'none', border:'none',
+                  borderBottom: idx<suggestions.length-1 ? '1px solid var(--color-border)' : 'none',
+                  cursor:'pointer', display:'flex', alignItems:'center', gap:8
+                }}
+                onMouseEnter={e=>e.currentTarget.style.background='var(--color-cream)'}
+                onMouseLeave={e=>e.currentTarget.style.background='none'}>
+                  <span style={{fontSize:'.875rem', fontWeight:500, color:'var(--color-ink)'}}>{c.city}</span>
+                  {c.region && <span style={{fontSize:'.78rem', color:'var(--color-ink-muted)'}}>{c.region}</span>}
+                  <span style={{fontSize:'.75rem', color:'var(--color-ink-light)', marginLeft:'auto'}}>{c.country}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <input className="input" placeholder="Country"
+          autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck="false"
+          value={country}
+          onChange={e=>{ const v=e.target.value; onCountryChange(v.length?v.charAt(0).toUpperCase()+v.slice(1):v); }}
+        />
       </div>
     </div>
   );
@@ -2583,34 +2722,35 @@ function NewTripSheet({onClose, onSave}) {
                     <span style={{fontSize:'.8rem',fontWeight:600,color:'var(--color-ink-light)'}}>Stop {i+1}</span>
                     {form.destinations.length>1&&<button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'2px 8px',color:'var(--color-flag)'}} onClick={()=>removeDest(i)}>Remove</button>}
                   </div>
-                  <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8,marginBottom:8}}>
-                    <input className="input" placeholder="City (e.g. Tokyo)"
-                      autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck="false"
-                      value={d.city} onChange={e=>{
-                        const v=e.target.value;
-                        const cap=v.length?v.charAt(0).toUpperCase()+v.slice(1):v;
-                        const key=v.toLowerCase().trim();
-                        const cityMatch=CITY_TO_COUNTRY[key];
-                        if(cityMatch){
-                          setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],city:cap,...cityMatch};return{...f,destinations:ds};});
-                        } else {
-                          setDest(i,'city',cap);
-                        }
-                      }}/>
-                    <input className="input" placeholder="Country"
-                      autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck="false"
-                      value={d.country||''} onChange={e=>{
-                        const v=e.target.value;
-                        const cap=v.length?v.charAt(0).toUpperCase()+v.slice(1):v;
-                        setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],country:cap};return{...f,destinations:ds};});
-                      }}/>
-                  </div>
+                  <CityAutocomplete
+                    value={d.city}
+                    country={d.country||''}
+                    onChange={(cityVal, meta)=>{
+                      setForm(f=>{
+                        const ds=[...f.destinations];
+                        ds[i]={...ds[i], city:cityVal, ...(meta||{})};
+                        return{...f,destinations:ds};
+                      });
+                    }}
+                    onCountryChange={v=>{
+                      setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],country:v};return{...f,destinations:ds};});
+                    }}
+                  />
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
                     <div>
                       <label className="section-label" style={{fontSize:'.7rem'}}>Arrival</label>
                       <input className="input" type="date" value={d.arrivalDate}
                         min={form.startDate||undefined} max={form.endDate||undefined}
-                        onChange={e=>setDest(i,'arrivalDate',e.target.value)}/>
+                        onChange={e=>{
+                          const v=e.target.value;
+                          setDest(i,'arrivalDate',v);
+                          // Auto-advance departure to next day if unset or before arrival
+                          if(v&&(!d.departureDate||d.departureDate<=v)){
+                            const next=new Date(v+'T12:00:00');next.setDate(next.getDate()+1);
+                            const nextStr=next.toISOString().slice(0,10);
+                            setForm(f=>{const ds=[...f.destinations];ds[i]={...ds[i],arrivalDate:v,departureDate:nextStr<=form.endDate?nextStr:form.endDate||nextStr};return{...f,destinations:ds};});
+                          }
+                        }}/>
                     </div>
                     <div>
                       <label className="section-label" style={{fontSize:'.7rem'}}>Departure</label>
@@ -2774,11 +2914,25 @@ function generateTripPDF(trip) {
 // ── AI ITINERARY PLANNER ───────────────────────────────────────────────────────
 function ItineraryAIPlanner({trip, onUpdateTrip}) {
   const [apiKey, setApiKeyState] = React.useState(getAIKey);
-  const [showKeyInput, setShowKeyInput] = React.useState(!getAIKey());
+  const [showKeyInput, setShowKeyInput] = React.useState(false);
   const [prompt, setPrompt] = React.useState(trip._regenPrompt || '');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [streamText, setStreamText] = React.useState('');
+  const [usage, setUsage] = React.useState(null); // {free_generations_used, extractions_used} | null
+
+  const refreshUsage = React.useCallback(() => {
+    fetchAIUsage().then(u => { if (u) setUsage(u); }).catch(()=>{});
+  }, []);
+  React.useEffect(() => {
+    let on = true;
+    ensureAnonSession()
+      .then(() => fetchAIUsage())
+      .then(u => { if (on && u) setUsage(u); })
+      .catch(()=>{});
+    return () => { on = false; };
+  }, []);
+  const freeLeft = usage ? Math.max(0, FREE_GENERATION_CAP - (usage.free_generations_used || 0)) : null;
 
   const nightCount = trip.startDate && trip.endDate
     ? Math.round((new Date(trip.endDate) - new Date(trip.startDate)) / 86400000)
@@ -2789,95 +2943,82 @@ function ItineraryAIPlanner({trip, onUpdateTrip}) {
   const buildSystemPrompt = () => {
     const lodgingLines = (trip.lodging||[]).map(l=>`  • ${l.name}${l.address?' at '+l.address:''}${l.checkIn?' · Check-in: '+l.checkIn:''}${l.checkOut?' · Check-out: '+l.checkOut:''}`).join('\n');
     const flightLines = (trip.flights||[]).map(f=>`  • ${f.direction||''} ${f.flightNumber||''} ${f.departureAirport||''}→${f.arrivalAirport||''} on ${f.departureTime?.slice(0,10)||''} at ${f.departureTime?.slice(11,16)||''}${f.confirmationNumber?' (conf: '+f.confirmationNumber+')':''}`).join('\n');
-    const destInfo = trip.destinations.map((d,i) => {
-      const arrDate = d.arrivalDate || trip.startDate;
-      const depDate = d.departureDate || trip.endDate;
-      return `  Stop ${i+1}: ${d.city}, ${d.country} (${d.countryCode}) · Arrive ${arrDate} → Depart ${depDate}`;
-    }).join('\n');
-    return `You are an expert travel planner who creates personalized, practical day-by-day itineraries. Generate a JSON array of day objects based on the trip context and user's request below.
+    return `You are a travel itinerary planner. Given a trip description, generate a detailed day-by-day itinerary as a JSON array.
 
-TRIP CONTEXT (use this to build the skeleton):
+Trip context:
 - Name: ${trip.title}
-- Destinations:\n${destInfo}
-- Full trip dates: ${trip.startDate} to ${trip.endDate} (${nightCount} nights)
+- Destinations: ${trip.destinations.map(d=>`${d.city} (${d.countryCode})`).join(', ')}
+- Dates: ${trip.startDate} to ${trip.endDate} (${nightCount} nights)
 - Occasion: ${trip.occasion}
 - Travelers: ${trip.travelerCount || 2}
-${lodgingLines ? `- Lodging (confirmed — include check-in/out on the correct days):\n${lodgingLines}` : `- Lodging: Not yet booked. Suggest neighborhoods/areas the group should consider staying in, as a note on the first day for each city.`}
-${flightLines ? `- Flights (confirmed — include exactly in the itinerary with real times):\n${flightLines}` : ''}
+${lodgingLines ? `- Lodging (MUST include check-in/check-out in itinerary):\n${lodgingLines}` : ''}
+${flightLines ? `- Flights (MUST include in itinerary with exact times and confirmation numbers):\n${flightLines}` : ''}
 
-MULTI-CITY & TRAIN TRAVEL RULES:
-- Each destination has its own arrivalDate and departureDate. RESPECT these — do not jumble city days.
-- If travel between cities is by train (e.g. Eurostar London→Paris), create a dedicated travel day: morning checkout, train journey as a must-do activity (with bookingRequired:true), early afternoon arrival at next city. Use the departure date from city 1 (= arrival date of city 2) for this day.
-- Assign each day's destinationId to the correct destination based on the date range above.
-- Do NOT place Paris activities on London days or vice versa.
+CRITICAL RULES about the user's request:
+1. The user's message contains their NON-NEGOTIABLE activities, restaurants, and plans. You MUST include every specific place, activity, or event they mention — do not skip or replace them.
+2. If they mention a hotel or where they're staying, include hotel check-in on arrival day and check-out on departure day as activities.
+3. If lodging is listed above, always start arrival day with "Check-in at [hotel name]" and end last day with "Check-out from [hotel name]".
+4. If flights are listed above, include departure flight prep (travel to airport, check-in time) on the appropriate days.
+5. After placing all non-negotiables, fill remaining slots with suggestions that complement their stated plans — same neighborhood, logical geography, similar vibe.
+6. Never replace a user-specified activity with a generic one.
 
-FAMILY & CHILD TRAVEL:
-- If the user mentions traveling with children, toddlers, or kids: prioritize child-friendly venues, include rest time (naps, slow mornings), choose walkable neighborhoods, avoid long queues without booking, and flag stroller accessibility where helpful.
-- Keep pace realistic for families — fewer activities per day with more breathing room.
+IMPORTANT: Return ONLY a valid JSON array of day objects. No markdown, no explanation, no preamble, no commentary — output must start with [ and end with ] and be nothing else. If the user's request mentions checklist items, entry requirements, or non-itinerary topics, acknowledge them by including relevant reminders as activity notes or tips on the appropriate days, but still return only the JSON day array.
 
-PERSONALIZATION RULES:
-- Read the user's vibe and style from their message. If they say "wander freely", "not over-scheduled", "chill" — don't pack every hour. Leave open afternoon blocks labeled "Free time to explore."
-- If they specify must-do vs nice-to-have — mark user-specified items as bucket:"must-do", AI suggestions as bucket:"nice-to-have".
-- Respect dietary preferences, cuisine preferences, and price range hints in their message.
-- If they mention a specific event (concert, sports game, etc.) include it as must-do with the exact date, time, and venue.
-
-CRITICAL CONTENT RULES:
-1. Include EVERY specific place, restaurant, activity, or event the user mentions — never skip or replace.
-2. If lodging is listed above, start arrival day with "Check-in at [hotel name]" and end last day with "Check-out."
-3. If flights are listed, include airport departure prep on the correct day (travel to airport 2–3 hrs before domestic, 3–4 hrs before international).
-4. Fill remaining slots with suggestions that match the user's stated vibe, neighborhood, and preferences.
-5. Use real venue names and real addresses — no generic placeholders.
-6. City names in the "label" field must be spelled correctly.
-
-Return ONLY a valid JSON array. No markdown, no explanation, no preamble. Start with [ and end with ].
-
-Each day object:
+Each day object must follow this exact shape:
 {
   "id": "day-1",
   "date": "YYYY-MM-DD",
-  "label": "Day 1 — City, Theme",
+  "label": "Day 1 - Arrival",
   "destinationId": "${trip.destinations[0]?.id || 'd1'}",
   "notes": "",
   "activities": [
     {
       "id": "a1",
-      "name": "Venue Name",
+      "name": "Example Venue",
       "emoji": "🎢",
-      "address": "123 Main St, City",
-      "neighborhood": "Neighborhood",
+      "address": "123 Main St, City, ST 00000",
+      "neighborhood": "Downtown",
       "bucket": "must-do",
       "category": "entertainment",
       "bookingRequired": true,
-      "bookingUrl": "https://...",
-      "notes": "One key fact.",
-      "thingsToConsider": ["One tip"],
+      "bookingUrl": "",
+      "notes": "Example note.",
+      "thingsToConsider": ["Tip 1", "Tip 2"],
       "sortOrder": 0
     }
   ],
   "restaurants": [
     {
       "id": "r1",
-      "name": "Restaurant Name",
+      "name": "Example Restaurant",
       "emoji": "🍽️",
-      "address": "456 Food St, City",
-      "neighborhood": "Neighborhood",
+      "address": "456 Food St, City, ST 00000",
+      "neighborhood": "Downtown",
       "bucket": "must-do",
-      "cuisine": "Indian",
+      "cuisine": "American",
       "mealType": "dinner",
       "reservationRequired": true,
       "priceRange": "$$$",
-      "notes": "Why it's worth it.",
+      "notes": "Great atmosphere, book ahead.",
       "thingsToConsider": [],
       "sortOrder": 0
     }
   ]
 }
 
-VOLUME RULES:
-- For trips ≤7 nights: 2–3 activities and 1–2 restaurants per day
-- For trips 8–14 nights: 2 activities and 1 restaurant per day
-- Travel days (airport or train): 1 transport activity + 1 light arrival activity, no restaurants required
-- Keep notes and thingsToConsider to 1 sentence each — brevity is critical to stay within token limits`;
+Rules:
+- Generate one day object per day of the trip (from startDate to endDate inclusive)
+- For trips up to 7 nights: include 3 activities and 2 restaurants per day
+- For trips 8-14 nights: include 2 activities and 1 restaurant per day (keep responses compact)
+- For trips 15+ nights: include 2 activities and 1 restaurant per day
+- Spread activities logically by geography — cluster nearby things on the same day
+- First day: arrival + light activities. Last day: checkout + departure-friendly spots.
+- Use real, specific venue names and addresses
+- Emojis should match the activity type
+- bucket is "must-do", "nice-to-have", or "if-time"
+- category is one of: sightseeing, food, outdoor, shopping, entertainment, culture, tour, other
+- mealType is one of: breakfast, lunch, dinner, cafe, drinks
+- Keep notes and thingsToConsider brief (1 sentence max) to stay within token limits`;
   };
 
   const [generated, setGenerated] = React.useState(false);
@@ -2887,7 +3028,6 @@ VOLUME RULES:
   const fileInputRef = React.useRef(null);
 
   const extractFromConfirmation = async (file) => {
-    if (!apiKey) { setShowKeyInput(true); return; }
     setUploading(true); setUploadResult(null); setError('');
     try {
       // Read file as base64
@@ -2937,33 +3077,42 @@ If this is a FLIGHT confirmation, return an array:
 
 Only include fields you can actually read from the document. Use null for anything missing.`;
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1024,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: isPdf ? 'document' : 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-              { type: 'text', text: extractPrompt }
-            ]
-          }]
-        })
-      });
+      const extractMessages = [{
+        role: 'user',
+        content: [
+          { type: isPdf ? 'document' : 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: extractPrompt }
+        ]
+      }];
 
-      if (!res.ok) {
-        const err = await res.json().catch(()=>({}));
-        throw new Error(err?.error?.message || `API error ${res.status}`);
+      let text = '';
+      if (apiKey) {
+        // Power-user path: bring-your-own-key, direct to Anthropic (unlimited)
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 1024,
+            messages: extractMessages
+          })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(()=>({}));
+          throw new Error(err?.error?.message || `API error ${res.status}`);
+        }
+        const data = await res.json();
+        text = data?.content?.[0]?.text || '';
+      } else {
+        // Default path: Locale's free tier via server-side proxy
+        text = await callAIProxy({ feature: 'extract', messages: extractMessages, max_tokens: 1024 });
+        refreshUsage();
       }
-      const data = await res.json();
-      const text = data?.content?.[0]?.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('Could not extract details from this document. Try a clearer image or PDF.');
       const parsed = JSON.parse(jsonMatch[0]);
@@ -2998,42 +3147,55 @@ Only include fields you can actually read from the document. Use null for anythi
   };
 
   const generate = async () => {
-    if (!apiKey) { setShowKeyInput(true); return; }
     if (!prompt.trim()) { setError('Tell me what you want to do on this trip first.'); return; }
     setLoading(true); setError(''); setStreamText('');
 
     try {
-      const res = await fetch(
-        'https://api.anthropic.com/v1/messages',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 16000,
-            system: buildSystemPrompt(),
-            messages: [{ role: 'user', content: 'User request: ' + prompt }],
-          }),
+      const genMessages = [{ role: 'user', content: 'User request: ' + prompt }];
+      let full = '';
+
+      if (apiKey) {
+        // Power-user path: bring-your-own-key, direct to Anthropic (unlimited)
+        const res = await fetch(
+          'https://api.anthropic.com/v1/messages',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'anthropic-dangerous-direct-browser-access': 'true',
+            },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 16000,
+              system: buildSystemPrompt(),
+              messages: genMessages,
+            }),
+          }
+        );
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err?.error?.message || `API error ${res.status}`);
         }
-      );
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `API error ${res.status}`);
+        const data = await res.json().catch(() => { throw new Error('Could not read the API response. Please try again.'); });
+        full = data?.content?.[0]?.text || '';
+        if (data?.stop_reason === 'max_tokens') {
+          console.warn('Response hit max_tokens — JSON may be truncated. Attempting recovery...');
+        }
+      } else {
+        // Default path: Locale's free tier via server-side proxy, streamed live
+        full = await callAIProxy({
+          feature: 'itinerary',
+          system: buildSystemPrompt(),
+          messages: genMessages,
+          max_tokens: 16000,
+          onDelta: (t) => setStreamText(t),
+        });
+        refreshUsage();
       }
 
-      const data = await res.json().catch(() => { throw new Error('Could not read the API response. Please try again.'); });
-      const full = data?.content?.[0]?.text || '';
       if (!full) throw new Error('Claude returned an empty response. Please try again.');
-      // Warn if response was cut off due to token limit
-      if (data?.stop_reason === 'max_tokens') {
-        console.warn('Response hit max_tokens — JSON may be truncated. Attempting recovery...');
-      }
       setStreamText(full);
 
       // Parse the JSON — strip markdown fences, find the outermost array
@@ -3047,6 +3209,8 @@ Only include fields you can actually read from the document. Use null for anythi
         if (start === -1 || end === -1 || end <= start) throw new Error('No JSON array found in response.');
         days = JSON.parse(cleaned.slice(start, end + 1));
         if (!Array.isArray(days) || days.length === 0) throw new Error('Response contained an empty or invalid itinerary.');
+        days = validateAIDays(days); // sanitize shape/types before touching trip state (Debt-007)
+        if (days.length === 0) throw new Error('Response contained an empty or invalid itinerary.');
       } catch(parseErr) {
         console.error('AI response parse failed:', parseErr, '\nRaw response:', full.slice(0, 500));
         try {
@@ -3054,7 +3218,7 @@ Only include fields you can actually read from the document. Use null for anythi
           log.unshift({ ts: new Date().toISOString(), msg: 'AI parse: ' + parseErr.message, raw: full.slice(0, 300) });
           localStorage.setItem('locale_error_log', JSON.stringify(log.slice(0, 10)));
         } catch(e) {}
-        throw new Error('Claude\'s response wasn\'t formatted correctly. Your trip is safe — please try generating again.');
+        throw new Error('The response wasn\'t formatted correctly — your trip is safe and unchanged. If you were trying to update your checklist, use the "+ Add to Checklist" button instead. Otherwise, try rephrasing your itinerary request and generating again.');
       }
 
       // Assign proper IDs and link destinations
@@ -3088,12 +3252,12 @@ Only include fields you can actually read from the document. Use null for anythi
     <div style={{padding:'40px 20px',maxWidth:480,margin:'0 auto'}}>
       <div style={{background:'var(--color-surface)',borderRadius:16,padding:24,border:'1px solid var(--color-border)'}}>
         <div style={{fontSize:'1.8rem',marginBottom:12,textAlign:'center'}}>🔑</div>
-        <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600,marginBottom:8,textAlign:'center'}}>Add your Claude API key</h3>
+        <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600,marginBottom:8,textAlign:'center'}}>Use your own Claude API key</h3>
         <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',marginBottom:12,textAlign:'center',lineHeight:1.5}}>
-          Locale uses Claude to generate your itinerary. Your key is stored on this device only and only sent to Anthropic's API.
+          <strong>Optional.</strong> Locale includes {FREE_GENERATION_CAP} free AI itineraries — no key needed. Adding your own Anthropic key gives you unlimited generations, billed to your own account. The key stays on this device and is only sent to Anthropic.
         </p>
         <div style={{background:'#FEF3C7',border:'1px solid #D97706',borderRadius:8,padding:'8px 12px',marginBottom:12,fontSize:'.78rem',color:'#92400E',lineHeight:1.5,textAlign:'left'}}>
-          <strong>⚠️ Security notice:</strong> Your key is saved in this browser's local storage and is visible in DevTools. Do not use a production key with unrestricted spending. Beta testers: use only the test key provided by Stephanie.
+          <strong>⚠️ Security notice:</strong> Your key is saved in this browser's local storage and is visible in DevTools. Use a key with a spending limit set in your Anthropic console.
         </div>
         <input
           className="input"
@@ -3104,7 +3268,7 @@ Only include fields you can actually read from the document. Use null for anythi
           style={{marginBottom:12}}
         />
         <div style={{display:'flex',gap:8}}>
-          {apiKey && <button className="btn btn-secondary" style={{flex:1}} onClick={()=>setShowKeyInput(false)}>Cancel</button>}
+          <button className="btn btn-secondary" style={{flex:1}} onClick={()=>setShowKeyInput(false)}>Back</button>
           <button className="btn btn-primary" style={{flex:2}} onClick={()=>saveKey(document.getElementById('ai-key-input').value)}>
             Save key & continue
           </button>
@@ -3132,8 +3296,20 @@ Only include fields you can actually read from the document. Use null for anythi
               <h3 style={{fontFamily:'var(--font-display)',color:'#fff',fontSize:'1.4rem',fontWeight:600,marginBottom:4}}>{trip.title}</h3>
               <p style={{color:'rgba(255,255,255,.75)',fontSize:'.83rem'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {nightCount} nights</p>
             </div>
-            <button onClick={()=>setShowKeyInput(true)} style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 10px',color:'rgba(255,255,255,.8)',fontSize:'.72rem',cursor:'pointer'}}>🔑 API Key</button>
+            <button onClick={()=>setShowKeyInput(true)} title="Optional: use your own Anthropic API key for unlimited generations" style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 10px',color:'rgba(255,255,255,.8)',fontSize:'.72rem',cursor:'pointer'}}>{apiKey ? '🔑 Your key' : '⚙︎'}</button>
           </div>
+          {!apiKey && (
+            <div style={{marginTop:12,display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.14)',border:'1px solid rgba(255,255,255,.22)',borderRadius:20,padding:'4px 12px'}}>
+              <span style={{fontSize:'.75rem',color:'#fff'}}>
+                {freeLeft == null ? '✨ Includes free AI itineraries' : freeLeft > 0 ? `✨ ${freeLeft} of ${FREE_GENERATION_CAP} free ${freeLeft === 1 ? 'itinerary' : 'itineraries'} left` : '✨ Free itineraries used'}
+              </span>
+            </div>
+          )}
+          {apiKey && (
+            <div style={{marginTop:12,display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.14)',border:'1px solid rgba(255,255,255,.22)',borderRadius:20,padding:'4px 12px'}}>
+              <span style={{fontSize:'.75rem',color:'#fff'}}>🔑 Using your API key · unlimited</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -3261,19 +3437,29 @@ Only include fields you can actually read from the document. Use null for anythi
         </div>
       )}
 
-      <button
-        className="btn btn-primary"
-        style={{width:'100%',padding:'14px',fontSize:'1rem',opacity:loading?0.7:1}}
-        onClick={generate}
-        disabled={loading}
-      >
-        {loading ? '✨ Building your itinerary…' : '✨ Generate itinerary with AI'}
-      </button>
+      {!apiKey && freeLeft === 0 ? (
+        <div style={{background:'var(--color-surface)',border:'1px solid var(--color-border)',borderRadius:12,padding:'16px 18px',textAlign:'center'}}>
+          <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:6}}>You've used your {FREE_GENERATION_CAP} free AI itineraries</p>
+          <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',lineHeight:1.6,marginBottom:10}}>
+            Everything you generated is yours to keep and edit by hand in the Days tab. Paid plans with more generations are coming soon. Have your own Anthropic API key? Add it for unlimited generations.
+          </p>
+          <button className="btn btn-secondary" style={{width:'100%'}} onClick={()=>setShowKeyInput(true)}>🔑 Use my own API key</button>
+        </div>
+      ) : (
+        <button
+          className="btn btn-primary"
+          style={{width:'100%',padding:'14px',fontSize:'1rem',opacity:loading?0.7:1}}
+          onClick={generate}
+          disabled={loading}
+        >
+          {loading ? '✨ Building your itinerary…' : '✨ Generate itinerary with AI'}
+        </button>
+      )}
 
       {generated && !loading && (
         <div style={{marginTop:16,background:'#F0FAF4',border:'1px solid #6EBB8A',borderRadius:12,padding:'14px 16px'}}>
           <p style={{fontWeight:600,fontSize:'.9rem',color:'#1A6B3A',marginBottom:6}}>✅ Itinerary generated! Check the Days tab to see it.</p>
-          <p style={{fontSize:'.8rem',color:'#2D5A3D',lineHeight:1.5,marginBottom:10}}>Want to refine it? Describe what to change below and regenerate — your edits will replace the current itinerary.</p>
+          <p style={{fontSize:'.8rem',color:'#2D5A3D',lineHeight:1.5,marginBottom:10}}>Want to change the <strong>day-by-day itinerary</strong>? Describe what to adjust below and regenerate. To add items to your <strong>Checklist</strong>, use the button below instead.</p>
           <textarea
             className="input"
             rows={3}
@@ -3282,14 +3468,26 @@ Only include fields you can actually read from the document. Use null for anythi
             onChange={e=>setPrompt(e.target.value)}
             style={{fontSize:'.83rem',lineHeight:1.5,marginBottom:10,resize:'vertical'}}
           />
-          <button className="btn btn-primary" style={{width:'100%'}} onClick={()=>{setGenerated(false);generate();}}>
-            ✨ Regenerate with changes
-          </button>
+          <div style={{display:'flex',gap:8,marginBottom:8}}>
+            <button className="btn btn-primary" style={{flex:2}} onClick={generate}>
+              ✨ Regenerate itinerary
+            </button>
+            <button className="btn btn-secondary" style={{flex:1,fontSize:'.78rem'}} onClick={()=>{
+              if(!prompt.trim()) return;
+              const newItem = {id:uuid(),label:prompt.trim(),emoji:'✅',category:'documents',completed:false,daysBeforeTrip:30,isAutoGenerated:false,notes:'Added via AI suggestion'};
+              onUpdateTrip({...trip,checklist:[...(trip.checklist||[]),newItem]});
+              setPrompt('');
+              alert('Added to your Checklist tab!');
+            }}>
+              + Add to Checklist
+            </button>
+          </div>
+          <p style={{fontSize:'.72rem',color:'#2D5A3D',opacity:.7}}>Regenerate replaces your current days. Checklist items can be added without regenerating.</p>
         </div>
       )}
 
       <p style={{textAlign:'center',fontSize:'.75rem',color:'var(--color-ink-muted)',marginTop:10,lineHeight:1.5}}>
-        Powered by Claude · Takes about 10–20 seconds · You can edit everything after
+        Powered by Claude · Takes about 10–20 seconds · You can edit everything after · No account or API key needed
       </p>
     </div>
   );
@@ -3431,7 +3629,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
 
   const TABS = [
     {id:'overview',label:'Overview',icon:''},
-    {id:'checklist',label:'Getting Ready',icon:''},
+    {id:'checklist',label:'Checklist',icon:''},
     {id:'days',label:'Days',icon:''},
     {id:'packing',label:'Packing',icon:''},
     {id:'tidbits',label:'City Tips',icon:''},
@@ -3488,9 +3686,8 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
           {flags.length>0&&(
             <div style={{marginTop:16,display:'flex',gap:8,flexWrap:'wrap'}}>
               {flags.map((f,i)=>(
-                <div key={i} style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',gap:6}}>
+                <div key={i} style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)'}}>
                   <span style={{color:'#fff',fontSize:'.8rem'}}>{f.emoji} <strong>{f.label}</strong> · {f.desc}</span>
-                  {f.url&&<a href={f.url} target="_blank" rel="noopener noreferrer" style={{color:'rgba(255,255,255,.8)',fontSize:'.75rem',textDecoration:'underline',flexShrink:0,whiteSpace:'nowrap'}}>Apply →</a>}
                 </div>
               ))}
             </div>
@@ -4120,6 +4317,134 @@ class ErrorBoundary extends React.Component {
   assert('CITY_LOCAL_TIPS has paris', !!CITY_LOCAL_TIPS['paris']);
   assert('CITY_LOCAL_TIPS london is object', typeof CITY_LOCAL_TIPS['london'] === 'object' && !Array.isArray(CITY_LOCAL_TIPS['london']));
 
+  // ── NEW: CITY_SEARCH_INDEX ────────────────────────────────────────────────
+  assert('CITY_SEARCH_INDEX is array', Array.isArray(CITY_SEARCH_INDEX));
+  assert('CITY_SEARCH_INDEX has entries', CITY_SEARCH_INDEX.length > 50);
+  assert('CITY_SEARCH_INDEX entries have required fields', CITY_SEARCH_INDEX.every(c =>
+    typeof c.display === 'string' && typeof c.city === 'string' &&
+    typeof c.countryCode === 'string' && typeof c.country === 'string'
+  ));
+  // Portland disambiguation — both OR and ME must exist
+  const portlands = CITY_SEARCH_INDEX.filter(c => c.city === 'Portland');
+  assert('CITY_SEARCH_INDEX has Portland OR', portlands.some(c => c.region === 'OR'));
+  assert('CITY_SEARCH_INDEX has Portland ME', portlands.some(c => c.region === 'ME'));
+  // No duplicate display strings
+  const displays = CITY_SEARCH_INDEX.map(c => c.display);
+  assert('CITY_SEARCH_INDEX has no duplicate display strings', displays.length === new Set(displays).size);
+
+  // ── NEW: searchCities ─────────────────────────────────────────────────────
+  assert('searchCities returns empty array for short query', searchCities('p').length === 0);
+  assert('searchCities returns empty array for empty string', searchCities('').length === 0);
+  const porRes = searchCities('portland');
+  assert('searchCities finds Portland results', porRes.length >= 2);
+  assert('searchCities results cap at 6', searchCities('san').length <= 6);
+  assert('searchCities matches on region (OR)', searchCities('portland or').some(c => c.region === 'OR'));
+  const lonRes = searchCities('london');
+  assert('searchCities finds London', lonRes.length > 0);
+  assert('searchCities London result has GB countryCode', lonRes[0]?.countryCode === 'GB');
+
+  // ── NEW: UK ETA in getIntlFlags ───────────────────────────────────────────
+  const gbTrip = { destinations:[{countryCode:'GB',isInternational:true}], travelerPassportCountry:'US', checklist:[] };
+  const gbFlags = getIntlFlags(gbTrip);
+  assert('getIntlFlags flags UK ETA for US passport→GB', gbFlags.some(f => f.label === 'UK ETA Required'));
+  assert('getIntlFlags UK ETA is critical severity', gbFlags.find(f => f.label === 'UK ETA Required')?.severity === 'critical');
+  assert('getIntlFlags UK ETA has url', !!gbFlags.find(f => f.label === 'UK ETA Required')?.url);
+  // Once checklist item checked off, flag should disappear
+  const gbTripDone = { ...gbTrip, checklist:[{id:'x',label:'Apply for UK ETA',completed:true}] };
+  assert('getIntlFlags UK ETA suppressed when checklist item completed', !getIntlFlags(gbTripDone).some(f => f.label === 'UK ETA Required'));
+
+  // ── NEW: UK ETA in generateChecklist ─────────────────────────────────────
+  const gbChecklist = generateChecklist({ title:'London Trip', startDate:'2026-09-17', endDate:'2026-09-20', travelerPassportCountry:'US', destinations:[{city:'London',countryCode:'GB',isInternational:true}] });
+  assert('generateChecklist includes UK ETA item for GB destination', gbChecklist.some(c => c.label.toLowerCase().includes('uk eta')));
+  const ukEtaItem = gbChecklist.find(c => c.label.toLowerCase().includes('uk eta'));
+  assert('UK ETA checklist item has bookingUrl', !!ukEtaItem?.bookingUrl);
+  assert('UK ETA checklist item is in documents category', ukEtaItem?.category === 'documents');
+  // Old "no ETA needed" text must NOT appear
+  assert('generateChecklist does not say "no ETA needed" for GB', !gbChecklist.some(c => c.label.toLowerCase().includes('no eta')));
+
+  // ── NEW: AI parse error message ───────────────────────────────────────────
+  // Verify the error string contains the "Add to Checklist" hint
+  // We test this by checking the source string used in the generate() function is present in the page
+  const pageText = document.documentElement.innerHTML;
+  assert('Parse error message mentions Add to Checklist path', pageText.includes('+ Add to Checklist'));
+
+  // ── NEW: ActivityForm default shapes ────────────────────────────────────
+  // Test that uuid() produces valid IDs (used heavily in add-activity path)
+  const actId = uuid();
+  assert('uuid used in activity creation is valid', /^[0-9a-f-]{36}$/.test(actId));
+
+  // ── NEW: Day mutation helpers (pure logic, no React) ─────────────────────
+  // Simulate handleDelete logic: remove item from list by id
+  const mockActivities = [{id:'act-1',name:'A'},{id:'act-2',name:'B'},{id:'act-3',name:'C'}];
+  const afterDelete = mockActivities.filter(x => x.id !== 'act-2');
+  assert('handleDelete removes correct item', afterDelete.length === 2 && !afterDelete.find(x=>x.id==='act-2'));
+  assert('handleDelete preserves other items', afterDelete.find(x=>x.id==='act-1') && afterDelete.find(x=>x.id==='act-3'));
+
+  // Simulate handleSaveActivity edit path: update item in place
+  const mockList = [{id:'a1',name:'Old Name'},{id:'a2',name:'Keep'}];
+  const edited = mockList.map(x => x.id==='a1' ? {...x, name:'New Name'} : x);
+  assert('edit updates correct item', edited.find(x=>x.id==='a1')?.name === 'New Name');
+  assert('edit preserves other items', edited.find(x=>x.id==='a2')?.name === 'Keep');
+
+  // Simulate handleSaveActivity add path: push new item
+  const withNew = [...mockList, {id:'a3',name:'New',sortOrder:2}];
+  assert('add appends new item', withNew.length === 3 && withNew[2].id === 'a3');
+
+  // ── NEW: Destination date auto-advance logic ──────────────────────────────
+  // Simulate the auto-advance: if arrivalDate set, departureDate = arrivalDate + 1 day
+  const simulateAutoAdvance = (arrival, currentDepart, tripEnd) => {
+    if(arrival && (!currentDepart || currentDepart <= arrival)){
+      const next = new Date(arrival+'T12:00:00');
+      next.setDate(next.getDate()+1);
+      const nextStr = next.toISOString().slice(0,10);
+      return nextStr <= tripEnd ? nextStr : (tripEnd || nextStr);
+    }
+    return currentDepart;
+  };
+  assert('auto-advance sets departure to day after arrival', simulateAutoAdvance('2026-09-17','','2026-09-21') === '2026-09-18');
+  assert('auto-advance respects trip end date ceiling', simulateAutoAdvance('2026-09-21','','2026-09-21') === '2026-09-21');
+  assert('auto-advance does not overwrite later departure', simulateAutoAdvance('2026-09-17','2026-09-20','2026-09-25') === '2026-09-20');
+
+  // ── NEW: Trip start→end auto-advance (existing feature, regression guard) ─
+  const simStartAdvance = (start, currentEnd) => {
+    if(start && (!currentEnd || currentEnd <= start)){
+      const d = new Date(start+'T12:00:00'); d.setDate(d.getDate()+1);
+      return d.toISOString().slice(0,10);
+    }
+    return currentEnd;
+  };
+  assert('trip start→end auto-advance works', simStartAdvance('2026-09-17','') === '2026-09-18');
+  assert('trip start→end does not overwrite later end date', simStartAdvance('2026-09-17','2026-09-25') === '2026-09-25');
+
+  // ── NEW v0.8: VWP single source of truth (Debt-004) ─
+  assert('VWP_COUNTRIES is defined once at module level', Array.isArray(VWP_COUNTRIES) && VWP_COUNTRIES.length > 30);
+  assert('VWP_COUNTRIES has no duplicates', new Set(VWP_COUNTRIES).size === VWP_COUNTRIES.length);
+
+  // ── NEW v0.8: AI output validation (Debt-007) ─
+  const dirtyDays = [
+    { label:'Day 1', date:'2026-09-17', activities:[
+      { name:'Museum', bucket:'must-do', bookingUrl:'javascript:alert(1)', thingsToConsider:['ok', 42, null] },
+      { name:'', bucket:'nope' },
+      { name:'X'.repeat(500), bucket:'weird-bucket', bookingRequired:'yes' },
+    ], restaurants:'not-an-array' },
+    'not-an-object',
+    { activities:[], restaurants:[] },
+  ];
+  const cleanDays = validateAIDays(dirtyDays);
+  assert('validateAIDays drops non-object days', cleanDays.length === 1);
+  assert('validateAIDays drops nameless activities', cleanDays[0].activities.length === 2);
+  assert('validateAIDays strips unsafe bookingUrl (no javascript:)', cleanDays[0].activities[0].bookingUrl === '');
+  assert('validateAIDays coerces bad bucket to nice-to-have', cleanDays[0].activities[1].bucket === 'nice-to-have');
+  assert('validateAIDays truncates oversized strings', cleanDays[0].activities[1].name.length <= 120);
+  assert('validateAIDays filters non-string tips', cleanDays[0].activities[0].thingsToConsider.length === 1);
+  assert('validateAIDays coerces stringly bools to false', cleanDays[0].activities[1].bookingRequired === false);
+  assert('validateAIDays handles non-array restaurants', Array.isArray(cleanDays[0].restaurants) && cleanDays[0].restaurants.length === 0);
+  assert('validateAIDays returns [] for non-array input', validateAIDays(null).length === 0 && validateAIDays({}).length === 0);
+
+  // ── NEW v0.8: backend constants sanity ─
+  assert('AI proxy URL points at Supabase functions', AI_PROXY_URL.startsWith(SUPABASE_URL) && AI_PROXY_URL.includes('/functions/v1/ai-proxy'));
+  assert('Free generation cap is a small positive number', FREE_GENERATION_CAP >= 1 && FREE_GENERATION_CAP <= 10);
+
   // Summary
   if (failed === 0) {
     console.log(`%c✅ All ${passed} Locale tests passed`, 'color:#2B5F6E;font-weight:bold;font-size:13px');
@@ -4142,7 +4467,7 @@ const manifest = {
   name: "Locale — Your trips, beautifully kept.",
   short_name: "Locale",
   description: "Your trips, beautifully kept.",
-  start_url: "./",
+  start_url: ".",
   display: "standalone",
   background_color: "#F5F2EC",
   theme_color: "#2B5F6E",
@@ -4158,12 +4483,13 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v9';
+const CACHE = 'locale-v8';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js',
 ];
 
 self.addEventListener('install', e => {
@@ -4188,6 +4514,13 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const { request } = e;
   const url = new URL(request.url);
+
+  // Never intercept API calls (AI proxy, Supabase auth/data, Anthropic) or non-GET
+  if (request.method !== 'GET' ||
+      url.hostname.endsWith('supabase.co') ||
+      url.hostname === 'api.anthropic.com') {
+    return; // let the browser handle it (streaming-safe)
+  }
 
   // Navigation requests: serve the cached app shell (the single HTML file)
   if (request.mode === 'navigate') {

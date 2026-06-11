@@ -106,7 +106,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-eyebrow">Focus Group Brief · Beta v0.7</div>
+  <div class="hero-eyebrow">Focus Group Brief · Beta v0.8</div>
   <div class="hero-title">Locale</div>
   <div class="hero-sub">Your trips, beautifully kept. — A POC brief for focus group testers.</div>
   <div class="hero-pills">
@@ -246,7 +246,7 @@
 
 <!-- FEATURES LIVE -->
 <div class="section" id="features">
-  <div class="section-eyebrow">Beta v0.7 — What's live today</div>
+  <div class="section-eyebrow">Beta v0.8 — What's live today</div>
   <div class="section-title">Features available to test</div>
 
   <p>Everything below is live in the current build. This is what you're being asked to evaluate.</p>
@@ -259,8 +259,8 @@
     </div>
     <div class="card">
       <div class="card-title">🤖 AI itinerary generator</div>
-      <div class="card-desc">Describe what you want to do — activities, food, vibe — and Claude generates a day-by-day plan with venues, addresses, and booking flags.</div>
-      <span class="card-tag tag-live">Live</span>
+      <div class="card-desc">Describe what you want to do — activities, food, vibe — and Claude generates a day-by-day plan with venues, addresses, and booking flags. No API key or account needed: every user gets 2 free AI itineraries, streamed live as they generate.</div>
+      <span class="card-tag tag-live">Live · v0.8</span>
     </div>
     <div class="card">
       <div class="card-title">✅ Smart checklist</div>
@@ -336,6 +336,34 @@
   <div class="section-title">What's being worked on</div>
 
   <p>This is an honest view of what's broken, what's coming, and what's planned for later phases. Fixed items are marked — see <strong>Release Notes</strong> for the full history.</p>
+
+  <div class="divider"></div>
+  <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:12px">✅ New in v0.8 — June 11, 2026</p>
+
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">AI features required testers to enter an API key (the #1 friction point)</div>
+      <div class="backlog-desc">Fixed — AI now works out of the box with no key, no account, no signup. A secure server-side proxy (Supabase Edge Function) holds the key; each user gets 2 free AI itineraries and 10 free confirmation scans, shown in a meter in the AI planner. Power users can still add their own key for unlimited generations. This also removes the key-in-localStorage security risk flagged in the handoff doc.</div>
+      <span class="card-tag tag-fixed">Fixed v0.8</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">Itinerary generation showed a blank wait of up to 20 seconds</div>
+      <div class="backlog-desc">Added — token streaming. The itinerary now streams into a live preview panel as Claude writes it, so testers see progress immediately.</div>
+      <span class="card-tag tag-fixed">Fixed v0.8</span>
+    </div>
+  </div>
+  <div class="backlog-item" style="opacity:.55">
+    <div class="backlog-num" style="background:#1A6B3A">✓</div>
+    <div class="backlog-body">
+      <div class="backlog-title" style="text-decoration:line-through">AI responses were inserted into trip data without validation; abuse could run up costs</div>
+      <div class="backlog-desc">Added — every AI-generated day/activity/restaurant is now schema-validated and sanitized before saving (unsafe URLs stripped, types coerced, lengths capped). Server-side: per-user rate limits (6/hour), free-tier caps, a global monthly spend kill switch, and a full audit log of every AI request. Also fixed: duplicated visa-waiver country list unified (the two copies had drifted apart), service worker no longer interferes with API calls, and a design polish pass (focus rings, press states, reduced-motion support).</div>
+      <span class="card-tag tag-fixed">Fixed v0.8</span>
+    </div>
+  </div>
 
   <div class="divider"></div>
   <p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1A6B3A;margin-bottom:12px">✅ New in v0.7 — June 7, 2026</p>
@@ -596,7 +624,7 @@
     <div class="backlog-num">1</div>
     <div class="backlog-body">
       <div class="backlog-title">Role-aware onboarding</div>
-      <div class="backlog-desc">Separate flows for trip Creators (need API key) vs. Viewers (receiving a shared trip, should never see the API key prompt).</div>
+      <div class="backlog-desc">Separate flows for trip Creators vs. Viewers (receiving a shared trip). Largely resolved by v0.8 — no one sees an API key prompt anymore; remaining work is a tailored first-run experience per role.</div>
     </div>
   </div>
   <div class="backlog-item">
