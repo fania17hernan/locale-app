@@ -848,8 +848,8 @@ const CITY_LOCAL_TIPS={
 };
 
 // ── APP VERSION & FEATURE FLAGS ────────────────────────────────────────────────
-const APP_VERSION = '0.8';
-const SCHEMA_VERSION = 3; // increment when trip data shape changes
+const APP_VERSION = '0.9';
+const SCHEMA_VERSION = 4; // increment when trip data shape changes (v4: planningStage + ideation)
 
 // Feature flags — set to false to disable a feature for all users without a deploy
 const FLAGS = {
@@ -966,6 +966,50 @@ function validateAIDays(days){
       notes:str(r?.notes,300), thingsToConsider:tips(r?.thingsToConsider),
     })).filter(r=>r.name),
   })).filter(d=>d.activities.length||d.restaurants.length||d.label);
+}
+
+// ── TASTE PROFILE — captured once, flavors every AI call ──────────────────────
+const PROFILE_SK = 'locale_profile_v1';
+function getTasteProfile(){try{const p=JSON.parse(localStorage.getItem(PROFILE_SK));return p&&typeof p==='object'?p:null;}catch(e){return null;}}
+function setTasteProfile(p){try{localStorage.setItem(PROFILE_SK,JSON.stringify(p));}catch(e){}}
+function profilePromptText(p){
+  if(!p) return '';
+  const bits=[];
+  if(p.style) bits.push('Travel style: '+p.style);
+  if(p.pace) bits.push('Pace: '+p.pace);
+  if(Array.isArray(p.interests)&&p.interests.length) bits.push('Interests: '+p.interests.join(', '));
+  if(p.notes) bits.push('In their own words: "'+String(p.notes).slice(0,300)+'"');
+  if(!bits.length) return '';
+  return '\nTRAVELER PROFILE — tailor every suggestion to this person:\n- '+bits.join('\n- ')+'\n';
+}
+
+// ── IDEATION OUTPUT VALIDATION (mirror of validateAIDays for ideate mode) ─────
+function validateIdeation(o){
+  if(!o||typeof o!=='object'||Array.isArray(o)) return null;
+  const str=(v,max=400)=>typeof v==='string'?v.slice(0,max):'';
+  const list=(v,map)=>Array.isArray(v)?v.slice(0,8).map(map).filter(x=>x&&(x.name||x.length)):[];
+  const out={
+    destination_summary:str(o.destination_summary,600),
+    best_time:{when:str(o.best_time?.when,120),why:str(o.best_time?.why,400)},
+    neighborhoods:list(o.neighborhoods,n=>({name:str(n?.name,80),why:str(n?.why,300),stay_here_if:str(n?.stay_here_if,200)})),
+    day_trips:list(o.day_trips,d=>({name:str(d?.name,80),why:str(d?.why,300)})),
+    tips:Array.isArray(o.tips)?o.tips.slice(0,8).map(t=>str(t,250)).filter(Boolean):[],
+  };
+  return (out.destination_summary||out.neighborhoods.length)?out:null;
+}
+
+// ── DAY ROUTE — Google Maps waypoint link (no API key, no cost) ───────────────
+function buildDayRouteUrl(trip, day){
+  const lodging=(trip.lodging||[])[0];
+  const cityFallback=(trip.destinations||[]).find(d=>d.id===day.destinationId)?.city||(trip.destinations||[])[0]?.city||'';
+  const stopAddr=(s)=>(s.address&&s.address.trim())?s.address:(s.name?s.name+(cityFallback?', '+cityFallback:''):'');
+  const stops=[...(day.activities||[]),...(day.restaurants||[])]
+    .sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0))
+    .map(stopAddr).filter(Boolean).slice(0,8); // Maps caps ~10 waypoints
+  if(!stops.length) return null;
+  const anchor=lodging&&lodging.address?lodging.address:(lodging&&lodging.name?lodging.name+(cityFallback?', '+cityFallback:''):null);
+  const chain=anchor?[anchor,...stops,anchor]:stops;
+  return 'https://www.google.com/maps/dir/'+chain.map(s=>encodeURIComponent(s)).join('/');
 }
 
 // ── VWP — single source of truth (fixes Debt-004: was duplicated & diverging) ──
@@ -1328,6 +1372,9 @@ function normalizeTrip(t){
   const packingList = (Array.isArray(t.packingList) && t.packingList.length > 0) ? t.packingList : null;
   const lodging = t.lodging || [];
   const flights = t.flights || [];
+  // v3→v4 (additive, v0.9): planningStage ('idea'|'booked') + ideation results
+  const planningStage = t.planningStage === 'idea' ? 'idea' : 'booked';
+  const ideation = t.ideation ?? null;
 
   return {
     ...t,
@@ -1336,6 +1383,7 @@ function normalizeTrip(t){
     collaborators, checklist,
     destinations, days,
     packingList, lodging, flights,
+    planningStage, ideation,
   };
 }
 const MOCK_TRIPS=RAW_MOCK_TRIPS.map(t=>normalizeTrip(t));
@@ -2116,12 +2164,104 @@ function ActivityForm({initial,type,onSave,onCancel}){
 }
 
 // ── DAY VIEW ───────────────────────────────────────────────────────────────────
+// ── DAY ROUTE MAP — Leaflet (lazy CDN) + OSM Nominatim geocoding, all free ────
+const GEO_SK='locale_geo_v1';
+function geoCache(){try{return JSON.parse(localStorage.getItem(GEO_SK))||{};}catch(e){return{};}}
+function geoCacheSet(k,v){try{const c=geoCache();c[k]=v;localStorage.setItem(GEO_SK,JSON.stringify(c));}catch(e){}}
+let _leafletLoading=null;
+function loadLeaflet(){
+  if(window.L) return Promise.resolve();
+  if(_leafletLoading) return _leafletLoading;
+  _leafletLoading=new Promise((resolve,reject)=>{
+    const css=document.createElement('link');css.rel='stylesheet';
+    css.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+    document.head.appendChild(css);
+    const js=document.createElement('script');
+    js.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    js.onload=resolve; js.onerror=()=>reject(new Error('Map library failed to load.'));
+    document.head.appendChild(js);
+  });
+  return _leafletLoading;
+}
+async function geocodeStop(query){
+  const key=query.toLowerCase().trim();
+  const cached=geoCache()[key];
+  if(cached!==undefined) return cached; // null = known miss, don't re-ask
+  try{
+    const res=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(query));
+    if(!res.ok) return null;
+    const data=await res.json();
+    const hit=data?.[0]?{lat:parseFloat(data[0].lat),lon:parseFloat(data[0].lon)}:null;
+    geoCacheSet(key,hit);
+    return hit;
+  }catch(e){return null;}
+}
+function dayStopsForRoute(trip,day){
+  const lodging=(trip.lodging||[])[0];
+  const city=(trip.destinations||[]).find(d=>d.id===day.destinationId)?.city||(trip.destinations||[])[0]?.city||'';
+  const addr=(s)=>(s.address&&s.address.trim())?s.address:(s.name?s.name+(city?', '+city:''):'');
+  const stops=[...(day.activities||[]),...(day.restaurants||[])]
+    .sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0))
+    .map(s=>({label:s.name,query:addr(s)})).filter(s=>s.query);
+  if(lodging&&(lodging.address||lodging.name)) stops.unshift({label:'🏨 '+(lodging.name||'Hotel'),query:lodging.address||lodging.name+(city?', '+city:'')});
+  return stops.slice(0,10);
+}
+function DayRouteMap({trip,day}){
+  const mapRef=React.useRef(null);
+  const mapObj=React.useRef(null);
+  const [status,setStatus]=React.useState('loading'); // loading | ready | empty | error
+  const [progress,setProgress]=React.useState('');
+  React.useEffect(()=>{
+    let cancelled=false;
+    (async()=>{
+      try{
+        await loadLeaflet();
+        const stops=dayStopsForRoute(trip,day);
+        if(!stops.length){setStatus('empty');return;}
+        const points=[];
+        for(let i=0;i<stops.length;i++){
+          if(cancelled)return;
+          setProgress(`Locating ${i+1} of ${stops.length}…`);
+          const isCached=geoCache()[stops[i].query.toLowerCase().trim()]!==undefined;
+          const pt=await geocodeStop(stops[i].query);
+          if(pt)points.push({...pt,label:stops[i].label});
+          if(!isCached&&i<stops.length-1)await new Promise(r=>setTimeout(r,1100)); // Nominatim: max 1 req/sec
+        }
+        if(cancelled)return;
+        if(points.length<1){setStatus('empty');return;}
+        const L=window.L;
+        if(mapObj.current){mapObj.current.remove();mapObj.current=null;}
+        const m=L.map(mapRef.current,{scrollWheelZoom:false});
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(m);
+        points.forEach((p,i)=>{
+          L.marker([p.lat,p.lon]).addTo(m).bindPopup(`<strong>${i+1}.</strong> ${p.label.replace(/</g,'&lt;')}`);
+        });
+        if(points.length>1) L.polyline(points.map(p=>[p.lat,p.lon]),{color:'#2B5F6E',weight:3,opacity:.75,dashArray:'6 8'}).addTo(m);
+        m.fitBounds(points.map(p=>[p.lat,p.lon]),{padding:[28,28]});
+        mapObj.current=m;
+        setStatus('ready');
+      }catch(e){if(!cancelled)setStatus('error');}
+    })();
+    return()=>{cancelled=true;if(mapObj.current){mapObj.current.remove();mapObj.current=null;}};
+  },[day.id]);
+  return(
+    <div style={{marginBottom:16}}>
+      <div ref={mapRef} style={{height:260,borderRadius:12,border:'1px solid var(--color-border)',background:'var(--color-cream-dark)',display:status==='ready'?'block':'none'}}/>
+      {status==='loading'&&<div style={{height:120,borderRadius:12,border:'1px solid var(--color-border)',background:'var(--color-surface)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.8rem',color:'var(--color-ink-muted)'}}>🗺 {progress||'Loading map…'}</div>}
+      {status==='empty'&&<div style={{padding:'12px 14px',borderRadius:12,border:'1px solid var(--color-border)',background:'var(--color-surface)',fontSize:'.8rem',color:'var(--color-ink-muted)'}}>Couldn't place this day's stops on the map — addresses may be missing. The Google Maps link below still works.</div>}
+      {status==='error'&&<div style={{padding:'12px 14px',borderRadius:12,border:'1px solid var(--color-border)',background:'var(--color-surface)',fontSize:'.8rem',color:'var(--color-ink-muted)'}}>Map couldn't load. Check your connection, or use the Google Maps link below.</div>}
+      <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)',marginTop:6}}>Route is approximate — venue locations come from AI-suggested addresses. Always double-check before heading out.</p>
+    </div>
+  );
+}
+
 function DayView({trip,day,onUpdateTrip}){
   const [notes,setNotes]=useState(day.notes||'');
   const [filter,setFilter]=useState('all');
   const [copied,setCopied]=useState(false);
   const [addingType,setAddingType]=useState(null); // 'activity'|'restaurant'|null
   const [editingItem,setEditingItem]=useState(null); // {item, type}
+  const [showMap,setShowMap]=useState(false);
   const actsRef=useRef(null);
   const restsRef=useRef(null);
   const dest=trip.destinations.find(d=>d.id===day.destinationId);
@@ -2208,6 +2348,20 @@ function DayView({trip,day,onUpdateTrip}){
           </div>
         </div>
       )}
+      {/* Day route — inline map + Google Maps handoff */}
+      {(()=>{
+        const routeUrl=buildDayRouteUrl(trip,day);
+        if(!routeUrl)return null;
+        return(
+          <div style={{marginBottom:16}}>
+            <div style={{display:'flex',gap:8,marginBottom:showMap?10:0}}>
+              <button className="btn btn-secondary btn-sm" style={{flex:1}} onClick={()=>setShowMap(s=>!s)}>{showMap?'▲ Hide map':'🗺 Map this day'}</button>
+              <a className="btn btn-ghost btn-sm" style={{flex:1,textAlign:'center'}} href={routeUrl} target="_blank" rel="noopener">Open route in Google Maps ↗</a>
+            </div>
+            {showMap&&<DayRouteMap trip={trip} day={day}/>}
+          </div>
+        );
+      })()}
       <div style={{display:'flex',gap:8,marginBottom:16}}>
         {['all','must-do','nice-to-have'].map(f=>(
           <button key={f} className={`pill ${filter===f?'pill-accent':'pill-neutral'}`} style={{cursor:'pointer',border:'none'}} onClick={()=>setFilter(f)}>
@@ -2539,6 +2693,7 @@ function NewTripSheet({onClose, onSave}) {
   const [step, setStep] = React.useState(1);
   const [form, setForm] = React.useState({
     title:'', emoji:'✈️', occasion:'leisure', travelerCount:2, travelerPassportCountry:'US',
+    planningStage:'booked', // 'idea' = still dreaming, 'booked' = flights/lodging confirmed
     startDate:'', endDate:'',
     destinations:[{id:uuid(), city:'', countryCode:'US', arrivalDate:'', departureDate:''}],
     collaborators:[{id:uuid(), name:'Me', avatar:'M', color:AVATAR_COLORS[0]}],
@@ -2557,8 +2712,9 @@ function NewTripSheet({onClose, onSave}) {
   };
   const validate2 = () => {
     const e={};
-    if(!form.startDate) e.startDate='Start date required';
-    if(!form.endDate) e.endDate='End date required';
+    const isIdea = form.planningStage==='idea';
+    if(!isIdea && !form.startDate) e.startDate='Start date required';
+    if(!isIdea && !form.endDate) e.endDate='End date required';
     if(form.startDate&&form.endDate&&form.endDate<form.startDate) e.endDate='End date must be after start date';
     if(form.destinations.some(d=>!d.city.trim())) e.destinations='All destinations need a city';
     setErrors(e);
@@ -2660,6 +2816,23 @@ function NewTripSheet({onClose, onSave}) {
         {step===1 && (
           <div style={{display:'flex',flexDirection:'column',gap:16}}>
             <div>
+              <label className="section-label">Where are you in planning?</label>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                <button type="button" onClick={()=>set('planningStage','idea')}
+                  style={{textAlign:'left',padding:'12px 14px',borderRadius:12,cursor:'pointer',background:form.planningStage==='idea'?'var(--color-accent-soft)':'var(--color-surface)',border:form.planningStage==='idea'?'2px solid var(--color-accent)':'1px solid var(--color-border)'}}>
+                  <div style={{fontSize:'1.2rem',marginBottom:4}}>💭</div>
+                  <div style={{fontWeight:600,fontSize:'.85rem',marginBottom:2}}>Just an idea</div>
+                  <div style={{fontSize:'.72rem',color:'var(--color-ink-light)',lineHeight:1.4}}>Nothing booked yet — get AI help picking neighborhoods, where to stay, and when to go</div>
+                </button>
+                <button type="button" onClick={()=>set('planningStage','booked')}
+                  style={{textAlign:'left',padding:'12px 14px',borderRadius:12,cursor:'pointer',background:form.planningStage==='booked'?'var(--color-accent-soft)':'var(--color-surface)',border:form.planningStage==='booked'?'2px solid var(--color-accent)':'1px solid var(--color-border)'}}>
+                  <div style={{fontSize:'1.2rem',marginBottom:4}}>🎟️</div>
+                  <div style={{fontWeight:600,fontSize:'.85rem',marginBottom:2}}>Flights & lodging booked</div>
+                  <div style={{fontSize:'.72rem',color:'var(--color-ink-light)',lineHeight:1.4}}>Upload your confirmations and plan day-by-day around your real dates and hotel</div>
+                </button>
+              </div>
+            </div>
+            <div>
               <label className="section-label">Trip Name *</label>
               <input className={`input ${errors.title?'input-error':''}`} value={form.title} onChange={e=>set('title',e.target.value)} placeholder="e.g. 🌍 London & Paris 2026"/>
               {errors.title&&<p style={{color:'var(--color-flag)',fontSize:'.75rem',marginTop:4}}>{errors.title}</p>}
@@ -2696,7 +2869,7 @@ function NewTripSheet({onClose, onSave}) {
           <div style={{display:'flex',flexDirection:'column',gap:16}}>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
               <div>
-                <label className="section-label">Start Date *</label>
+                <label className="section-label">{form.planningStage==='idea'?'Start Date (optional for ideas)':'Start Date *'}</label>
                 <input className={`input ${errors.startDate?'input-error':''}`} type="date" value={form.startDate} onChange={e=>{
                   const v=e.target.value;
                   set('startDate',v);
@@ -2709,7 +2882,7 @@ function NewTripSheet({onClose, onSave}) {
                 {errors.startDate&&<p style={{color:'var(--color-flag)',fontSize:'.75rem',marginTop:4}}>{errors.startDate}</p>}
               </div>
               <div>
-                <label className="section-label">End Date *</label>
+                <label className="section-label">{form.planningStage==='idea'?'End Date (optional)':'End Date *'}</label>
                 <input className={`input ${errors.endDate?'input-error':''}`} type="date" value={form.endDate} onChange={e=>set('endDate',e.target.value)} min={form.startDate||undefined}/>
                 {errors.endDate&&<p style={{color:'var(--color-flag)',fontSize:'.75rem',marginTop:4}}>{errors.endDate}</p>}
               </div>
@@ -2915,6 +3088,207 @@ function generateTripPDF(trip) {
   w.document.close();
 }
 
+// ── TASTE PROFILE QUIZ — one-time, flavors every AI call ──────────────────────
+function ProfileQuiz({initial, onDone}) {
+  const [p, setP] = React.useState(initial || {style:'', pace:'', interests:[], notes:''});
+  const toggleInterest = (i) => setP(prev=>({...prev, interests: prev.interests.includes(i) ? prev.interests.filter(x=>x!==i) : [...prev.interests, i]}));
+  const STYLE_OPTS = ['Live like a local', 'Classic must-sees', 'A mix of both'];
+  const PACE_OPTS = ['Packed days', 'Balanced', 'Slow mornings, easy days'];
+  const INTERESTS = ['Food & restaurants','Fashion & boutiques','Art & museums','History','Nightlife','Outdoors','Shopping','Live music','Architecture','Coffee & cafés'];
+  const Chip = ({label, active, onClick}) => (
+    <button type="button" onClick={onClick} className={`pill ${active?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.8rem',padding:'6px 14px'}}>{label}</button>
+  );
+  return (
+    <div style={{padding:'24px 20px',maxWidth:520,margin:'0 auto'}}>
+      <div style={{textAlign:'center',marginBottom:20}}>
+        <div style={{fontSize:'1.8rem',marginBottom:8}}>🧭</div>
+        <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.4rem',fontWeight:600,marginBottom:6}}>How do you like to travel?</h3>
+        <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.5}}>30 seconds, once. Every AI suggestion — neighborhoods, itineraries, packing — gets tailored to you.</p>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:18}}>
+        <div>
+          <label className="section-label">Your style</label>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{STYLE_OPTS.map(s=><Chip key={s} label={s} active={p.style===s} onClick={()=>setP({...p,style:s})}/>)}</div>
+        </div>
+        <div>
+          <label className="section-label">Your pace</label>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{PACE_OPTS.map(s=><Chip key={s} label={s} active={p.pace===s} onClick={()=>setP({...p,pace:s})}/>)}</div>
+        </div>
+        <div>
+          <label className="section-label">What you love (pick any)</label>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{INTERESTS.map(i=><Chip key={i} label={i} active={p.interests.includes(i)} onClick={()=>toggleInterest(i)}/>)}</div>
+        </div>
+        <div>
+          <label className="section-label">Anything else? (optional)</label>
+          <textarea className="input" rows={2} value={p.notes} onChange={e=>setP({...p,notes:e.target.value})}
+            placeholder={'e.g. "We travel with a stroller", "vegetarian", "I always find the best vintage shops"'} style={{resize:'vertical',lineHeight:1.5}}/>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <button className="btn btn-ghost" style={{flex:1}} onClick={()=>onDone(null)}>Skip for now</button>
+          <button className="btn btn-primary" style={{flex:2}} onClick={()=>onDone(p)}>Save my taste →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── AI IDEATION MODE — for trips that are still just an idea ──────────────────
+function IdeationPlanner({trip, onUpdateTrip, apiKey, refreshUsage, freeLeft}) {
+  const [prompt, setPrompt] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [streamText, setStreamText] = React.useState('');
+  const result = trip.ideation || null;
+
+  const buildIdeationPrompt = () => {
+    const profile = profilePromptText(getTasteProfile());
+    return `You are a sharp, honest travel advisor. The traveler is DREAMING about a trip — nothing is booked. Your job: recommend where to stay, when to go, and how to think about this destination, tailored tightly to who they are.
+
+Trip idea:
+- Destination(s): ${trip.destinations.map(d=>`${d.city} (${d.countryCode})`).join(', ')}
+- Occasion: ${trip.occasion} · Travelers: ${trip.travelerCount||2}
+${trip.startDate?`- Tentative dates: ${trip.startDate} to ${trip.endDate}`:'- No dates yet — recommending the best time is part of your job'}
+${profile}
+Return ONLY a valid JSON object — no markdown, no commentary — with this exact shape:
+{
+  "destination_summary": "2-3 sentences on how this destination fits THIS traveler specifically",
+  "best_time": {"when": "e.g. late September to mid October", "why": "weather, crowds, prices, events"},
+  "neighborhoods": [{"name": "", "why": "why it fits this traveler", "stay_here_if": "one sentence"}],
+  "day_trips": [{"name": "", "why": ""}],
+  "tips": ["2-4 practical, traveler-specific tips"]
+}
+Rules: 3-5 neighborhoods ordered best-fit first. 1-3 day trips. Be specific and opinionated — name real neighborhoods and real reasons. If the user's message adds constraints, honor every one of them.`;
+  };
+
+  const ideate = async () => {
+    setLoading(true); setError(''); setStreamText('');
+    try {
+      const messages=[{role:'user',content: prompt.trim() ? 'About this trip: '+prompt : 'Recommend based on my profile and the trip idea above.'}];
+      let full='';
+      if (apiKey) {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+          body: JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:4096,system:buildIdeationPrompt(),messages})
+        });
+        if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err?.error?.message||`API error ${res.status}`);}
+        const data=await res.json(); full=data?.content?.[0]?.text||'';
+      } else {
+        full = await callAIProxy({feature:'ideate',system:buildIdeationPrompt(),messages,max_tokens:4096,onDelta:t=>setStreamText(t)});
+        refreshUsage&&refreshUsage();
+      }
+      const cleaned = full.replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
+      const s=cleaned.indexOf('{'), e=cleaned.lastIndexOf('}');
+      if(s===-1||e<=s) throw new Error('No recommendations found in the response. Try again.');
+      const parsed = validateIdeation(JSON.parse(cleaned.slice(s,e+1)));
+      if(!parsed) throw new Error("The response wasn't formatted correctly — your trip is unchanged. Try again.");
+      onUpdateTrip({...trip, ideation: parsed});
+      setStreamText('');
+    } catch(e){ setError(e.message); }
+    finally{ setLoading(false); }
+  };
+
+  const Card = ({children}) => <div style={{background:'var(--color-surface)',border:'1px solid var(--color-border)',borderRadius:14,padding:'16px 18px',marginBottom:10}}>{children}</div>;
+
+  return (
+    <div style={{padding:'0 0 40px'}}>
+      <div style={{background:'linear-gradient(135deg,#3D2E5C 0%,#5A4A78 100%)',borderRadius:16,padding:'24px 20px',marginBottom:20,position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',top:-20,right:-20,fontSize:'6rem',opacity:.08,transform:'rotate(-15deg)'}}>💭</div>
+        <p style={{color:'rgba(255,255,255,.7)',fontSize:'.75rem',letterSpacing:'.08em',textTransform:'uppercase',marginBottom:4}}>Trip Ideation</p>
+        <h3 style={{fontFamily:'var(--font-display)',color:'#fff',fontSize:'1.4rem',fontWeight:600,marginBottom:4}}>{trip.title}</h3>
+        <p style={{color:'rgba(255,255,255,.75)',fontSize:'.83rem'}}>Where to stay · when to go · tailored to your taste</p>
+        {!apiKey && freeLeft!=null && (
+          <div style={{marginTop:12,display:'inline-flex',background:'rgba(255,255,255,.14)',border:'1px solid rgba(255,255,255,.22)',borderRadius:20,padding:'4px 12px'}}>
+            <span style={{fontSize:'.75rem',color:'#fff'}}>✨ {freeLeft} of {FREE_GENERATION_CAP} free AI generations left</span>
+          </div>
+        )}
+      </div>
+
+      {!result && (
+        <div style={{marginBottom:16}}>
+          <label className="section-label">Tell us about this trip dream (optional)</label>
+          <textarea className="input" rows={4} value={prompt} onChange={e=>setPrompt(e.target.value)}
+            placeholder={'e.g. "I love fashion and food. When I travel I like to live like a local first, then hit the attractions. Budget-ish on hotels, splurge on dinners."'}
+            style={{resize:'vertical',lineHeight:1.6,fontSize:'.875rem',marginBottom:12}}/>
+        </div>
+      )}
+
+      {error && <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:10,padding:'10px 14px',fontSize:'.83rem',color:'#b91c1c',marginBottom:14}}>{error}</div>}
+      {loading && (
+        <div style={{background:'var(--color-surface)',border:'1px solid var(--color-border)',borderRadius:10,padding:'14px 16px',marginBottom:14}}>
+          {(()=>{
+            const found=[...streamText.matchAll(/"name"\s*:\s*"([^"]{1,60})"/g)].map(m=>m[1]);
+            const stage=streamText.includes('"tips"')?'Final tips for you…':streamText.includes('"day_trips"')?'Scouting day trips…':streamText.includes('"neighborhoods"')?'Picking your neighborhoods…':streamText.includes('"best_time"')?'Working out the best time to go…':'Reading your taste profile…';
+            return (
+              <div>
+                <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',marginBottom:8,fontWeight:600,letterSpacing:'.05em',textTransform:'uppercase'}}>💭 Thinking through your trip</p>
+                <p style={{fontSize:'.83rem',color:'var(--color-ink)',marginBottom:found.length?8:0}}>{stage}</p>
+                {found.length>0&&(
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    {found.slice(0,8).map((n,i)=><span key={i} className="pill pill-muted" style={{fontSize:'.72rem'}}>📍 {n}</span>)}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {!result && (
+        <button className="btn btn-primary" style={{width:'100%',padding:'14px',fontSize:'1rem',opacity:loading?0.7:1}} onClick={ideate} disabled={loading}>
+          {loading ? '💭 Dreaming up your trip…' : '💭 Get recommendations'}
+        </button>
+      )}
+
+      {result && (
+        <div>
+          <Card>
+            <p style={{fontSize:'.875rem',lineHeight:1.7,color:'var(--color-ink-light)'}}>{result.destination_summary}</p>
+          </Card>
+          {result.best_time?.when && (
+            <Card>
+              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:6}}>🗓 Best time to go</p>
+              <p style={{fontWeight:600,fontSize:'.95rem',marginBottom:4}}>{result.best_time.when}</p>
+              <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6}}>{result.best_time.why}</p>
+            </Card>
+          )}
+          {result.neighborhoods?.length>0 && (
+            <Card>
+              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:10}}>📍 Where to stay</p>
+              {result.neighborhoods.map((n,i)=>(
+                <div key={i} style={{paddingBottom:10,marginBottom:10,borderBottom:i<result.neighborhoods.length-1?'1px solid var(--color-border)':'none'}}>
+                  <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:3}}>{i+1}. {n.name}</p>
+                  <p style={{fontSize:'.81rem',color:'var(--color-ink-light)',lineHeight:1.55,marginBottom:3}}>{n.why}</p>
+                  {n.stay_here_if&&<p style={{fontSize:'.78rem',color:'var(--color-ink-muted)',fontStyle:'italic'}}>Stay here if: {n.stay_here_if}</p>}
+                </div>
+              ))}
+            </Card>
+          )}
+          {result.day_trips?.length>0 && (
+            <Card>
+              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:8}}>🚆 Worth a day trip</p>
+              {result.day_trips.map((d,i)=>(
+                <p key={i} style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6,marginBottom:4}}><strong>{d.name}</strong> — {d.why}</p>
+              ))}
+            </Card>
+          )}
+          {result.tips?.length>0 && (
+            <Card>
+              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:8}}>💡 For you specifically</p>
+              {result.tips.map((t,i)=><p key={i} style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6,marginBottom:5}}>· {t}</p>)}
+            </Card>
+          )}
+          <div style={{display:'flex',gap:8,marginTop:14}}>
+            <button className="btn btn-secondary" style={{flex:1}} onClick={()=>{onUpdateTrip({...trip,ideation:null});}}>↺ Start over</button>
+            <button className="btn btn-primary" style={{flex:2}} onClick={()=>{onUpdateTrip({...trip,planningStage:'booked'});}}>🎟️ I've booked it — plan my days</button>
+          </div>
+          <p style={{textAlign:'center',fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:10}}>Booking switches this trip to itinerary mode — upload your confirmations there.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── AI ITINERARY PLANNER ───────────────────────────────────────────────────────
 function ItineraryAIPlanner({trip, onUpdateTrip}) {
   const [apiKey, setApiKeyState] = React.useState(getAIKey);
@@ -2937,6 +3311,8 @@ function ItineraryAIPlanner({trip, onUpdateTrip}) {
     return () => { on = false; };
   }, []);
   const freeLeft = usage ? Math.max(0, FREE_GENERATION_CAP - (usage.free_generations_used || 0)) : null;
+  const [profile, setProfileState] = React.useState(getTasteProfile);
+  const [showQuiz, setShowQuiz] = React.useState(()=>!getTasteProfile());
 
   const nightCount = trip.startDate && trip.endDate
     ? Math.round((new Date(trip.endDate) - new Date(trip.startDate)) / 86400000)
@@ -2958,6 +3334,13 @@ Trip context:
 ${lodgingLines ? `- Lodging (MUST include check-in/check-out in itinerary):\n${lodgingLines}` : ''}
 ${flightLines ? `- Flights (MUST include in itinerary with exact times and confirmation numbers):\n${flightLines}` : ''}
 
+${profilePromptText(getTasteProfile())}
+GEOGRAPHY & LOGISTICS RULES (critical for a realistic itinerary):
+1. Cluster each day's activities and restaurants in ONE neighborhood or area — never criss-cross the city in a single day.
+2. Anchor every day to the lodging${(trip.lodging||[]).length?' listed above':''}: breakfast/first stop near it, and the last stop should make for an easy trip back.
+3. Sequence stops in walking/transit order — each stop should be near the previous one (think: hotel → breakfast → boutique → museum → happy hour → dinner → hotel).
+4. Anything more than ~45 minutes away does NOT belong in a day plan. Instead, mention it in that day's "notes" as a possible day trip (e.g. "Consider a day trip to Versailles").
+
 CRITICAL RULES about the user's request:
 1. The user's message contains their NON-NEGOTIABLE activities, restaurants, and plans. You MUST include every specific place, activity, or event they mention — do not skip or replace them.
 2. If they mention a hotel or where they're staying, include hotel check-in on arrival day and check-out on departure day as activities.
@@ -2965,6 +3348,7 @@ CRITICAL RULES about the user's request:
 4. If flights are listed above, include departure flight prep (travel to airport, check-in time) on the appropriate days.
 5. After placing all non-negotiables, fill remaining slots with suggestions that complement their stated plans — same neighborhood, logical geography, similar vibe.
 6. Never replace a user-specified activity with a generic one.
+7. NEVER repeat the same note or reminder across multiple days. Flight reminders belong ONLY in the "notes" of the day of that flight (and check-in prep the evening before, if relevant). Every day's "notes" must be unique to that day or empty — no boilerplate.
 
 IMPORTANT: Return ONLY a valid JSON array of day objects. No markdown, no explanation, no preamble, no commentary — output must start with [ and end with ] and be nothing else. If the user's request mentions checklist items, entry requirements, or non-itinerary topics, acknowledge them by including relevant reminders as activity notes or tips on the appropriate days, but still return only the JSON day array.
 
@@ -3252,6 +3636,10 @@ Only include fields you can actually read from the document. Use null for anythi
     }
   };
 
+  // One-time taste profile, then ideation mode for dream trips
+  if (showQuiz) return <ProfileQuiz initial={profile} onDone={(p)=>{ if(p){ setTasteProfile(p); setProfileState(p); } setShowQuiz(false); }}/>;
+  if (trip.planningStage === 'idea') return <IdeationPlanner trip={trip} onUpdateTrip={onUpdateTrip} apiKey={apiKey} refreshUsage={refreshUsage} freeLeft={freeLeft}/>;
+
   if (showKeyInput) return (
     <div style={{padding:'40px 20px',maxWidth:480,margin:'0 auto'}}>
       <div style={{background:'var(--color-surface)',borderRadius:16,padding:24,border:'1px solid var(--color-border)'}}>
@@ -3300,7 +3688,10 @@ Only include fields you can actually read from the document. Use null for anythi
               <h3 style={{fontFamily:'var(--font-display)',color:'#fff',fontSize:'1.4rem',fontWeight:600,marginBottom:4}}>{trip.title}</h3>
               <p style={{color:'rgba(255,255,255,.75)',fontSize:'.83rem'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {nightCount} nights</p>
             </div>
-            <button onClick={()=>setShowKeyInput(true)} title="Optional: use your own Anthropic API key for unlimited generations" style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 10px',color:'rgba(255,255,255,.8)',fontSize:'.72rem',cursor:'pointer'}}>{apiKey ? '🔑 Your key' : '⚙︎'}</button>
+            <div style={{display:'flex',gap:6}}>
+              <button onClick={()=>setShowQuiz(true)} title="Edit your taste profile" style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 10px',color:'rgba(255,255,255,.8)',fontSize:'.72rem',cursor:'pointer'}}>🧭 Taste</button>
+              <button onClick={()=>setShowKeyInput(true)} title="Optional: use your own Anthropic API key for unlimited generations" style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 10px',color:'rgba(255,255,255,.8)',fontSize:'.72rem',cursor:'pointer'}}>{apiKey ? '🔑 Your key' : '⚙︎'}</button>
+            </div>
           </div>
           {!apiKey && (
             <div style={{marginTop:12,display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.14)',border:'1px solid rgba(255,255,255,.22)',borderRadius:20,padding:'4px 12px'}}>
@@ -3434,10 +3825,30 @@ Only include fields you can actually read from the document. Use null for anythi
 
       {error && <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:10,padding:'10px 14px',fontSize:'.83rem',color:'#b91c1c',marginBottom:14}}>{error}</div>}
 
-      {loading && streamText && (
-        <div style={{background:'var(--color-surface)',border:'1px solid var(--color-border)',borderRadius:10,padding:'12px 14px',marginBottom:14,maxHeight:160,overflowY:'auto'}}>
-          <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',marginBottom:6,fontWeight:600,letterSpacing:'.05em',textTransform:'uppercase'}}>✨ Generating your itinerary…</p>
-          <pre style={{fontSize:'.72rem',color:'var(--color-ink-light)',whiteSpace:'pre-wrap',wordBreak:'break-all',fontFamily:'monospace',margin:0}}>{streamText.slice(-600)}</pre>
+      {loading && (
+        <div style={{background:'var(--color-surface)',border:'1px solid var(--color-border)',borderRadius:10,padding:'14px 16px',marginBottom:14}}>
+          {(()=>{
+            const totalDays=(nightCount||0)+1;
+            const labels=[...streamText.matchAll(/"label"\s*:\s*"([^"]{1,80})"/g)].map(m=>m[1]);
+            const pct=totalDays>0?Math.min(100,Math.round(labels.length/totalDays*100)):0;
+            return (
+              <div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                  <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',fontWeight:600,letterSpacing:'.05em',textTransform:'uppercase'}}>✨ Building your itinerary</p>
+                  {labels.length>0&&<span style={{fontSize:'.72rem',color:'var(--color-ink-muted)'}}>{Math.min(labels.length,totalDays)} of {totalDays} days</span>}
+                </div>
+                <div style={{height:4,background:'var(--color-cream-dark)',borderRadius:2,overflow:'hidden',marginBottom:10}}>
+                  <div style={{height:'100%',width:pct+'%',background:'var(--color-accent)',borderRadius:2,transition:'width .4s ease'}}/>
+                </div>
+                {labels.length===0&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>Reading your trip details, lodging, and taste profile…</p>}
+                {labels.slice(-4).map((l,i,arr)=>(
+                  <p key={i} style={{fontSize:'.8rem',color:i===arr.length-1?'var(--color-ink)':'var(--color-ink-light)',lineHeight:1.7}}>
+                    {i===arr.length-1?'✍️ ':'✓ '}{l}{i===arr.length-1?'…':''}
+                  </p>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -3633,7 +4044,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
 
   const TABS = [
     {id:'overview',label:'Overview',icon:''},
-    {id:'checklist',label:'Checklist',icon:''},
+    {id:'checklist',label:'Pre-Trip',icon:''},
     {id:'days',label:'Days',icon:''},
     {id:'packing',label:'Packing',icon:''},
     {id:'tidbits',label:'City Tips',icon:''},
@@ -3829,12 +4240,17 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
 
 function Dashboard({trips, onSelectTrip, onNewTrip}) {
   const [sort, setSort] = React.useState('date');
+  const [showPast, setShowPast] = React.useState(false);
   const sorted = [...trips].sort((a,b)=>{
     if(sort==='date') return new Date(a.startDate)-new Date(b.startDate);
     if(sort==='name') return a.title.localeCompare(b.title);
     if(sort==='countdown') return getCountdownInfo(a.startDate).days - getCountdownInfo(b.startDate).days;
     return 0;
   });
+  const todayISO = new Date().toISOString().slice(0,10);
+  const isPast = t => !!t.endDate && t.endDate < todayISO;
+  const upcoming = sorted.filter(t=>!isPast(t));
+  const past = sorted.filter(isPast).sort((a,b)=>new Date(b.endDate)-new Date(a.endDate)); // most recent first
   return (
     <div style={{minHeight:'100vh',background:'var(--color-cream)'}}>
       <div className="dashboard-header">
@@ -3872,10 +4288,36 @@ function Dashboard({trips, onSelectTrip, onNewTrip}) {
             <button className="btn btn-primary" style={{fontSize:'1rem',padding:'14px 28px'}} onClick={onNewTrip}>✨ Plan your first trip</button>
           </div>
         ) : (
-          <div className="trip-grid">
-            {sorted.map((trip,i)=>(
-              <TripCard key={trip.id} trip={trip} onClick={()=>onSelectTrip(trip.id)} animDelay={i*80}/>
-            ))}
+          <div>
+            <div className="trip-grid">
+              {upcoming.map((trip,i)=>(
+                <TripCard key={trip.id} trip={trip} onClick={()=>onSelectTrip(trip.id)} animDelay={i*80}/>
+              ))}
+            </div>
+            {upcoming.length===0 && past.length>0 && (
+              <div style={{textAlign:'center',padding:'30px 20px'}}>
+                <p style={{fontSize:'.9rem',color:'var(--color-ink-light)',marginBottom:14}}>No upcoming trips — time to dream up the next one.</p>
+                <button className="btn btn-primary" onClick={onNewTrip}>✨ Plan a new trip</button>
+              </div>
+            )}
+            {past.length>0 && (
+              <div style={{marginTop:28}}>
+                <button onClick={()=>setShowPast(s=>!s)}
+                  style={{width:'100%',background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:10,padding:'4px 0',marginBottom:showPast?14:0}}>
+                  <span style={{fontFamily:'var(--font-display)',fontSize:'1.1rem',fontWeight:600,color:'var(--color-ink-light)'}}>📸 Past trips</span>
+                  <span className="pill pill-neutral" style={{fontSize:'.7rem'}}>{past.length}</span>
+                  <span style={{flex:1,height:1,background:'var(--color-border)'}}/>
+                  <span style={{fontSize:'.75rem',color:'var(--color-ink-muted)'}}>{showPast?'▲ Hide':'▼ Show'}</span>
+                </button>
+                {showPast && (
+                  <div className="trip-grid" style={{opacity:.85}}>
+                    {past.map((trip,i)=>(
+                      <TripCard key={trip.id} trip={trip} onClick={()=>onSelectTrip(trip.id)} animDelay={i*60}/>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -4449,6 +4891,35 @@ class ErrorBoundary extends React.Component {
   assert('AI proxy URL points at Supabase functions', AI_PROXY_URL.startsWith(SUPABASE_URL) && AI_PROXY_URL.includes('/functions/v1/ai-proxy'));
   assert('Free generation cap is a small positive number', FREE_GENERATION_CAP >= 1 && FREE_GENERATION_CAP <= 10);
 
+  // ── NEW v0.9: planningStage migration ─
+  const ideaTrip = normalizeTrip({title:'Dream', planningStage:'idea'});
+  const legacyTrip = normalizeTrip({title:'Old trip'});
+  assert('normalizeTrip preserves idea stage', ideaTrip.planningStage === 'idea');
+  assert('normalizeTrip defaults legacy trips to booked', legacyTrip.planningStage === 'booked');
+  assert('normalizeTrip defaults ideation to null', legacyTrip.ideation === null);
+  assert('normalizeTrip rejects bogus stage values', normalizeTrip({title:'x', planningStage:'whatever'}).planningStage === 'booked');
+
+  // ── NEW v0.9: ideation validation ─
+  const ide = validateIdeation({destination_summary:'Great fit.', best_time:{when:'Sept',why:'fewer crowds'},
+    neighborhoods:[{name:'Le Marais',why:'fashion + food',stay_here_if:'you want walkability'},{name:'',why:'x'}],
+    day_trips:[{name:'Versailles',why:'day trip classic'}], tips:['Book ahead',42]});
+  assert('validateIdeation keeps valid neighborhoods only', ide.neighborhoods.length === 1);
+  assert('validateIdeation keeps string tips only', ide.tips.length === 1);
+  assert('validateIdeation rejects junk input', validateIdeation('nope') === null && validateIdeation([1,2]) === null);
+
+  // ── NEW v0.9: day route URL ─
+  const routeTrip = {lodging:[{name:'The Standard',address:'848 Washington St, New York, NY'}],destinations:[{id:'d1',city:'New York'}]};
+  const routeDay = {destinationId:'d1',activities:[{name:'Cafe Cluny',address:'284 W 12th St, New York, NY',sortOrder:0}],restaurants:[{name:'Dante',address:'',sortOrder:1}]};
+  const url = buildDayRouteUrl(routeTrip, routeDay);
+  assert('day route URL is a Google Maps dir link', url && url.startsWith('https://www.google.com/maps/dir/'));
+  assert('day route starts and ends at lodging', url.indexOf('848%20Washington') !== -1 && url.indexOf('848%20Washington') !== url.lastIndexOf('848%20Washington'));
+  assert('day route falls back to name + city for missing address', url.includes('Dante%2C%20New%20York'));
+  assert('day route returns null with no stops', buildDayRouteUrl(routeTrip, {destinationId:'d1',activities:[],restaurants:[]}) === null);
+
+  // ── NEW v0.9: taste profile prompt ─
+  assert('profilePromptText empty without profile', profilePromptText(null) === '');
+  assert('profilePromptText includes interests', profilePromptText({style:'Live like a local',interests:['Food & restaurants']}).includes('Food & restaurants'));
+
   // Summary
   if (failed === 0) {
     console.log(`%c✅ All ${passed} Locale tests passed`, 'color:#2B5F6E;font-weight:bold;font-size:13px');
@@ -4487,7 +4958,7 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v9';
+const CACHE = 'locale-v10';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
