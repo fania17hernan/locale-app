@@ -1554,6 +1554,42 @@ function saveTrips(trips){
 }
 
 // ── SHARED COMPONENTS ──────────────────────────────────────────────────────────
+// ── Booking confirmation extraction (shared by Days planner + Regenerate modal) ──
+const CONFIRMATION_EXTRACT_PROMPT = `You are parsing a travel confirmation document. Extract ALL available details and return ONLY a JSON object — no markdown, no explanation.
+
+If this is a HOTEL/LODGING confirmation, return:
+{"type":"lodging","name":"hotel name","address":"full address","checkIn":"YYYY-MM-DD","checkOut":"YYYY-MM-DD","checkInTime":"HH:MM","checkOutTime":"HH:MM","confirmationNumber":"conf number or null","roomType":"room type or null","notes":"any useful info like parking, amenities, check-in instructions"}
+
+If this is a FLIGHT confirmation, return:
+{"type":"flights","flights":[{"direction":"outbound|return|connecting","airline":"airline name","flightNumber":"e.g. DL204","departureAirport":"airport code or name","arrivalAirport":"airport code or name","departureTime":"YYYY-MM-DDTHH:MM:00","arrivalTime":"YYYY-MM-DDTHH:MM:00","confirmationNumber":"conf number or null","seatNumber":"seat or null","notes":"baggage info, terminal, gate if available"}]}
+
+Only include fields you can actually read from the document. Use null for anything missing.`;
+
+async function parseConfirmationFile(file){
+  const base64 = await new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result.split(',')[1]); r.onerror=reject; r.readAsDataURL(file); });
+  const isPdf = file.type==='application/pdf';
+  const mediaType = isPdf ? 'application/pdf' : (file.type||'image/jpeg');
+  const messages = [{ role:'user', content:[ {type:isPdf?'document':'image', source:{type:'base64', media_type:mediaType, data:base64}}, {type:'text', text:CONFIRMATION_EXTRACT_PROMPT} ] }];
+  const text = await callAIProxy({ feature:'extract', messages, max_tokens:1024 });
+  const m = (text||'').match(/\{[\s\S]*\}/);
+  if(!m) throw new Error('Could not read that document. Try a clearer screenshot or PDF.');
+  return JSON.parse(m[0]);
+}
+function mergeBookingIntoTrip(trip, p){
+  if(p && p.type==='lodging'){
+    const newLodging=[...(trip.lodging||[])];
+    const ex=newLodging.findIndex(l=>l.name===p.name);
+    const entry={id:ex>=0?newLodging[ex].id:uuid(),name:p.name||'',address:p.address||'',checkIn:p.checkIn||'',checkOut:p.checkOut||'',checkInTime:p.checkInTime||'',checkOutTime:p.checkOutTime||'',confirmationNumber:p.confirmationNumber||'',roomType:p.roomType||'',notes:p.notes||''};
+    if(ex>=0)newLodging[ex]=entry; else newLodging.push(entry);
+    return {trip:{...trip, lodging:newLodging}, kind:'lodging', label:entry.name};
+  } else if(p && p.type==='flights'){
+    const newFlights=[...(trip.flights||[])];
+    (p.flights||[]).forEach(f=>{ const ex=newFlights.findIndex(x=>x.flightNumber===f.flightNumber&&x.departureTime===f.departureTime); const entry={...f,id:ex>=0?newFlights[ex].id:uuid()}; if(ex>=0)newFlights[ex]=entry; else newFlights.push(entry); });
+    return {trip:{...trip, flights:newFlights}, kind:'flights', label:(p.flights||[]).map(f=>f.flightNumber).filter(Boolean).join(', ')};
+  }
+  return {trip, kind:null, label:''};
+}
+
 function AvatarStack({collaborators,max=4}){
   const shown=collaborators.slice(0,max),extra=collaborators.length-max;
   const [tipId,setTipId]=useState(null);
@@ -4335,6 +4371,8 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
   const [showShare, setShowShare] = React.useState(false);
   const [regenPrompt, setRegenPrompt] = React.useState('');
   const [showRegenModal, setShowRegenModal] = React.useState(false);
+  const [regenUploading, setRegenUploading] = React.useState(false);
+  const [regenUploadMsg, setRegenUploadMsg] = React.useState('');
   const flags = getIntlFlags(trip);
   const {label:countdown} = getCountdownInfo(trip.startDate);
   const firstDest = trip.destinations?.[0];
@@ -4503,8 +4541,23 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
                     onChange={e=>setRegenPrompt(e.target.value)}
                     style={{marginBottom:12,resize:'none'}}
                   />
+                  <label style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'10px',border:'1px dashed var(--color-border)',borderRadius:10,cursor:regenUploading?'default':'pointer',marginBottom:10,color:'var(--color-ink-light)',fontSize:'.85rem',textAlign:'center'}}>
+                    {regenUploading ? 'Reading your confirmation…' : '📎 Attach a flight or hotel confirmation (optional) — AI plans around it'}
+                    <input type="file" accept="image/*,application/pdf" style={{display:'none'}} disabled={regenUploading}
+                      onChange={async e=>{ const f=e.target.files?.[0]; e.target.value=''; if(!f) return;
+                        setRegenUploading(true); setRegenUploadMsg('');
+                        try{
+                          const parsed = await parseConfirmationFile(f);
+                          const {trip:updated, kind, label} = mergeBookingIntoTrip(trip, parsed);
+                          if(kind){ onUpdateTrip(updated); setRegenUploadMsg('Saved '+(kind==='lodging'?'lodging':'flight'+((parsed.flights||[]).length>1?'s':''))+(label?(' · '+label):'')+' ✓ — regenerate to plan around it.'); }
+                          else { setRegenUploadMsg("Couldn't tell if that was a flight or hotel — try another file."); }
+                        }catch(err){ setRegenUploadMsg('Upload failed: '+err.message); }
+                        finally{ setRegenUploading(false); }
+                      }}/>
+                  </label>
+                  {regenUploadMsg && <p style={{fontSize:'.78rem',color:regenUploadMsg.startsWith('Saved')?'var(--color-success)':'var(--color-flag)',marginBottom:12,lineHeight:1.4}}>{regenUploadMsg}</p>}
                   <div style={{display:'flex',gap:8}}>
-                    <button className="btn btn-secondary" style={{flex:1}} onClick={()=>setShowRegenModal(false)}>Cancel</button>
+                    <button className="btn btn-secondary" style={{flex:1}} onClick={()=>{ setShowRegenModal(false); setRegenUploadMsg(''); }}>Cancel</button>
                     <button className="btn btn-primary" style={{flex:2}} onClick={()=>{ setShowRegenModal(false); onUpdateTrip({...trip,days:[],_regenPrompt:regenPrompt}); setRegenPrompt(''); }}>Regenerate</button>
                   </div>
                 </div>
