@@ -1810,10 +1810,24 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
 }
 
 // ── CHECKLIST VIEW ─────────────────────────────────────────────────────────────
-function ChecklistView({trip,onUpdate}){
+function ChecklistView({trip,onUpdate,onUpdateTrip}){
   const checklist=trip.checklist||[];
   const [collapsed,setCollapsed]=useState({});
   const [newItem,setNewItem]=useState('');
+  const [uploadingId,setUploadingId]=useState(null);
+  const isBookingTask=(item)=>/lodg|hotel|flight|confirmation|booked|reservation|check.?in/i.test(item.label||'');
+  const handleBookingUpload=async(item,file)=>{
+    setUploadingId(item.id);
+    try{
+      const parsed=await parseConfirmationFile(file);
+      const {trip:merged,kind}=mergeBookingIntoTrip(trip,parsed);
+      if(!kind){ showToast("Couldn't read that as a flight or hotel — try another file.","warn"); return; }
+      const newChecklist=(merged.checklist||trip.checklist||[]).map(i=>i.id===item.id?{...i,completed:true}:i);
+      if(onUpdateTrip) onUpdateTrip({...merged,checklist:newChecklist}); else onUpdate(newChecklist);
+      showToast('Saved '+(kind==='lodging'?'lodging':'flight'+((parsed.flights||[]).length>1?'s':''))+' ✓ and checked off.','info',4000);
+    }catch(err){ showToast('Upload failed: '+err.message,'error',5000); }
+    finally{ setUploadingId(null); }
+  };
   const catLabels={documents:'📄 Documents',bookings:'✈️ Bookings',finance:'💰 Finance',tech:'📱 Tech',health:'🏥 Health',packing:'🧳 Packing',custom:'⭐ Custom'};
   const catOrder=['documents','bookings','finance','tech','health','packing','custom'];
   const done=checklist.filter(i=>i.completed).length,total=checklist.length;
@@ -1869,6 +1883,15 @@ function ChecklistView({trip,onUpdate}){
                         </div>
                       ):null;
                     })()}
+                    {isBookingTask(item) && !item.completed && (
+                      <div style={{marginTop:6}} onClick={e=>e.stopPropagation()}>
+                        <label className="btn btn-secondary btn-sm" style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:'.75rem',padding:'4px 10px',borderRadius:20,cursor:uploadingId===item.id?'default':'pointer'}}>
+                          {uploadingId===item.id ? 'Reading…' : '📎 Upload confirmation'}
+                          <input type="file" accept="image/*,application/pdf" style={{display:'none'}} disabled={uploadingId===item.id}
+                            onChange={e=>{ const f=e.target.files?.[0]; e.target.value=''; if(f) handleBookingUpload(item, f); }}/>
+                        </label>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -3533,11 +3556,13 @@ ${lodgingLines ? `- Lodging (MUST include check-in/check-out in itinerary):\n${l
 ${flightLines ? `- Flights (MUST include in itinerary with exact times and confirmation numbers):\n${flightLines}` : ''}
 
 ${profilePromptText(getTasteProfile())}
-GEOGRAPHY & LOGISTICS RULES (critical for a realistic itinerary):
+GEOGRAPHY & LOGISTICS RULES (critical — plan each day as an efficient route that MINIMIZES total travel time):
 1. Cluster each day's activities and restaurants in ONE neighborhood or area — never criss-cross the city in a single day.
 2. Anchor every day to the lodging${(trip.lodging||[]).length?' listed above':''}: breakfast/first stop near it, and the last stop should make for an easy trip back.
-3. Sequence stops in walking/transit order — each stop should be near the previous one (think: hotel → breakfast → boutique → museum → happy hour → dinner → hotel).
-4. Anything more than ~45 minutes away does NOT belong in a day plan. Instead, mention it in that day's "notes" as a possible day trip (e.g. "Consider a day trip to Versailles").
+3. Sequence stops so the day forms a loop or a one-way path with NO backtracking — each stop near the previous one (hotel → breakfast → boutique → museum → lunch nearby → afternoon stop → happy hour → dinner → hotel).
+4. Pair every meal with the geographically nearest activity at that time of day — lunch and dinner must be a short walk from the stops right before/after them, never across town.
+5. Anything more than ~45 minutes away does NOT belong in a day plan. Instead, mention it in that day's "notes" as a possible day trip (e.g. "Consider a day trip to Versailles").
+6. In each day's "notes", state the neighborhood the day is centered on and that stops are walkable (e.g. "Centered on Le Marais — all stops within a ~15-min walk").
 
 CRITICAL RULES about the user's request:
 1. The user's message contains their NON-NEGOTIABLE activities, restaurants, and plans. You MUST include every specific place, activity, or event they mention — do not skip or replace them.
@@ -4581,7 +4606,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
             )}
           </div>
         )}
-        {activeTab==='checklist' && <ChecklistView trip={trip} onUpdate={handleChecklistUpdate}/>}
+        {activeTab==='checklist' && <ChecklistView trip={trip} onUpdate={handleChecklistUpdate} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='crew' && <CrewSection trip={trip} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='packing' && <PackingView trip={trip} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='tidbits' && <CityTidbits destinations={trip.destinations} trip={trip} onUpdateTrip={onUpdateTrip}/>}
