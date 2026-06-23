@@ -1477,7 +1477,7 @@ function normalizeTrip(t){
   const title = t.title || t.name || 'My Trip';
   const startDate = t.startDate || t.travelPeriod?.depart || '';
   const endDate = t.endDate || t.travelPeriod?.return || '';
-  const collaborators = (t.collaborators||[]).map(c=>({...c, avatarColor: c.avatarColor||c.color||'var(--color-accent)'}));
+  const collaborators = (t.collaborators||[]).map((c,i)=>({...c, avatarColor: c.avatarColor||c.color||AVATAR_COLORS[i%AVATAR_COLORS.length], rsvp: c.rsvp||(i===0?'going':'pending'), email: c.email||'', phone: c.phone||''}));
   const checklist = (t.checklist||[]).length ? t.checklist : generateChecklist({...t, startDate, endDate, title});
 
   // Schema migrations — add fields introduced in each version
@@ -4071,6 +4071,78 @@ Only include fields you can actually read from the document. Use null for anythi
 }
 
 // ── Trip Date Editor ─────────────────────────────────────────────────────────
+function CrewSection({trip, onUpdateTrip}){
+  const members = trip.collaborators || [];
+  const counts = members.reduce((a,m)=>{const r=m.rsvp||'pending';a[r]=(a[r]||0)+1;return a;},{});
+  const save = (next)=> onUpdateTrip({...trip, collaborators: next});
+  const setRsvp = (id, rsvp)=> save(members.map(m=>m.id===id?{...m, rsvp}:m));
+  const remove = (id)=> { if(window.confirm('Remove this person from the trip?')) save(members.filter(m=>m.id!==id)); };
+  const [name,setName]=React.useState('');
+  const [email,setEmail]=React.useState('');
+  const [phone,setPhone]=React.useState('');
+  const [rsvp,setR]=React.useState('pending');
+  const add = ()=>{
+    if(!name.trim()){ showToast('Add a name.','warn'); return; }
+    if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())){ showToast('That email looks off.','warn'); return; }
+    const color = AVATAR_COLORS[members.length % AVATAR_COLORS.length];
+    save([...members, {id:uuid(), name:name.trim(), email:email.trim(), phone:phone.trim(), rsvp, avatarColor:color}]);
+    setName(''); setEmail(''); setPhone(''); setR('pending');
+  };
+  const shareInvite = ()=>{
+    const encoded = encodeTrip(trip);
+    if(!encoded){ showToast('Could not create an invite link.','error'); return; }
+    const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
+    if(navigator.share){ navigator.share({title:trip.title, text:'Join my trip on Locale', url}).catch(()=>{}); }
+    else { navigator.clipboard.writeText(url).then(()=>showToast('Invite link copied — recipients can view this trip.','info',4000)).catch(()=>prompt('Copy invite link:', url)); }
+  };
+  return (
+    <div>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:14}}>
+        <span className="pill pill-accent" style={{fontWeight:600}}>● {counts.going||0} going</span>
+        <span className="pill pill-muted" style={{fontWeight:600}}>● {counts.pending||0} pending</span>
+        {counts.no ? <span className="pill pill-muted" style={{fontWeight:600}}>● {counts.no} can't</span> : null}
+      </div>
+      <div className="card" style={{marginBottom:12,padding:0}}>
+        {members.length===0 && <div style={{padding:16,color:'var(--color-ink-light)',fontSize:'.9rem'}}>No one added yet. Add travelers below, then share the invite link.</div>}
+        {members.map(m=>(
+          <div key={m.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderBottom:'1px solid var(--color-border)'}}>
+            <span style={{width:36,height:36,borderRadius:'50%',background:m.avatarColor,color:'#0E1117',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,flexShrink:0,boxShadow:'0 0 0 2px var(--color-surface), 0 0 0 4px '+m.avatarColor}}>{(m.name||'?').charAt(0).toUpperCase()}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:600,color:'var(--color-ink)'}}>{m.name}</div>
+              <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{[m.email,m.phone].filter(Boolean).join(' · ') || 'No contact info'}</div>
+            </div>
+            <select className="input" aria-label="RSVP status" style={{width:'auto',padding:'4px 8px',fontSize:'.78rem'}} value={m.rsvp||'pending'} onChange={e=>setRsvp(m.id, e.target.value)}>
+              <option value="going">Going</option>
+              <option value="pending">Pending</option>
+              <option value="no">Can't make it</option>
+            </select>
+            <button aria-label="Remove person" onClick={()=>remove(m.id)} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'2px 8px'}}>✕</button>
+          </div>
+        ))}
+      </div>
+      <div className="card" style={{marginBottom:12}}>
+        <p className="section-label">Add a traveler</p>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          <input className="input" placeholder="Name *" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')add();}}/>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <input className="input" style={{flex:'1 1 160px'}} type="email" autoComplete="off" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/>
+            <input className="input" style={{flex:'1 1 140px'}} type="tel" placeholder="Phone" value={phone} onChange={e=>setPhone(e.target.value)}/>
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <select className="input" style={{flex:'1 1 auto'}} value={rsvp} onChange={e=>setR(e.target.value)}>
+              <option value="going">Going</option>
+              <option value="pending">Pending</option>
+              <option value="no">Can't make it</option>
+            </select>
+            <button className="btn btn-primary" onClick={add}>Add</button>
+          </div>
+        </div>
+      </div>
+      <button className="btn btn-secondary" style={{width:'100%'}} onClick={shareInvite}>🔗 Share invite link</button>
+    </div>
+  );
+}
+
 function BudgetSection({trip, onUpdateTrip}){
   const budget = (trip.budget && Array.isArray(trip.budget.items)) ? trip.budget : {currency:'USD', items:[]};
   const items = budget.items;
@@ -4271,6 +4343,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
 
   const TABS = [
     {id:'overview',label:'Overview',icon:''},
+    {id:'crew',label:'Crew',icon:''},
     {id:'checklist',label:'Pre-Trip',icon:''},
     {id:'days',label:'Days',icon:''},
     {id:'packing',label:'Packing',icon:''},
@@ -4456,6 +4529,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
           </div>
         )}
         {activeTab==='checklist' && <ChecklistView trip={trip} onUpdate={handleChecklistUpdate}/>}
+        {activeTab==='crew' && <CrewSection trip={trip} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='packing' && <PackingView trip={trip} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='tidbits' && <CityTidbits destinations={trip.destinations} trip={trip} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='celebrate' && <CelebrationSection trip={trip} onUpdateTrip={onUpdateTrip}/>}
