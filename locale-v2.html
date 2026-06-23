@@ -5423,7 +5423,7 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v12-netfirst';
+const CACHE = 'locale-v13-nostore';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
@@ -5462,10 +5462,11 @@ self.addEventListener('fetch', e => {
     return; // let the browser handle it (streaming-safe)
   }
 
-  // Navigation requests: NETWORK-FIRST so new deploys always reach users; fall back to cache offline.
+  // Navigation requests: NETWORK-FIRST and bypass the HTTP cache (no-store) so new
+  // deploys reach users immediately; cache a copy for offline fallback.
   if (request.mode === 'navigate') {
     e.respondWith(
-      fetch(request)
+      fetch(request.url, { cache: 'no-store' })
         .then(res => {
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(request, clone));
