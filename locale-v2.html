@@ -1493,6 +1493,9 @@ function normalizeTrip(t){
   // v3→v4 (additive, v0.9): planningStage ('idea'|'booked') + ideation results
   const planningStage = t.planningStage === 'idea' ? 'idea' : 'booked';
   const ideation = t.ideation ?? null;
+  const budget = (t.budget && Array.isArray(t.budget.items))
+    ? { currency: t.budget.currency || 'USD', items: t.budget.items }
+    : { currency: 'USD', items: [] };
 
   return {
     ...t,
@@ -1501,7 +1504,7 @@ function normalizeTrip(t){
     collaborators, checklist,
     destinations, days,
     packingList, lodging, flights,
-    planningStage, ideation,
+    planningStage, ideation, budget,
   };
 }
 const MOCK_TRIPS=RAW_MOCK_TRIPS.map(t=>normalizeTrip(t));
@@ -2475,6 +2478,17 @@ function DayView({trip,day,onUpdateTrip}){
         <h2 className="font-display" style={{fontSize:'1.5rem',fontWeight:600,lineHeight:1.2,marginBottom:4}}>{day.label}</h2>
         <p style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{formatDate(day.date)}{dest?` · ${dest.city}`:''}</p>
       </div>
+      {(() => {
+        const dayItems = (trip.budget?.items||[]).filter(i=>i.day===day.id);
+        if(!dayItems.length) return null;
+        const sum = dayItems.reduce((s,i)=>s+(Number(i.amount)||0),0);
+        return (
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'var(--color-accent-soft)',border:'1px solid var(--color-border)',borderRadius:10,padding:'8px 12px',marginBottom:16}}>
+            <span style={{fontFamily:'var(--font-mono)',fontSize:'.68rem',letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-ink-muted)'}}>Day spend · {dayItems.length} {dayItems.length===1?'item':'items'}</span>
+            <span style={{fontFamily:'var(--font-mono)',fontWeight:600,color:'var(--color-ink)'}}>${(Math.round(sum*100)/100).toLocaleString()}</span>
+          </div>
+        );
+      })()}
       {wx&&(
         <div className="weather-strip" style={{marginBottom:16}}>
           <span style={{fontSize:'1.5rem'}}>{wx.icon}</span>
@@ -4057,6 +4071,71 @@ Only include fields you can actually read from the document. Use null for anythi
 }
 
 // ── Trip Date Editor ─────────────────────────────────────────────────────────
+function BudgetSection({trip, onUpdateTrip}){
+  const budget = (trip.budget && Array.isArray(trip.budget.items)) ? trip.budget : {currency:'USD', items:[]};
+  const items = budget.items;
+  const people = Math.max(1, trip.travelerCount || (trip.collaborators ? trip.collaborators.length : 0) || 1);
+  const days = trip.days || [];
+  const fmt = n => '$' + (Math.round((Number(n)||0)*100)/100).toLocaleString(undefined,{maximumFractionDigits:2});
+  const total = items.reduce((s,i)=>s+(Number(i.amount)||0),0);
+  const perPerson = total/people;
+  const [label,setLabel]=React.useState('');
+  const [amount,setAmount]=React.useState('');
+  const [dayId,setDayId]=React.useState('');
+  const save = (next)=> onUpdateTrip({...trip, budget:{currency:budget.currency||'USD', items:next}});
+  const add = ()=>{
+    const a=parseFloat(amount);
+    if(!label.trim() || !(a>=0)){ showToast('Add a label and an amount.','warn'); return; }
+    save([...items, {id:uuid(), label:label.trim(), amount:a, day:dayId||null}]);
+    setLabel(''); setAmount(''); setDayId('');
+  };
+  const remove = (id)=> save(items.filter(i=>i.id!==id));
+  const dayLabel = (id)=>{ const idx=days.findIndex(x=>x.id===id); return idx>=0 ? (days[idx].label||('Day '+(idx+1))) : null; };
+  return (
+    <div style={{background:'var(--color-surface)',borderRadius:12,padding:'16px 18px',border:'1px solid var(--color-border)',marginBottom:12}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:12}}>
+        <p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',fontWeight:600}}>💰 Budget</p>
+        <span style={{fontFamily:'var(--font-mono)',fontSize:'.7rem',color:'var(--color-ink-muted)'}}>{people} {people===1?'traveler':'travelers'}</span>
+      </div>
+      {items.length===0 ? (
+        <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:14,lineHeight:1.5}}>Track shared costs and see each person's share. Add your first expense below — tag it to a day to see per-day spend.</p>
+      ) : (
+        <div style={{marginBottom:14}}>
+          {items.map(i=>(
+            <div key={i.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid var(--color-border)'}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:'.9rem',fontWeight:500,color:'var(--color-ink)'}}>{i.label}</div>
+                {i.day && dayLabel(i.day) && <div style={{fontSize:'.7rem',color:'var(--color-ink-muted)'}}>{dayLabel(i.day)}</div>}
+              </div>
+              <div style={{fontFamily:'var(--font-mono)',fontWeight:500,color:'var(--color-ink)'}}>{fmt(i.amount)}</div>
+              <button aria-label="Remove expense" onClick={()=>remove(i.id)} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'2px 8px'}}>✕</button>
+            </div>
+          ))}
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:12}}>
+            <span style={{fontWeight:600,color:'var(--color-ink)'}}>Total</span>
+            <span style={{fontFamily:'var(--font-mono)',fontWeight:700,color:'var(--color-ink)'}}>{fmt(total)}</span>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:4}}>
+            <span style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>Your share{people>1?` (÷ ${people})`:''}</span>
+            <span style={{fontFamily:'var(--font-mono)',fontWeight:600,color:'var(--color-success)'}}>{fmt(perPerson)}</span>
+          </div>
+        </div>
+      )}
+      <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+        <input className="input" style={{flex:'2 1 140px'}} placeholder="Expense (e.g. Airbnb)" value={label} onChange={e=>setLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')add();}}/>
+        <input className="input" style={{flex:'1 1 90px'}} type="number" inputMode="decimal" placeholder="Amount" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')add();}}/>
+        {days.length>0 && (
+          <select className="input" style={{flex:'1 1 110px'}} value={dayId} onChange={e=>setDayId(e.target.value)}>
+            <option value="">Whole trip</option>
+            {days.map((d,idx)=><option key={d.id} value={d.id}>{d.label||('Day '+(idx+1))}</option>)}
+          </select>
+        )}
+        <button className="btn btn-primary" onClick={add}>Add</button>
+      </div>
+    </div>
+  );
+}
+
 function TripDateEditor({trip, onUpdateTrip}) {
   const [editing, setEditing] = React.useState(false);
   const [startDate, setStartDate] = React.useState(trip.startDate || '');
@@ -4321,6 +4400,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
                 })}
               </div>
             </div>
+            <BudgetSection trip={trip} onUpdateTrip={onUpdateTrip}/>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:10,marginBottom:12}}>
               {trip.destinations.map(d=>(
                 <div key={d.id} style={{background:'var(--color-surface)',borderRadius:12,padding:'14px 12px',border:'1px solid var(--color-border)',textAlign:'center'}}>
