@@ -5398,7 +5398,7 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v11-redesign';
+const CACHE = 'locale-v12-netfirst';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
@@ -5437,16 +5437,16 @@ self.addEventListener('fetch', e => {
     return; // let the browser handle it (streaming-safe)
   }
 
-  // Navigation requests: serve the cached app shell (the single HTML file)
+  // Navigation requests: NETWORK-FIRST so new deploys always reach users; fall back to cache offline.
   if (request.mode === 'navigate') {
     e.respondWith(
-      caches.match(request)
-        .then(cached => cached || fetch(request).then(res => {
+      fetch(request)
+        .then(res => {
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(request, clone));
           return res;
-        }))
-        .catch(() => caches.match('/') || new Response('<h1>Locale</h1><p>You are offline. Open the app while connected first to enable full offline support.</p>', { headers: { 'Content-Type': 'text/html' } }))
+        })
+        .catch(() => caches.match(request).then(c => c || caches.match('/') || new Response('<h1>Locale</h1><p>You are offline. Open the app while connected first to enable full offline support.</p>', { headers: { 'Content-Type': 'text/html' } })))
     );
     return;
   }
