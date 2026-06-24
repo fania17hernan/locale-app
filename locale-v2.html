@@ -949,7 +949,7 @@ function setAIKey(k){try{localStorage.setItem(AI_KEY_SK,k);}catch(e){}}
 const SUPABASE_URL = 'https://pdbqrjqlwqjqzefmmlhd.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkYnFyanFsd3FqcXplZm1tbGhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExODQxMDEsImV4cCI6MjA5Njc2MDEwMX0.lPxZMp-Ff6RSR-R1DtHj3pJKCiXzqwm1encEB0tHuVc';
 const AI_PROXY_URL = SUPABASE_URL + '/functions/v1/ai-proxy';
-const FREE_GENERATION_CAP = 2;   // mirrors server config (server is the enforcer)
+const FREE_GENERATION_CAP = 5;   // mirrors server config (server is the enforcer — keep ai_config.free_generation_cap in sync)
 const FREE_EXTRACTION_CAP = 10;
 
 let _sbClient = null;
@@ -1102,6 +1102,50 @@ function profilePromptText(p){
 }
 
 // ── IDEATION OUTPUT VALIDATION (mirror of validateAIDays for ideate mode) ─────
+// Robust JSON parse for AI output — tolerates code fences, trailing commas,
+// and truncated/unbalanced output (auto-closes open strings/brackets). Returns parsed value or null.
+function safeJSONParse(raw){
+  if(typeof raw!=='string') return null;
+  let s=raw.trim().replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'').trim();
+  // narrow to the start of the outermost JSON value
+  const firstObj=s.indexOf('{'), firstArr=s.indexOf('[');
+  let start=-1;
+  if(firstObj===-1) start=firstArr; else if(firstArr===-1) start=firstObj; else start=Math.min(firstObj,firstArr);
+  if(start===-1) return null;
+  s=s.slice(start);
+  const stripCommas=(x)=>x.replace(/,\s*([}\]])/g,'$1');
+  // scan for the balanced end (so trailing prose after the JSON is ignored)
+  let depth=0, inStr=false, esc=false, end=-1;
+  for(let i=0;i<s.length;i++){
+    const ch=s[i];
+    if(esc){esc=false;continue;}
+    if(ch==='\\'){esc=true;continue;}
+    if(ch==='"'){inStr=!inStr;continue;}
+    if(inStr) continue;
+    if(ch==='{'||ch==='[') depth++;
+    else if(ch==='}'||ch===']'){ depth--; if(depth===0){ end=i; break; } }
+  }
+  const candidate = end!==-1 ? s.slice(0,end+1) : s;
+  try{ return JSON.parse(candidate); }catch(e){}
+  try{ return JSON.parse(stripCommas(candidate)); }catch(e){}
+  // truncated output: balance open brackets / close an open string from the full remainder
+  const stack=[]; inStr=false; esc=false;
+  for(let i=0;i<s.length;i++){
+    const ch=s[i];
+    if(esc){esc=false;continue;}
+    if(ch==='\\'){esc=true;continue;}
+    if(ch==='"'){inStr=!inStr;continue;}
+    if(inStr) continue;
+    if(ch==='{'||ch==='[') stack.push(ch);
+    else if(ch==='}'||ch===']') stack.pop();
+  }
+  let fixed=s;
+  if(inStr) fixed+='"';
+  fixed=fixed.replace(/,\s*$/,'');            // dangling comma at the cut point
+  while(stack.length){ const o=stack.pop(); fixed+=(o==='{'?'}':']'); }
+  fixed=stripCommas(fixed);
+  try{ return JSON.parse(fixed); }catch(e){ return null; }
+}
 function validateIdeation(o){
   if(!o||typeof o!=='object'||Array.isArray(o)) return null;
   const str=(v,max=400)=>typeof v==='string'?v.slice(0,max):'';
@@ -2633,7 +2677,7 @@ function Avatar22({initial,color}){
 }
 
 // ── TIMELINE STOP — one row in the day plan (prototype style) ────────────────────
-function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDeleteComment}){
+function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDeleteComment, onMoveUp, onMoveDown, canMoveUp, canMoveDown}){
   const [open,setOpen]=useState(false);
   const [draft,setDraft]=useState('');
   const author=resolveStopAuthor(trip,item);
@@ -2642,10 +2686,13 @@ function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDelet
   const comments=item.comments||[];
   const mapsUrl=`https://maps.google.com/?q=${encodeURIComponent(item.address||item.name)}`;
   const post=()=>{ if(draft.trim()){ onAddComment(item, draft.trim()); setDraft(''); if(!open)setOpen(true); } };
+  const showReorder = !!(onMoveUp||onMoveDown);
+  const reorderBtn=(enabled)=>({width:40,height:34,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:8,border:'1px solid var(--color-border)',background:'var(--color-cream-dark)',color:'var(--color-ink)',cursor:enabled?'pointer':'default',opacity:enabled?1:.3,fontSize:'.8rem',lineHeight:1,padding:0});
   return(
     <div style={{display:'flex',position:'relative'}}>
       <div style={{width:3,borderRadius:2,background:accent,flexShrink:0,alignSelf:'stretch'}}/>
-      <div style={{flex:1,minWidth:0,padding:'0 0 18px 14px'}}>
+      <div style={{flex:1,minWidth:0,padding:'0 0 18px 14px',display:'flex',gap:8,alignItems:'flex-start'}}>
+       <div style={{flex:1,minWidth:0}}>
         {time && <div style={{fontFamily:'var(--font-mono)',fontSize:'.72rem',color:'var(--color-ink-muted)',letterSpacing:'.04em',marginBottom:3}}>{time}</div>}
         <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
           <span style={{fontWeight:700,fontSize:'1rem',color:'var(--color-ink)'}}>{item.emoji?item.emoji+' ':''}{item.name}</span>
@@ -2689,6 +2736,13 @@ function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDelet
             </div>
           </div>
         )}
+       </div>
+       {showReorder && (
+         <div style={{display:'flex',flexDirection:'column',gap:4,flexShrink:0}} role="group" aria-label="Reorder stop">
+           <button type="button" aria-label={`Move ${item.name} earlier`} disabled={!canMoveUp} onClick={onMoveUp} style={reorderBtn(canMoveUp)}>▲</button>
+           <button type="button" aria-label={`Move ${item.name} later`} disabled={!canMoveDown} onClick={onMoveDown} style={reorderBtn(canMoveDown)}>▼</button>
+         </div>
+       )}
       </div>
     </div>
   );
@@ -2719,7 +2773,9 @@ function DayView({trip,day,onUpdateTrip}){
       if(idx>=0) list[idx]={...list[idx],...formData};
       setEditingItem(null);
     } else {
-      list.push({...formData,id:uuid(),sortOrder:list.length,
+      // unified sortOrder across both lists so new stops append to the end of the timeline
+      const maxOrder=Math.max(-1,...(day.activities||[]).map(s=>s.sortOrder??0),...(day.restaurants||[]).map(s=>s.sortOrder??0));
+      list.push({...formData,id:uuid(),sortOrder:maxOrder+1,
         addedBy: me?.id||null, addedByName: me?null:'You', addedAt: Date.now(), comments:[]});
     }
     updateDay({...day,[listKey]:list});
@@ -2746,15 +2802,29 @@ function DayView({trip,day,onUpdateTrip}){
   const wx=dest?wxMap[dest.countryCode]||null:null;
   function saveNotes(v){onUpdateTrip({...trip,days:trip.days.map(d=>d.id===day.id?{...d,notes:v}:d)});}
 
-  // Merge activities + restaurants into one time-ordered timeline
+  // Merge activities + restaurants into one timeline.
+  // Sort by manual sortOrder first (so up/down reordering sticks), time as tiebreaker.
   const merged=[...acts.map(a=>({item:a,type:'activity'})),...rests.map(r=>({item:r,type:'restaurant'}))]
     .sort((a,b)=>{
+      const so=(a.item.sortOrder??0)-(b.item.sortOrder??0);
+      if(so!==0) return so;
       const ta=a.item.time||'', tb=b.item.time||'';
       if(ta&&tb&&ta!==tb) return ta<tb?-1:1;
       if(ta&&!tb) return -1;
       if(!ta&&tb) return 1;
-      return (a.item.sortOrder??0)-(b.item.sortOrder??0);
+      return 0;
     });
+  // Move a stop up/down in the merged timeline; persists a unified sortOrder across both lists.
+  const moveStop=(i,dir)=>{
+    const j=i+dir;
+    if(j<0||j>=merged.length) return;
+    const arr=merged.map(m=>m.item);
+    [arr[i],arr[j]]=[arr[j],arr[i]];
+    const orderMap=new Map(arr.map((s,k)=>[s.id,k]));
+    const reindex=(list)=>(list||[]).map(s=>orderMap.has(s.id)?{...s,sortOrder:orderMap.get(s.id)}:s);
+    updateDay({...day,activities:reindex(day.activities),restaurants:reindex(day.restaurants)});
+  };
+  const canReorder = filter==='all'; // reordering a filtered subset is ambiguous
   const totalStops=(day.activities||[]).length+(day.restaurants||[]).length;
   const dayComments=day.comments||[];
 
@@ -2841,11 +2911,13 @@ function DayView({trip,day,onUpdateTrip}){
           <p style={{fontSize:'.85rem',color:'var(--color-ink-muted)',padding:'4px 0 16px'}}>
             {totalStops===0 ? 'No stops yet — tap + Activity or + Food to start this day.' : 'Nothing matches this filter.'}
           </p>
-        ) : merged.map(({item,type})=>(
+        ) : merged.map(({item,type},i)=>(
           <TimelineStop key={item.id} trip={trip} item={item} type={type}
             onEdit={it=>{setAddingType(null);setEditingItem({item:it,type});}}
             onDelete={id=>handleDelete(id,type==='restaurant'?'restaurants':'activities')}
-            onAddComment={addStopComment} onDeleteComment={deleteStopComment}/>
+            onAddComment={addStopComment} onDeleteComment={deleteStopComment}
+            onMoveUp={canReorder?()=>moveStop(i,-1):null} onMoveDown={canReorder?()=>moveStop(i,1):null}
+            canMoveUp={canReorder&&i>0} canMoveDown={canReorder&&i<merged.length-1}/>
         ))}
       </div>
       {/* Notes on this day — attributed */}
@@ -3626,10 +3698,9 @@ Rules: 3-5 neighborhoods ordered best-fit first. 1-3 day trips. Be specific and 
         full = await callAIProxy({feature:'ideate',system:buildIdeationPrompt(),messages,max_tokens:4096,onDelta:t=>setStreamText(t)});
         refreshUsage&&refreshUsage();
       }
-      const cleaned = full.replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
-      const s=cleaned.indexOf('{'), e=cleaned.lastIndexOf('}');
-      if(s===-1||e<=s) throw new Error('No recommendations found in the response. Try again.');
-      const parsed = validateIdeation(JSON.parse(cleaned.slice(s,e+1)));
+      const obj = safeJSONParse(full);
+      if(!obj) throw new Error('No recommendations found in the response. Tap "Get recommendations" to try again.');
+      const parsed = validateIdeation(obj);
       if(!parsed) throw new Error("The response wasn't formatted correctly — your trip is unchanged. Try again.");
       onUpdateTrip({...trip, ideation: parsed});
       setStreamText('');
@@ -4068,13 +4139,8 @@ Only include fields you can actually read from the document. Use null for anythi
       // Parse the JSON — strip markdown fences, find the outermost array
       let days;
       try {
-        // Strip ```json ... ``` or ``` ... ``` fences if present
-        let cleaned = full.replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
-        // Find the first [ and last ] to extract the array robustly
-        const start = cleaned.indexOf('[');
-        const end = cleaned.lastIndexOf(']');
-        if (start === -1 || end === -1 || end <= start) throw new Error('No JSON array found in response.');
-        days = JSON.parse(cleaned.slice(start, end + 1));
+        // Robustly parse — tolerates fences, trailing commas, and token-limit truncation
+        days = safeJSONParse(full);
         if (!Array.isArray(days) || days.length === 0) throw new Error('Response contained an empty or invalid itinerary.');
         days = validateAIDays(days); // sanitize shape/types before touching trip state (Debt-007)
         if (days.length === 0) throw new Error('Response contained an empty or invalid itinerary.');
@@ -4828,26 +4894,30 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
         )}
         <div style={{position:'relative',zIndex:1,padding:'52px 16px 20px',maxWidth:720,margin:'0 auto'}}>
           {/* Top bar: Back + action buttons */}
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-            <button onClick={onBack} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>← Back</button>
+          {(()=>{
+            const iconBtn=(danger)=>({width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',background:danger?'rgba(255,80,80,.28)':'rgba(255,255,255,.18)',border:'none',borderRadius:12,color:'#fff',fontSize:'1.15rem',cursor:'pointer',backdropFilter:'blur(4px)',flexShrink:0});
+            const doShare=()=>{
+              const encoded = encodeTrip(trip);
+              if(!encoded){alert('Could not encode trip.');return;}
+              const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
+              if(navigator.share){
+                navigator.share({title: trip.title, text: `Check out my trip to ${(trip.destinations||[]).map(d=>d.city).join(' & ')||trip.title} on Locale! (Read-only snapshot)`, url});
+              } else {
+                navigator.clipboard.writeText(url).then(()=>showToast('Link copied — recipients can view but not edit.','info',4000)).catch(()=>{ prompt('Copy this read-only snapshot link:', url); });
+              }
+            };
+            return (
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:14}}>
+            <button onClick={onBack} aria-label="Back to all trips" style={{display:'flex',alignItems:'center',gap:6,height:44,background:'rgba(255,255,255,.18)',border:'none',borderRadius:12,padding:'0 16px',color:'#fff',fontSize:'.9rem',fontWeight:500,cursor:'pointer',backdropFilter:'blur(4px)'}}>← Back</button>
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
-              <button onClick={()=>{
-                const encoded = encodeTrip(trip);
-                if(!encoded){alert('Could not encode trip.');return;}
-                const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
-                if(navigator.share){
-                  navigator.share({title: trip.title, text: `Check out my trip to ${(trip.destinations||[]).map(d=>d.city).join(' & ')||trip.title} on Locale! (Read-only snapshot)`, url});
-                } else {
-                  navigator.clipboard.writeText(url).then(()=>showToast('Link copied — recipients can view but not edit.','info',4000)).catch(()=>{
-                    prompt('Copy this read-only snapshot link:', url);
-                  });
-                }
-              }} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>🔗 Share</button>
-              <button onClick={()=>downloadTripICS(trip)} title="Add itinerary to your calendar" style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>📅 Calendar</button>
-              <button onClick={()=>generateTripPDF(trip)} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>↓ PDF</button>
-              <button aria-label="Delete trip" onClick={()=>{ if(window.confirm(`Delete "${trip.title}"? This can't be undone.`)) onDelete(trip.id); }} style={{background:'rgba(255,80,80,.3)',border:'none',borderRadius:20,padding:'6px 12px',color:'#fff',fontSize:'1rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>🗑</button>
+              <button onClick={doShare} aria-label="Share trip" title="Share trip" style={iconBtn(false)}>🔗</button>
+              <button onClick={()=>downloadTripICS(trip)} aria-label="Add itinerary to calendar" title="Add to calendar (.ics)" style={iconBtn(false)}>📅</button>
+              <button onClick={()=>generateTripPDF(trip)} aria-label="Download trip as PDF" title="Download PDF" style={iconBtn(false)}>⬇️</button>
+              <button aria-label="Delete trip" title="Delete trip" onClick={()=>{ if(window.confirm(`Delete "${trip.title}"? This can't be undone.`)) onDelete(trip.id); }} style={iconBtn(true)}>🗑️</button>
             </div>
           </div>
+            );
+          })()}
           {/* Title + meta */}
           <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:8}}>
             <span style={{fontSize:'2rem',lineHeight:1}}>{(()=>{const m=(trip.title||'').match(/^\p{Emoji}/u);return m?m[0]:(trip.emoji||'✈️');})()}</span>
@@ -5853,6 +5923,36 @@ class ErrorBoundary extends React.Component {
   assert('buildTripICS includes timed activity', ics.includes('DTSTART:20260917T093000'));
   assert('buildTripICS includes flight summary', ics.includes('BA286'));
   assert('buildTripICS escapes accented/quoted names', ics.includes("Mus") && ics.includes('Orsay'));
+
+  // ── NEW v1.1: safeJSONParse robustness ─
+  assert('safeJSONParse parses clean object', safeJSONParse('{"a":1}')?.a===1);
+  assert('safeJSONParse strips code fences', safeJSONParse('```json\n{"a":2}\n```')?.a===2);
+  assert('safeJSONParse tolerates trailing comma in array', JSON.stringify(safeJSONParse('[1,2,3,]'))==='[1,2,3]');
+  assert('safeJSONParse tolerates trailing comma in object', safeJSONParse('{"a":1,"b":2,}')?.b===2);
+  assert('safeJSONParse repairs truncated array', (()=>{const r=safeJSONParse('[{"name":"A"},{"name":"B"'); return Array.isArray(r)&&r.length===2&&r[1].name==='B';})());
+  assert('safeJSONParse repairs truncated object+string', (()=>{const r=safeJSONParse('{"x":"hello'); return r&&r.x==='hello';})());
+  assert('safeJSONParse ignores prose around JSON', safeJSONParse('Here you go: {"a":9} thanks')?.a===9);
+  assert('safeJSONParse returns null on hopeless input', safeJSONParse('not json at all')===null);
+
+  // ── NEW v1.1: day stop reorder (unified sortOrder swap) ─
+  (()=>{
+    const day={activities:[{id:'a1',sortOrder:0},{id:'a2',sortOrder:2}],restaurants:[{id:'r1',sortOrder:1}]};
+    // merged display order by sortOrder: a1(0), r1(1), a2(2)
+    const merged=[{item:day.activities[0]},{item:day.restaurants[0]},{item:day.activities[1]}];
+    const moveStop=(i,dir)=>{
+      const j=i+dir; if(j<0||j>=merged.length) return null;
+      const arr=merged.map(m=>m.item); [arr[i],arr[j]]=[arr[j],arr[i]];
+      const orderMap=new Map(arr.map((s,k)=>[s.id,k]));
+      const reindex=(list)=>list.map(s=>orderMap.has(s.id)?{...s,sortOrder:orderMap.get(s.id)}:s);
+      return {activities:reindex(day.activities),restaurants:reindex(day.restaurants)};
+    };
+    const moved=moveStop(2,-1); // move a2 up past r1
+    const all=[...moved.activities,...moved.restaurants].sort((a,b)=>a.sortOrder-b.sortOrder).map(s=>s.id);
+    assert('reorder: moving a stop up reflows unified order', JSON.stringify(all)===JSON.stringify(['a1','a2','r1']));
+    assert('reorder: clamps at top (no move)', moveStop(0,-1)===null);
+    assert('reorder: clamps at bottom (no move)', moveStop(2,1)===null);
+  })();
+  assert('FREE_GENERATION_CAP raised to 5', FREE_GENERATION_CAP===5);
 
   // Summary
   if (failed === 0) {
