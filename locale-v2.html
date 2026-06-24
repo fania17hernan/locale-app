@@ -1130,6 +1130,94 @@ function buildDayRouteUrl(trip, day){
   return 'https://www.google.com/maps/dir/'+chain.map(s=>encodeURIComponent(s)).join('/');
 }
 
+// ── .ics calendar export (PRD 2.4) ──────────────────────────────────────────────
+function icsEsc(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n'); }
+function icsFold(line){ // RFC5545: fold at 75 octets
+  if(line.length<=74) return line;
+  let out=line.slice(0,74), rest=line.slice(74);
+  while(rest.length>73){ out+='\r\n '+rest.slice(0,73); rest=rest.slice(73); }
+  return out+'\r\n '+rest;
+}
+function icsDateLocal(dateStr, time){ // floating local time → 20260917T093000 ; all-day → 20260917
+  if(!dateStr) return null;
+  const ymd=dateStr.slice(0,10).replace(/-/g,'');
+  if(!time) return {value:ymd, allDay:true};
+  const m=/^(\d{1,2}):(\d{2})/.exec(time); if(!m) return {value:ymd, allDay:true};
+  return {value:ymd+'T'+m[1].padStart(2,'0')+m[2]+'00', allDay:false};
+}
+function icsDateFromISO(iso){ // "2026-09-17T10:30:00" → 20260917T103000 (floating local)
+  if(!iso) return null;
+  const m=/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(iso);
+  if(!m) return null;
+  return m[1]+m[2]+m[3]+'T'+m[4]+m[5]+'00';
+}
+function addMinutesToICS(val, mins){ // val like 20260917T093000 (floating)
+  const m=/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/.exec(val); if(!m) return val;
+  const d=new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]); d.setMinutes(d.getMinutes()+mins);
+  const p=n=>String(n).padStart(2,'0');
+  return ''+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'T'+p(d.getHours())+p(d.getMinutes())+'00';
+}
+function nextDayYMD(ymd){ const d=new Date(+ymd.slice(0,4),+ymd.slice(4,6)-1,+ymd.slice(6,8)); d.setDate(d.getDate()+1); const p=n=>String(n).padStart(2,'0'); return ''+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate()); }
+function buildTripICS(trip){
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Locale//Trip Planner//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  const stamp=(new Date()).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
+  const cityOf=(dayId)=>{ const d=(trip.days||[]).find(x=>x.id===dayId); const dest=(trip.destinations||[]).find(z=>z.id===d?.destinationId); return dest?.city||''; };
+  const push=(ev)=>{
+    lines.push('BEGIN:VEVENT');
+    lines.push('UID:'+(ev.uid||uuid())+'@locale.app');
+    lines.push('DTSTAMP:'+stamp);
+    if(ev.allDay){ lines.push('DTSTART;VALUE=DATE:'+ev.start); lines.push('DTEND;VALUE=DATE:'+(ev.end||nextDayYMD(ev.start))); }
+    else { lines.push('DTSTART:'+ev.start); lines.push('DTEND:'+(ev.end||addMinutesToICS(ev.start,60))); }
+    lines.push(icsFold('SUMMARY:'+icsEsc(ev.summary)));
+    if(ev.location) lines.push(icsFold('LOCATION:'+icsEsc(ev.location)));
+    if(ev.desc) lines.push(icsFold('DESCRIPTION:'+icsEsc(ev.desc)));
+    lines.push('END:VEVENT');
+  };
+  // Flights
+  (trip.flights||[]).forEach(f=>{
+    const start=icsDateFromISO(f.departureTime); if(!start) return;
+    const end=icsDateFromISO(f.arrivalTime)||addMinutesToICS(start,120);
+    push({uid:f.id, allDay:false, start, end,
+      summary:`✈️ ${f.airline||'Flight'} ${f.flightNumber||''}`.trim(),
+      location:[f.departureAirport,f.arrivalAirport].filter(Boolean).join(' → '),
+      desc:[f.confirmationNumber&&('Confirmation: '+f.confirmationNumber), f.seatNumber&&('Seat '+f.seatNumber), f.notes].filter(Boolean).join('\n')});
+  });
+  // Day stops
+  (trip.days||[]).forEach(day=>{
+    const city=cityOf(day.id);
+    const stops=[...(day.activities||[]),...(day.restaurants||[])]
+      .sort((a,b)=>{const ta=a.time||'',tb=b.time||'';if(ta&&tb&&ta!==tb)return ta<tb?-1:1;if(ta&&!tb)return -1;if(!ta&&tb)return 1;return (a.sortOrder??0)-(b.sortOrder??0);});
+    stops.forEach(s=>{
+      const d=icsDateLocal(day.date, s.time); if(!d) return;
+      push({uid:s.id, allDay:d.allDay, start:d.value, end:d.allDay?null:addMinutesToICS(d.value,90),
+        summary:(s.emoji?s.emoji+' ':'')+(s.name||'Activity'),
+        location:s.address||[s.neighborhood,city].filter(Boolean).join(', '),
+        desc:[s.notes, s.cuisine&&('Cuisine: '+s.cuisine), s.bucket==='must-do'&&'★ Must do'].filter(Boolean).join('\n')});
+    });
+  });
+  // Lodging check-in/out
+  (trip.lodging||[]).forEach(l=>{
+    if(l.checkIn){ const d=icsDateLocal(l.checkIn,l.checkInTime); if(d) push({uid:(l.id||uuid())+'-in', allDay:d.allDay, start:d.value, end:d.allDay?null:addMinutesToICS(d.value,30), summary:'🏨 Check in · '+(l.name||'Hotel'), location:l.address||'', desc:l.confirmationNumber?('Confirmation: '+l.confirmationNumber):''}); }
+    if(l.checkOut){ const d=icsDateLocal(l.checkOut,l.checkOutTime); if(d) push({uid:(l.id||uuid())+'-out', allDay:d.allDay, start:d.value, end:d.allDay?null:addMinutesToICS(d.value,30), summary:'🏨 Check out · '+(l.name||'Hotel'), location:l.address||''}); }
+  });
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+function downloadTripICS(trip){
+  try{
+    const ics=buildTripICS(trip);
+    const eventCount=(ics.match(/BEGIN:VEVENT/g)||[]).length;
+    if(eventCount===0){ showToast('Nothing to export yet — add itinerary stops or flight times first.','warn',5000); return; }
+    const blob=new Blob([ics],{type:'text/calendar;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=(trip.title||'trip').replace(/[^\w\-]+/g,'_').replace(/^_+|_+$/g,'')+'.ics';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    showToast(`Calendar file ready (${eventCount} event${eventCount>1?'s':''}). Open it to add to your calendar.`,'info',5000);
+  }catch(e){ showToast('Could not build the calendar file.','error',5000); }
+}
+
 // ── VWP — single source of truth (fixes Debt-004: was duplicated & diverging) ──
 const VWP_COUNTRIES = ['GB','DE','FR','IT','ES','AU','NZ','JP','KR','SG','NL','BE','AT','CH','SE','NO','DK','FI','IE','PT','CZ','SK','HU','PL','LU','LI','MC','SM','IS','EE','LV','LT','SI','MT','CY','GR','HR','BG','RO','BN','TW','CL'];
 
@@ -1477,13 +1565,28 @@ function normalizeTrip(t){
   const title = t.title || t.name || 'My Trip';
   const startDate = t.startDate || t.travelPeriod?.depart || '';
   const endDate = t.endDate || t.travelPeriod?.return || '';
-  const collaborators = (t.collaborators||[]).map((c,i)=>({...c, avatarColor: c.avatarColor||c.color||AVATAR_COLORS[i%AVATAR_COLORS.length], rsvp: c.rsvp||(i===0?'going':'pending'), email: c.email||'', phone: c.phone||''}));
+  const collaborators = (t.collaborators||[]).map((c,i)=>({...c, avatarColor: c.avatarColor||c.color||AVATAR_COLORS[i%AVATAR_COLORS.length], rsvp: c.rsvp||(i===0?'going':'pending'), email: c.email||'', phone: c.phone||'', venmo: c.venmo||'', zelle: c.zelle||''}));
   const checklist = (t.checklist||[]).length ? t.checklist : generateChecklist({...t, startDate, endDate, title});
 
   // Schema migrations — add fields introduced in each version
   // v1→v2: destinations array, days array
   const destinations = t.destinations || [];
-  const days = t.days || [];
+  // v4→v4.1 (additive): per-stop attribution (addedBy/addedByName/addedAt),
+  // per-stop comment threads, optional time; per-day comment list. All default-safe.
+  const normStop = (s)=>({
+    ...s,
+    time: s.time || '',
+    addedBy: s.addedBy || null,
+    addedByName: s.addedByName || null,
+    addedAt: s.addedAt || null,
+    comments: Array.isArray(s.comments) ? s.comments : [],
+  });
+  const days = (t.days || []).map(d=>({
+    ...d,
+    activities: (d.activities||[]).map(normStop),
+    restaurants: (d.restaurants||[]).map(normStop),
+    comments: Array.isArray(d.comments) ? d.comments : [],
+  }));
   // v2→v3: packingList, lodging, flights
   // null or [] = never generated → PackingView will auto-generate
   // Only treat as initialised if it actually has items
@@ -1493,9 +1596,15 @@ function normalizeTrip(t){
   // v3→v4 (additive, v0.9): planningStage ('idea'|'booked') + ideation results
   const planningStage = t.planningStage === 'idea' ? 'idea' : 'booked';
   const ideation = t.ideation ?? null;
+  // v4.1 (2.3): pinned ideation suggestions reused when generating the itinerary
+  const pinnedIdeas = Array.isArray(t.pinnedIdeas) ? t.pinnedIdeas : [];
+  // v4.1 (2.2): structured must-happen events injected verbatim into the prompt
+  const mustEvents = Array.isArray(t.mustEvents) ? t.mustEvents : [];
   const budget = (t.budget && Array.isArray(t.budget.items))
-    ? { currency: t.budget.currency || 'USD', items: t.budget.items }
-    : { currency: 'USD', items: [] };
+    ? { currency: t.budget.currency || 'USD',
+        items: t.budget.items.map(i=>({...i, paidBy: i.paidBy||null, excluded: Array.isArray(i.excluded)?i.excluded:[]})),
+        payments: Array.isArray(t.budget.payments)?t.budget.payments:[] }
+    : { currency: 'USD', items: [], payments: [] };
 
   return {
     ...t,
@@ -1505,6 +1614,7 @@ function normalizeTrip(t){
     destinations, days,
     packingList, lodging, flights,
     planningStage, ideation, budget,
+    pinnedIdeas, mustEvents,
   };
 }
 const MOCK_TRIPS=RAW_MOCK_TRIPS.map(t=>normalizeTrip(t));
@@ -1730,6 +1840,27 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
               <span style={{fontSize:'1.2rem'}}>{dest.countryCode==='US'?'📍':'🌍'}</span>
               <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600}}>{dest.city}</h3>
             </div>
+            {(trip?.lodging||[]).length===0 && (()=>{
+              const q=encodeURIComponent(dest.city||'');
+              const pinnedStays=(trip?.pinnedIdeas||[]).filter(p=>/^stay in|^day trip|neighborhood/i.test(p.text));
+              return (
+                <div className="card" style={{marginBottom:8,padding:'14px 16px',borderLeft:'3px solid var(--color-accent)'}}>
+                  <p style={{fontWeight:600,fontSize:'.875rem',marginBottom:4}}>🏨 Where to stay</p>
+                  <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',lineHeight:1.5,marginBottom:pinnedStays.length?8:10}}>You haven't added lodging yet. Search stays in {dest.city}, or upload a booking confirmation on the Pre-Trip tab to lock it in.</p>
+                  {pinnedStays.length>0 && (
+                    <div style={{marginBottom:10}}>
+                      <p style={{fontSize:'.7rem',textTransform:'uppercase',letterSpacing:'.05em',color:'var(--color-ink-muted)',fontWeight:600,marginBottom:4}}>📌 Your pinned ideas</p>
+                      {pinnedStays.map(p=><p key={p.id} style={{fontSize:'.8rem',color:'var(--color-ink-light)',lineHeight:1.5,marginBottom:3}}>· {p.text}</p>)}
+                    </div>
+                  )}
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                    <a href={`https://www.airbnb.com/s/${q}/homes`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">Airbnb ↗</a>
+                    <a href={`https://www.expedia.com/Hotel-Search?destination=${q}`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">Expedia ↗</a>
+                    <a href={`https://www.booking.com/searchresults.html?ss=${q}`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">Booking ↗</a>
+                  </div>
+                </div>
+              );
+            })()}
             {sections.map((s,i)=>{
               const k=`${dest.id}-${i}`;
               return(
@@ -2331,8 +2462,8 @@ function ActivityCard({item,type,draggable,onEdit,onDelete}){
 function ActivityForm({initial,type,onSave,onCancel}){
   const isRest=type==='restaurant';
   const blank=isRest
-    ?{name:'',emoji:'🍽️',address:'',neighborhood:'',cuisine:'',mealType:'dinner',priceRange:'$$',reservationRequired:false,notes:'',bucket:'must-do'}
-    :{name:'',emoji:'📍',address:'',neighborhood:'',category:'sightseeing',bookingRequired:false,notes:'',bucket:'must-do'};
+    ?{name:'',emoji:'🍽️',time:'',address:'',neighborhood:'',cuisine:'',mealType:'dinner',priceRange:'$$',reservationRequired:false,notes:'',bucket:'must-do'}
+    :{name:'',emoji:'📍',time:'',address:'',neighborhood:'',category:'sightseeing',bookingRequired:false,notes:'',bucket:'must-do'};
   const [f,setF]=useState(initial||blank);
   const set=(k,v)=>setF(x=>({...x,[k]:v}));
   return(
@@ -2342,7 +2473,16 @@ function ActivityForm({initial,type,onSave,onCancel}){
         <input className="input" value={f.emoji} onChange={e=>set('emoji',e.target.value)} style={{textAlign:'center',padding:'8px 4px'}}/>
         <input className="input" placeholder={isRest?'Restaurant name':'Activity name'} value={f.name} onChange={e=>set('name',e.target.value)}/>
       </div>
-      <input className="input" placeholder="Address (optional)" value={f.address||''} onChange={e=>set('address',e.target.value)} style={{marginBottom:8}}/>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+        <div>
+          <label className="section-label" style={{display:'block',marginBottom:4}}>Time (optional)</label>
+          <input className="input" type="time" value={f.time||''} onChange={e=>set('time',e.target.value)}/>
+        </div>
+        <div>
+          <label className="section-label" style={{display:'block',marginBottom:4}}>Address (optional)</label>
+          <input className="input" placeholder="Address" value={f.address||''} onChange={e=>set('address',e.target.value)}/>
+        </div>
+      </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
         <input className="input" placeholder="Neighborhood" value={f.neighborhood||''} onChange={e=>set('neighborhood',e.target.value)}/>
         <select className="input" value={f.bucket} onChange={e=>set('bucket',e.target.value)}>
@@ -2462,18 +2602,112 @@ function DayRouteMap({trip,day}){
   );
 }
 
+// ── Attribution helpers (per-stop "Added by X · Yago") ──────────────────────────
+function relativeAgo(ts){
+  if(!ts) return '';
+  const d = typeof ts==='number'?ts:Date.parse(ts);
+  if(!d || isNaN(d)) return '';
+  const s = Math.floor((Date.now()-d)/1000);
+  if(s<45) return 'just now';
+  const m=Math.floor(s/60); if(m<60) return m+'m ago';
+  const h=Math.floor(m/60); if(h<24) return h+'h ago';
+  const dd=Math.floor(h/24); if(dd<7) return dd+'d ago';
+  const w=Math.floor(dd/7); if(w<5) return w+'w ago';
+  const mo=Math.floor(dd/30); if(mo<12) return mo+'mo ago';
+  return Math.floor(dd/365)+'y ago';
+}
+function resolveStopAuthor(trip, item){
+  const members = trip.collaborators||[];
+  const m = item.addedBy ? members.find(x=>x.id===item.addedBy) : null;
+  if(m) return {name:m.name, color:m.avatarColor||AVATAR_COLORS[0], initial:(m.name||'?').charAt(0).toUpperCase()};
+  if(item.addedByName) return {name:item.addedByName, color:AVATAR_COLORS[0], initial:item.addedByName.charAt(0).toUpperCase()};
+  return null;
+}
+function fmtStopTime(t){
+  if(!t) return '';
+  const m=/^(\d{1,2}):(\d{2})/.exec(String(t)); if(!m) return String(t);
+  return m[1].padStart(2,'0')+':'+m[2];
+}
+function Avatar22({initial,color}){
+  return <span style={{width:22,height:22,borderRadius:'50%',background:color,color:'#0E1117',display:'inline-flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'.68rem',flexShrink:0}}>{initial}</span>;
+}
+
+// ── TIMELINE STOP — one row in the day plan (prototype style) ────────────────────
+function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDeleteComment}){
+  const [open,setOpen]=useState(false);
+  const [draft,setDraft]=useState('');
+  const author=resolveStopAuthor(trip,item);
+  const accent = author ? author.color : (type==='restaurant'?'#E8A13A':'var(--color-accent)');
+  const time=fmtStopTime(item.time);
+  const comments=item.comments||[];
+  const mapsUrl=`https://maps.google.com/?q=${encodeURIComponent(item.address||item.name)}`;
+  const post=()=>{ if(draft.trim()){ onAddComment(item, draft.trim()); setDraft(''); if(!open)setOpen(true); } };
+  return(
+    <div style={{display:'flex',position:'relative'}}>
+      <div style={{width:3,borderRadius:2,background:accent,flexShrink:0,alignSelf:'stretch'}}/>
+      <div style={{flex:1,minWidth:0,padding:'0 0 18px 14px'}}>
+        {time && <div style={{fontFamily:'var(--font-mono)',fontSize:'.72rem',color:'var(--color-ink-muted)',letterSpacing:'.04em',marginBottom:3}}>{time}</div>}
+        <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+          <span style={{fontWeight:700,fontSize:'1rem',color:'var(--color-ink)'}}>{item.emoji?item.emoji+' ':''}{item.name}</span>
+          {item.bucket==='must-do'&&<span className="badge-must">★</span>}
+          {item.bucket==='nice-to-have'&&<span className="badge-nice">✨</span>}
+          {(item.bookingRequired||item.reservationRequired)&&<span className="pill pill-flag" style={{padding:'1px 6px',fontSize:'.68rem'}}>Booking</span>}
+        </div>
+        {author && (
+          <div style={{display:'flex',alignItems:'center',gap:7,marginTop:6}}>
+            <Avatar22 initial={author.initial} color={author.color}/>
+            <span style={{fontSize:'.8rem',color:'var(--color-ink-muted)'}}>Added by {author.name}{item.addedAt?' · '+relativeAgo(item.addedAt):''}</span>
+          </div>
+        )}
+        <button onClick={()=>setOpen(o=>!o)} style={{marginTop:8,background:'none',border:'none',padding:0,cursor:'pointer',display:'flex',alignItems:'center',gap:6,color:comments.length?'var(--color-accent)':'var(--color-ink-muted)',fontSize:'.8rem',fontWeight:500}}>
+          💬 {comments.length ? (comments.length+' note'+(comments.length>1?'s':'')) : 'add a note'}
+        </button>
+        {open && (
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--color-border)'}}>
+            {item.neighborhood&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginBottom:4}}>📍 {item.neighborhood}</p>}
+            {item.address&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginBottom:4}}>{item.address}</p>}
+            {item.notes&&<p style={{fontSize:'.85rem',lineHeight:1.55,margin:'6px 0'}}>{item.notes}</p>}
+            {comments.map(c=>(
+              <div key={c.id} style={{display:'flex',gap:8,alignItems:'flex-start',margin:'8px 0'}}>
+                <Avatar22 initial={(c.author||'?').charAt(0).toUpperCase()} color={c.color||AVATAR_COLORS[0]}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:'.78rem'}}><strong>{c.author}</strong> <span style={{color:'var(--color-ink-muted)'}}>{c.ts?'· '+relativeAgo(c.ts):''}</span></div>
+                  <div style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{c.text}</div>
+                </div>
+                {onDeleteComment&&<button aria-label="Delete note" onClick={()=>onDeleteComment(item,c.id)} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'0 6px'}}>✕</button>}
+              </div>
+            ))}
+            <div style={{display:'flex',gap:6,marginTop:8}}>
+              <input className="input" style={{flex:1}} placeholder="Add a note…" value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')post();}}/>
+              <button className="btn btn-secondary btn-sm" disabled={!draft.trim()} onClick={post}>Post</button>
+            </div>
+            <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
+              <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">🗺️ Maps</a>
+              {(item.bookingUrl||item.reservationUrl)&&<a href={item.bookingUrl||item.reservationUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">Book →</a>}
+              {onEdit&&<button className="btn btn-ghost btn-sm" onClick={()=>onEdit(item)}>✏️ Edit</button>}
+              {onDelete&&<button className="btn btn-ghost btn-sm" aria-label="Remove item" style={{color:'var(--color-flag)'}} onClick={()=>{if(window.confirm('Remove this item?'))onDelete(item.id);}}>🗑</button>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DayView({trip,day,onUpdateTrip}){
   const [notes,setNotes]=useState(day.notes||'');
   const [filter,setFilter]=useState('all');
-  const [copied,setCopied]=useState(false);
   const [addingType,setAddingType]=useState(null); // 'activity'|'restaurant'|null
   const [editingItem,setEditingItem]=useState(null); // {item, type}
   const [showMap,setShowMap]=useState(false);
-  const actsRef=useRef(null);
-  const restsRef=useRef(null);
+  const [dayNoteDraft,setDayNoteDraft]=useState('');
   const dest=trip.destinations.find(d=>d.id===day.destinationId);
   const acts=(day.activities||[]).filter(a=>filter==='all'||a.bucket===filter);
   const rests=(day.restaurants||[]).filter(r=>filter==='all'||r.bucket===filter);
+  // "You" identity for attribution = trip owner (or first collaborator)
+  const me=(trip.collaborators||[]).find(c=>c.role==='owner')||(trip.collaborators||[])[0];
+  const myName=me?.name||'You';
+  const myColor=me?.avatarColor||AVATAR_COLORS[0];
 
   const updateDay=(newDay)=>onUpdateTrip({...trip,days:trip.days.map(d=>d.id===day.id?newDay:d)});
 
@@ -2485,7 +2719,8 @@ function DayView({trip,day,onUpdateTrip}){
       if(idx>=0) list[idx]={...list[idx],...formData};
       setEditingItem(null);
     } else {
-      list.push({...formData,id:uuid(),sortOrder:list.length});
+      list.push({...formData,id:uuid(),sortOrder:list.length,
+        addedBy: me?.id||null, addedByName: me?null:'You', addedAt: Date.now(), comments:[]});
     }
     updateDay({...day,[listKey]:list});
     setAddingType(null);
@@ -2494,48 +2729,44 @@ function DayView({trip,day,onUpdateTrip}){
   const handleDelete=(id,listKey)=>{
     updateDay({...day,[listKey]:(day[listKey]||[]).filter(x=>x.id!==id)});
   };
+  const listKeyOf=(item)=> (day.activities||[]).some(a=>a.id===item.id) ? 'activities' : 'restaurants';
+  const addStopComment=(item,text)=>{
+    const lk=listKeyOf(item);
+    updateDay({...day,[lk]:(day[lk]||[]).map(s=>s.id===item.id?{...s,comments:[...(s.comments||[]),{id:uuid(),author:myName,color:myColor,text,ts:Date.now()}]}:s)});
+  };
+  const deleteStopComment=(item,cid)=>{
+    const lk=listKeyOf(item);
+    updateDay({...day,[lk]:(day[lk]||[]).map(s=>s.id===item.id?{...s,comments:(s.comments||[]).filter(c=>c.id!==cid)}:s)});
+  };
+  const addDayComment=(text)=> updateDay({...day,comments:[...(day.comments||[]),{id:uuid(),author:myName,color:myColor,text,ts:Date.now()}]});
+  const deleteDayComment=(cid)=> updateDay({...day,comments:(day.comments||[]).filter(c=>c.id!==cid)});
 
-  // Wire up SortableJS for drag-and-drop reordering
-  useEffect(()=>{
-    if(!window.Sortable)return;
-    const makeSort=(ref,listKey)=>{
-      if(!ref.current)return null;
-      return new window.Sortable(ref.current,{
-        animation:150,
-        handle:'.drag-handle',
-        ghostClass:'sortable-ghost',
-        chosenClass:'sortable-chosen',
-        onEnd(evt){
-          if(evt.oldIndex===evt.newIndex)return;
-          const fullList=[...(day[listKey]||[])];
-          // Find the item ids in their new rendered order via DOM
-          const orderedIds=[...evt.from.querySelectorAll('.sortable-item')].map(el=>el.dataset.id);
-          const reordered=orderedIds.map((id,i)=>{
-            const item=fullList.find(x=>x.id===id);
-            return item?{...item,sortOrder:i}:null;
-          }).filter(Boolean);
-          // Merge back — items not shown (filtered) keep their place
-          const hiddenItems=fullList.filter(x=>!reordered.find(r=>r.id===x.id));
-          const merged=[...reordered,...hiddenItems];
-          const updatedDays=trip.days.map(d=>d.id===day.id?{...d,[listKey]:merged}:d);
-          onUpdateTrip({...trip,days:updatedDays});
-        }
-      });
-    };
-    const s1=makeSort(actsRef,'activities');
-    const s2=makeSort(restsRef,'restaurants');
-    return()=>{s1&&s1.destroy();s2&&s2.destroy();};
-  },[day.id,filter,acts.length,rests.length]);
   const hotel=trip.lodging?.find(l=>!l.destinationId||l.destinationId===day.destinationId);
   const wxMap={GB:{icon:'🌤',cond:'Partly Cloudy',hi:17,lo:12,unit:'C',rain:30},FR:{icon:'☀️',cond:'Mild & Sunny',hi:20,lo:14,unit:'C',rain:10},US:{icon:'☀️',cond:'Sunny',hi:30,lo:24,unit:'F',rain:5}};
   const wx=dest?wxMap[dest.countryCode]||null:null;
   function saveNotes(v){onUpdateTrip({...trip,days:trip.days.map(d=>d.id===day.id?{...d,notes:v}:d)});}
-  function copyNotes(){navigator.clipboard?.writeText(notes).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1500)});}
+
+  // Merge activities + restaurants into one time-ordered timeline
+  const merged=[...acts.map(a=>({item:a,type:'activity'})),...rests.map(r=>({item:r,type:'restaurant'}))]
+    .sort((a,b)=>{
+      const ta=a.item.time||'', tb=b.item.time||'';
+      if(ta&&tb&&ta!==tb) return ta<tb?-1:1;
+      if(ta&&!tb) return -1;
+      if(!ta&&tb) return 1;
+      return (a.item.sortOrder??0)-(b.item.sortOrder??0);
+    });
+  const totalStops=(day.activities||[]).length+(day.restaurants||[]).length;
+  const dayComments=day.comments||[];
+
   return(
     <div style={{padding:'0 16px 32px'}}>
-      <div style={{marginBottom:16}}>
-        <h2 className="font-display" style={{fontSize:'1.5rem',fontWeight:600,lineHeight:1.2,marginBottom:4}}>{day.label}</h2>
-        <p style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{formatDate(day.date)}{dest?` · ${dest.city}`:''}</p>
+      {/* Header — day label + derived status pill */}
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:16}}>
+        <div style={{minWidth:0}}>
+          <h2 className="font-display" style={{fontSize:'1.5rem',fontWeight:600,lineHeight:1.2,marginBottom:4}}>{day.label}{dest?<span style={{color:'var(--color-ink-light)',fontWeight:400}}> · {dest.city}</span>:''}</h2>
+          <p style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{formatDate(day.date)} · {totalStops} {totalStops===1?'stop':'stops'}</p>
+        </div>
+        <span className="pill" style={{flexShrink:0,background:'var(--color-success-soft, rgba(43,182,163,.14))',color:'var(--color-success)',fontWeight:600,fontSize:'.72rem',whiteSpace:'nowrap'}}>● On track</span>
       </div>
       {(() => {
         const dayItems = (trip.budget?.items||[]).filter(i=>i.day===day.id);
@@ -2580,72 +2811,69 @@ function DayView({trip,day,onUpdateTrip}){
           </div>
         );
       })()}
-      <div style={{display:'flex',gap:8,marginBottom:16}}>
+      {/* Filters + add */}
+      <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
         {['all','must-do','nice-to-have'].map(f=>(
           <button key={f} className={`pill ${filter===f?'pill-accent':'pill-neutral'}`} style={{cursor:'pointer',border:'none'}} onClick={()=>setFilter(f)}>
             {f==='all'?'All':f==='must-do'?'★ Must Do':'✨ Nice'}
           </button>
         ))}
-      </div>
-      {/* Activities section */}
-      <div style={{marginBottom:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-          <p className="section-label" style={{marginBottom:0}}>Activities {acts.length>1&&<span style={{fontSize:'.7rem',color:'var(--color-ink-light)',fontWeight:400}}>· drag to reorder</span>}</p>
-          {!addingType&&!editingItem&&<button className="btn btn-ghost btn-sm" onClick={()=>setAddingType('activity')}>+ Add</button>}
-        </div>
-        {editingItem?.type==='activity'&&(
-          <ActivityForm initial={editingItem.item} type="activity"
-            onSave={f=>handleSaveActivity(f,'activity')}
-            onCancel={()=>setEditingItem(null)}/>
-        )}
-        {addingType==='activity'&&(
-          <ActivityForm type="activity"
-            onSave={f=>handleSaveActivity(f,'activity')}
-            onCancel={()=>setAddingType(null)}/>
-        )}
-        <div ref={actsRef}>
-          {acts.map(a=><ActivityCard key={a.id} item={a} type="activity" draggable={acts.length>1}
-            onEdit={item=>{setAddingType(null);setEditingItem({item,type:'activity'});}}
-            onDelete={id=>handleDelete(id,'activities')}/>)}
-        </div>
-        {acts.length===0&&!addingType&&!editingItem&&(
-          <p style={{fontSize:'.83rem',color:'var(--color-ink-muted)',paddingLeft:4}}>No activities yet — tap + Add to plan something.</p>
+        <span style={{flex:1}}/>
+        {!addingType&&!editingItem&&(
+          <>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setAddingType('activity')}>+ Activity</button>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setAddingType('restaurant')}>+ Food</button>
+          </>
         )}
       </div>
-
-      {/* Restaurants section */}
-      <div style={{marginBottom:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-          <p className="section-label" style={{marginBottom:0}}>Food & Drinks {rests.length>1&&<span style={{fontSize:'.7rem',color:'var(--color-ink-light)',fontWeight:400}}>· drag to reorder</span>}</p>
-          {!addingType&&!editingItem&&<button className="btn btn-ghost btn-sm" onClick={()=>setAddingType('restaurant')}>+ Add</button>}
-        </div>
-        {editingItem?.type==='restaurant'&&(
-          <ActivityForm initial={editingItem.item} type="restaurant"
-            onSave={f=>handleSaveActivity(f,'restaurant')}
-            onCancel={()=>setEditingItem(null)}/>
-        )}
-        {addingType==='restaurant'&&(
-          <ActivityForm type="restaurant"
-            onSave={f=>handleSaveActivity(f,'restaurant')}
-            onCancel={()=>setAddingType(null)}/>
-        )}
-        <div ref={restsRef}>
-          {rests.map(r=><ActivityCard key={r.id} item={r} type="restaurant" draggable={rests.length>1}
-            onEdit={item=>{setAddingType(null);setEditingItem({item,type:'restaurant'});}}
-            onDelete={id=>handleDelete(id,'restaurants')}/>)}
-        </div>
-        {rests.length===0&&!addingType&&!editingItem&&(
-          <p style={{fontSize:'.83rem',color:'var(--color-ink-muted)',paddingLeft:4}}>No restaurants yet — tap + Add to add one.</p>
-        )}
+      {/* Add / edit forms */}
+      {editingItem&&(
+        <ActivityForm initial={editingItem.item} type={editingItem.type}
+          onSave={f=>handleSaveActivity(f,editingItem.type)} onCancel={()=>setEditingItem(null)}/>
+      )}
+      {addingType&&(
+        <ActivityForm type={addingType}
+          onSave={f=>handleSaveActivity(f,addingType)} onCancel={()=>setAddingType(null)}/>
+      )}
+      {/* Timeline card */}
+      <div className="card" style={{padding:'18px 16px 4px',marginBottom:16}}>
+        {merged.length===0 ? (
+          <p style={{fontSize:'.85rem',color:'var(--color-ink-muted)',padding:'4px 0 16px'}}>
+            {totalStops===0 ? 'No stops yet — tap + Activity or + Food to start this day.' : 'Nothing matches this filter.'}
+          </p>
+        ) : merged.map(({item,type})=>(
+          <TimelineStop key={item.id} trip={trip} item={item} type={type}
+            onEdit={it=>{setAddingType(null);setEditingItem({item:it,type});}}
+            onDelete={id=>handleDelete(id,type==='restaurant'?'restaurants':'activities')}
+            onAddComment={addStopComment} onDeleteComment={deleteStopComment}/>
+        ))}
       </div>
+      {/* Notes on this day — attributed */}
       <div className="card" style={{padding:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-          <p className="section-label" style={{marginBottom:0}}>📝 Group Notes</p>
-          {notes&&<button className="btn btn-ghost" style={{fontSize:'.75rem',padding:'4px 8px'}} onClick={copyNotes}>{copied?'✅ Copied':'📋 Copy'}</button>}
+        <p className="section-label" style={{marginBottom:dayComments.length?12:8}}>Notes on this day</p>
+        {dayComments.map(c=>(
+          <div key={c.id} style={{display:'flex',gap:9,alignItems:'flex-start',marginBottom:12}}>
+            <Avatar22 initial={(c.author||'?').charAt(0).toUpperCase()} color={c.color||AVATAR_COLORS[0]}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:'.8rem'}}><strong>{c.author}</strong> <span style={{color:'var(--color-ink-muted)'}}>{c.ts?'· '+relativeAgo(c.ts):''}</span></div>
+              <div style={{fontSize:'.9rem',color:'var(--color-ink)',lineHeight:1.45}}>{c.text}</div>
+            </div>
+            <button aria-label="Delete note" onClick={()=>deleteDayComment(c.id)} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'0 6px'}}>✕</button>
+          </div>
+        ))}
+        <div style={{display:'flex',gap:6}}>
+          <input className="input" style={{flex:1}} placeholder="Add a note for the crew…" value={dayNoteDraft}
+            onChange={e=>setDayNoteDraft(e.target.value)}
+            onKeyDown={e=>{if(e.key==='Enter'&&dayNoteDraft.trim()){addDayComment(dayNoteDraft.trim());setDayNoteDraft('');}}}/>
+          <button className="btn btn-primary btn-sm" disabled={!dayNoteDraft.trim()} onClick={()=>{if(dayNoteDraft.trim()){addDayComment(dayNoteDraft.trim());setDayNoteDraft('');}}}>Post</button>
         </div>
-        <textarea className="input-field" placeholder="Meet times, reminders, who's doing what..."
-          value={notes} onChange={e=>setNotes(e.target.value)} onBlur={()=>saveNotes(notes)}
-          style={{minHeight:80,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem'}}/>
+        {/* Freeform scratchpad (kept from earlier versions) */}
+        <details style={{marginTop:14}}>
+          <summary style={{cursor:'pointer',fontSize:'.78rem',color:'var(--color-ink-muted)',listStyle:'none'}}>📝 Shared scratchpad</summary>
+          <textarea className="input-field" placeholder="Meet times, reminders, who's doing what..."
+            value={notes} onChange={e=>setNotes(e.target.value)} onBlur={()=>saveNotes(notes)}
+            style={{minHeight:70,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem',marginTop:8}}/>
+        </details>
       </div>
     </div>
   );
@@ -3411,6 +3639,20 @@ Rules: 3-5 neighborhoods ordered best-fit first. 1-3 day trips. Be specific and 
 
   const Card = ({children}) => <div style={{background:'var(--color-surface)',border:'1px solid var(--color-border)',borderRadius:14,padding:'16px 18px',marginBottom:10}}>{children}</div>;
 
+  // Pin a suggestion so it flows into the itinerary prompt once booked (PRD 2.3)
+  const pinned = trip.pinnedIdeas || [];
+  const isPinned = (text) => pinned.some(p=>p.text===text);
+  const togglePin = (text) => {
+    const next = isPinned(text) ? pinned.filter(p=>p.text!==text) : [...pinned, {id:uuid(), text}];
+    onUpdateTrip({...trip, pinnedIdeas: next});
+    showToast(isPinned(text)?'Unpinned':'📌 Pinned — we\'ll use this when you plan your days','info',3000);
+  };
+  const PinBtn = ({text}) => (
+    <button onClick={()=>togglePin(text)} aria-label={isPinned(text)?'Unpin':'Pin this idea'}
+      style={{background:'none',border:'none',cursor:'pointer',fontSize:'.9rem',padding:'2px 4px',opacity:isPinned(text)?1:.4,flexShrink:0}}
+      title={isPinned(text)?'Pinned — tap to remove':'Pin this idea'}>📌</button>
+  );
+
   return (
     <div style={{padding:'0 0 40px'}}>
       <div style={{background:'linear-gradient(135deg,#3D2E5C 0%,#5A4A78 100%)',borderRadius:16,padding:'24px 20px',marginBottom:20,position:'relative',overflow:'hidden'}}>
@@ -3478,7 +3720,10 @@ Rules: 3-5 neighborhoods ordered best-fit first. 1-3 day trips. Be specific and 
               <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:10}}>📍 Where to stay</p>
               {result.neighborhoods.map((n,i)=>(
                 <div key={i} style={{paddingBottom:10,marginBottom:10,borderBottom:i<result.neighborhoods.length-1?'1px solid var(--color-border)':'none'}}>
-                  <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:3}}>{i+1}. {n.name}</p>
+                  <div style={{display:'flex',alignItems:'flex-start',gap:6}}>
+                    <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:3,flex:1}}>{i+1}. {n.name}</p>
+                    <PinBtn text={`Stay in ${n.name} — ${n.why}`}/>
+                  </div>
                   <p style={{fontSize:'.81rem',color:'var(--color-ink-light)',lineHeight:1.55,marginBottom:3}}>{n.why}</p>
                   {n.stay_here_if&&<p style={{fontSize:'.78rem',color:'var(--color-ink-muted)',fontStyle:'italic'}}>Stay here if: {n.stay_here_if}</p>}
                 </div>
@@ -3489,7 +3734,10 @@ Rules: 3-5 neighborhoods ordered best-fit first. 1-3 day trips. Be specific and 
             <Card>
               <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:8}}>🚆 Worth a day trip</p>
               {result.day_trips.map((d,i)=>(
-                <p key={i} style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6,marginBottom:4}}><strong>{d.name}</strong> — {d.why}</p>
+                <div key={i} style={{display:'flex',alignItems:'flex-start',gap:6,marginBottom:4}}>
+                  <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6,flex:1}}><strong>{d.name}</strong> — {d.why}</p>
+                  <PinBtn text={`Day trip: ${d.name} — ${d.why}`}/>
+                </div>
               ))}
             </Card>
           )}
@@ -3544,6 +3792,9 @@ function ItineraryAIPlanner({trip, onUpdateTrip}) {
   const buildSystemPrompt = () => {
     const lodgingLines = (trip.lodging||[]).map(l=>`  • ${l.name}${l.address?' at '+l.address:''}${l.checkIn?' · Check-in: '+l.checkIn:''}${l.checkOut?' · Check-out: '+l.checkOut:''}`).join('\n');
     const flightLines = (trip.flights||[]).map(f=>`  • ${f.direction||''} ${f.flightNumber||''} ${f.departureAirport||''}→${f.arrivalAirport||''} on ${f.departureTime?.slice(0,10)||''} at ${f.departureTime?.slice(11,16)||''}${f.confirmationNumber?' (conf: '+f.confirmationNumber+')':''}`).join('\n');
+    const pinnedLines = (trip.pinnedIdeas||[]).map(p=>`  • ${p.text}`).join('\n');
+    const mustEventLines = (trip.mustEvents||[]).map(m=>`  • ${[m.date&&('['+m.date+']'), m.who&&('('+m.who+')'), m.what].filter(Boolean).join(' ')}`).join('\n');
+    const isMultiCity = (trip.destinations||[]).length>1;
     return `You are a travel itinerary planner. Given a trip description, generate a detailed day-by-day itinerary as a JSON array.
 
 Trip context:
@@ -3554,6 +3805,8 @@ Trip context:
 - Travelers: ${trip.travelerCount || 2}
 ${lodgingLines ? `- Lodging (MUST include check-in/check-out in itinerary):\n${lodgingLines}` : ''}
 ${flightLines ? `- Flights (MUST include in itinerary with exact times and confirmation numbers):\n${flightLines}` : ''}
+${mustEventLines ? `- MUST-HAPPEN EVENTS (place each on its EXACT date for the EXACT people named — never drop, move, or paraphrase these):\n${mustEventLines}` : ''}
+${pinnedLines ? `- Pinned ideas the traveler saved (honor these — e.g. stay/area/things they liked):\n${pinnedLines}` : ''}
 
 ${profilePromptText(getTasteProfile())}
 GEOGRAPHY & LOGISTICS RULES (critical — plan each day as an efficient route that MINIMIZES total travel time):
@@ -3565,13 +3818,16 @@ GEOGRAPHY & LOGISTICS RULES (critical — plan each day as an efficient route th
 6. In each day's "notes", state the neighborhood the day is centered on and that stops are walkable (e.g. "Centered on Le Marais — all stops within a ~15-min walk").
 
 CRITICAL RULES about the user's request:
-1. The user's message contains their NON-NEGOTIABLE activities, restaurants, and plans. You MUST include every specific place, activity, or event they mention — do not skip or replace them.
-2. If they mention a hotel or where they're staying, include hotel check-in on arrival day and check-out on departure day as activities.
-3. If lodging is listed above, always start arrival day with "Check-in at [hotel name]" and end last day with "Check-out from [hotel name]".
-4. If flights are listed above, include departure flight prep (travel to airport, check-in time) on the appropriate days.
-5. After placing all non-negotiables, fill remaining slots with suggestions that complement their stated plans — same neighborhood, logical geography, similar vibe.
-6. Never replace a user-specified activity with a generic one.
-7. NEVER repeat the same note or reminder across multiple days. Flight reminders belong ONLY in the "notes" of the day of that flight (and check-in prep the evening before, if relevant). Every day's "notes" must be unique to that day or empty — no boilerplate.
+1. The user's message contains their NON-NEGOTIABLE activities, restaurants, and plans. You MUST include every specific place, activity, or event they mention — do not skip or replace them. Treat every concrete detail (a named venue, a dated event, a specific time, "we need tickets") as a hard constraint, not a suggestion.
+2. DATED EVENTS: when the user ties something to a specific day or weekday ("on Saturday", "Monday checkout", "the 14th"), put it on THAT exact date. Compute the weekday from the trip dates so e.g. "Saturday" maps to the correct calendar day. Never shift a dated event to a different day for convenience.
+3. PER-SUBGROUP / SPLIT DAYS: the group may split up on a given day (e.g. "the guys go to the ASU–Kansas State game at Wembley on Saturday while the women and toddler do something kid-friendly"). When this happens, plan BOTH tracks for that day: create separate activities for each subgroup, label each clearly in the activity name or notes (e.g. "(Guys) ASU vs Kansas State — Wembley Stadium", "(With toddler) Hyde Park playground + Natural History Museum"), and keep each track's stops geographically sensible. Do not collapse a split day into one shared plan.
+4. INTER-CITY TRANSIT: if the trip spans multiple cities or the user mentions moving between them (e.g. "check out Monday and take the Eurostar/train from London to Paris"), make that travel an explicit event on the correct day: a checkout from the origin lodging, the transit leg itself (with the mode — train/Eurostar/flight), and if tickets aren't booked, add a clear reminder note like "Book Eurostar London→Paris tickets in advance." Resume planning in the new city the same day after arrival.${isMultiCity?' This is a MULTI-CITY trip — assign each day to the correct city and never plan a stop in a city the group has already left or not yet reached.':''}
+5. If they mention a hotel or where they're staying, include hotel check-in on arrival day and check-out on departure day as activities.
+6. If lodging is listed above, always start arrival day with "Check-in at [hotel name]" and end last day with "Check-out from [hotel name]".
+7. If flights are listed above, include departure flight prep (travel to airport, check-in time) on the appropriate days.
+8. After placing all non-negotiables, fill remaining slots with suggestions that complement their stated plans — same neighborhood, logical geography, similar vibe.
+9. Never replace a user-specified activity with a generic one.
+10. NEVER repeat the same note or reminder across multiple days. Flight/transit reminders belong ONLY in the "notes" of the day of that event (and prep the evening before, if relevant). Every day's "notes" must be unique to that day or empty — no boilerplate.
 
 IMPORTANT: Return ONLY a valid JSON array of day objects. No markdown, no explanation, no preamble, no commentary — output must start with [ and end with ] and be nothing else. If the user's request mentions checklist items, entry requirements, or non-itinerary topics, acknowledge them by including relevant reminders as activity notes or tips on the appropriate days, but still return only the JSON day array.
 
@@ -4038,12 +4294,13 @@ Only include fields you can actually read from the document. Use null for anythi
         <label className="section-label">What do you want to do?</label>
         <textarea
           className="input"
-          rows={5}
-          placeholder={`Describe your trip plans in plain English. For example:\n\n"We're staying at the Disneyland Hotel. Day 1 we want to do Disneyland park — hit all the classic rides. Day 2 we want to explore Downtown LA: walk around Grand Central Market, visit LACMA, dinner in Little Tokyo. Day 3 we'll head to Santa Monica pier, Venice Beach, then fly home."`}
+          rows={6}
+          placeholder={`Be specific — name dates, who's doing what, and any travel between cities. The more detail, the better the plan. For example:\n\n"We're staying at the Hoxton in Shoreditch. Saturday: the guys go to the ASU vs Kansas State game at Wembley Stadium, while the women + our toddler do something kid-friendly (a park + an easy museum). Monday we check out of London and take the Eurostar to Paris — we still need to book those tickets, so add a reminder. In Paris we want a relaxed food-focused few days."`}
           value={prompt}
           onChange={e=>setPrompt(e.target.value)}
-          style={{minHeight:140,resize:'vertical',lineHeight:1.6,fontSize:'.875rem'}}
+          style={{minHeight:150,resize:'vertical',lineHeight:1.6,fontSize:'.875rem'}}
         />
+        <p style={{fontSize:'.74rem',color:'var(--color-ink-muted)',marginTop:6,lineHeight:1.5}}>💡 Mention exact days ("Saturday"), split plans for different people, and any city-to-city travel — those become fixed events the planner won't drop.</p>
       </div>
 
       {error && <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:10,padding:'10px 14px',fontSize:'.83rem',color:'#b91c1c',marginBottom:14}}>{error}</div>}
@@ -4137,6 +4394,7 @@ function CrewSection({trip, onUpdateTrip}){
   const counts = members.reduce((a,m)=>{const r=m.rsvp||'pending';a[r]=(a[r]||0)+1;return a;},{});
   const save = (next)=> onUpdateTrip({...trip, collaborators: next});
   const setRsvp = (id, rsvp)=> save(members.map(m=>m.id===id?{...m, rsvp}:m));
+  const setPay = (id, field, val)=> save(members.map(m=>m.id===id?{...m, [field]:val}:m));
   const remove = (id)=> { if(window.confirm('Remove this person from the trip?')) save(members.filter(m=>m.id!==id)); };
   const [name,setName]=React.useState('');
   const [email,setEmail]=React.useState('');
@@ -4171,6 +4429,13 @@ function CrewSection({trip, onUpdateTrip}){
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:600,color:'var(--color-ink)'}}>{m.name}</div>
               <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{[m.email,m.phone].filter(Boolean).join(' · ') || 'No contact info'}</div>
+              <details style={{marginTop:4}}>
+                <summary style={{cursor:'pointer',fontSize:'.7rem',color:'var(--color-accent)',listStyle:'none'}}>💸 {(m.venmo||m.zelle)?'Payment set':'Add Venmo/Zelle'}</summary>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:6}}>
+                  <input className="input" style={{flex:'1 1 120px',fontSize:'.78rem',padding:'5px 8px'}} placeholder="Venmo (without @)" value={m.venmo||''} onChange={e=>setPay(m.id,'venmo',e.target.value.replace(/^@/,'').trim())}/>
+                  <input className="input" style={{flex:'1 1 120px',fontSize:'.78rem',padding:'5px 8px'}} placeholder="Zelle (email/phone)" value={m.zelle||''} onChange={e=>setPay(m.id,'zelle',e.target.value.trim())}/>
+                </div>
+              </details>
             </div>
             <select className="input" aria-label="RSVP status" style={{width:'auto',padding:'4px 8px',fontSize:'.78rem'}} value={m.rsvp||'pending'} onChange={e=>setRsvp(m.id, e.target.value)}>
               <option value="going">Going</option>
@@ -4204,43 +4469,93 @@ function CrewSection({trip, onUpdateTrip}){
   );
 }
 
+function venmoPayUrl(handle, amount, note){
+  return `https://venmo.com/?txn=pay&audience=private&recipients=${encodeURIComponent(handle)}`+
+    `&amount=${encodeURIComponent((Math.round((Number(amount)||0)*100)/100).toFixed(2))}`+
+    `&note=${encodeURIComponent(note||'Trip expenses')}`;
+}
+function computeSettlements(balMap){
+  const creditors=[],debtors=[];
+  Object.entries(balMap).forEach(([id,v])=>{ const c=Math.round(v*100); if(c>0)creditors.push({id,c}); else if(c<0)debtors.push({id,c:-c}); });
+  creditors.sort((a,b)=>b.c-a.c); debtors.sort((a,b)=>b.c-a.c);
+  const res=[]; let ci=0,di=0; let guard=0;
+  while(ci<creditors.length&&di<debtors.length&&guard++<999){
+    const give=Math.min(creditors[ci].c,debtors[di].c);
+    if(give>0) res.push({from:debtors[di].id,to:creditors[ci].id,amount:give/100});
+    creditors[ci].c-=give; debtors[di].c-=give;
+    if(creditors[ci].c===0)ci++; if(debtors[di].c===0)di++;
+  }
+  return res;
+}
 function BudgetSection({trip, onUpdateTrip}){
-  const budget = (trip.budget && Array.isArray(trip.budget.items)) ? trip.budget : {currency:'USD', items:[]};
+  const budget = (trip.budget && Array.isArray(trip.budget.items)) ? trip.budget : {currency:'USD', items:[], payments:[]};
   const items = budget.items;
-  const people = Math.max(1, trip.travelerCount || (trip.collaborators ? trip.collaborators.length : 0) || 1);
+  const payments = budget.payments || [];
+  const members = trip.collaborators || [];
   const days = trip.days || [];
-  const fmt = n => '$' + (Math.round((Number(n)||0)*100)/100).toLocaleString(undefined,{maximumFractionDigits:2});
+  const fmt = n => '$' + (Math.round((Number(n)||0)*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const total = items.reduce((s,i)=>s+(Number(i.amount)||0),0);
-  const perPerson = total/people;
+  const nameOf = id => (members.find(m=>m.id===id)?.name)||'—';
+  const colorOf = id => (members.find(m=>m.id===id)?.avatarColor)||AVATAR_COLORS[0];
+  const dayLabel = (id)=>{ const idx=days.findIndex(x=>x.id===id); return idx>=0 ? (days[idx].label||('Day '+(idx+1))) : null; };
+
   const [label,setLabel]=React.useState('');
   const [amount,setAmount]=React.useState('');
   const [dayId,setDayId]=React.useState('');
-  const save = (next)=> onUpdateTrip({...trip, budget:{currency:budget.currency||'USD', items:next}});
+  const [paidBy,setPaidBy]=React.useState(members[0]?.id||'');
+  const [excluded,setExcluded]=React.useState([]); // member ids excluded from this expense's split
+  const [showSplit,setShowSplit]=React.useState(false);
+
+  const saveItems = (next)=> onUpdateTrip({...trip, budget:{currency:budget.currency||'USD', items:next, payments}});
+  const savePayments = (next)=> onUpdateTrip({...trip, budget:{currency:budget.currency||'USD', items, payments:next}});
   const add = ()=>{
     const a=parseFloat(amount);
     if(!label.trim() || !(a>=0)){ showToast('Add a label and an amount.','warn'); return; }
-    save([...items, {id:uuid(), label:label.trim(), amount:a, day:dayId||null}]);
-    setLabel(''); setAmount(''); setDayId('');
+    saveItems([...items, {id:uuid(), label:label.trim(), amount:a, day:dayId||null, paidBy:paidBy||null, excluded:[...excluded]}]);
+    setLabel(''); setAmount(''); setDayId(''); setExcluded([]); setShowSplit(false);
   };
-  const remove = (id)=> save(items.filter(i=>i.id!==id));
-  const dayLabel = (id)=>{ const idx=days.findIndex(x=>x.id===id); return idx>=0 ? (days[idx].label||('Day '+(idx+1))) : null; };
+  const remove = (id)=> saveItems(items.filter(i=>i.id!==id));
+  const recordPayment=(from,to,amt)=> savePayments([...payments,{id:uuid(),from,to,amount:amt,ts:Date.now()}]);
+  const undoPayment=(id)=> savePayments(payments.filter(p=>p.id!==id));
+
+  // Per-person balances (positive = owed to them; negative = they owe)
+  const bal={}; members.forEach(m=>bal[m.id]=0);
+  items.forEach(it=>{
+    const amt=Number(it.amount)||0;
+    const included = members.filter(m=>!(it.excluded||[]).includes(m.id));
+    const n = included.length || 1;
+    const share = amt/n;
+    included.forEach(m=>{ bal[m.id]-=share; });
+    if(it.paidBy && bal[it.paidBy]!==undefined) bal[it.paidBy]+=amt;
+  });
+  payments.forEach(p=>{ if(bal[p.from]!==undefined)bal[p.from]+=Number(p.amount)||0; if(bal[p.to]!==undefined)bal[p.to]-=Number(p.amount)||0; });
+  const settlements = members.length>=2 ? computeSettlements(bal) : [];
+  const splitInfo=(it)=>{
+    const inc=members.filter(m=>!(it.excluded||[]).includes(m.id));
+    const n=inc.length||1;
+    return members.length ? `${nameOf(it.paidBy)} paid · split ${n} way${n>1?'s':''}${(it.excluded||[]).length?` · ${(it.excluded).map(nameOf).join(', ')} excluded`:''}` : null;
+  };
+
   return (
     <div style={{background:'var(--color-surface)',borderRadius:12,padding:'16px 18px',border:'1px solid var(--color-border)',marginBottom:12}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:12}}>
         <p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',fontWeight:600}}>💰 Budget</p>
-        <span style={{fontFamily:'var(--font-mono)',fontSize:'.7rem',color:'var(--color-ink-muted)'}}>{people} {people===1?'traveler':'travelers'}</span>
+        <span style={{fontFamily:'var(--font-mono)',fontSize:'.7rem',color:'var(--color-ink-muted)'}}>{members.length||trip.travelerCount||0} {(members.length||trip.travelerCount)===1?'person':'people'}</span>
       </div>
+
       {items.length===0 ? (
-        <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:14,lineHeight:1.5}}>Track shared costs and see each person's share. Add your first expense below — tag it to a day to see per-day spend.</p>
+        <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:14,lineHeight:1.5}}>Track shared costs, choose who paid, and settle up. Add crew on the Crew tab to split unevenly (e.g. skip a child) and get Venmo/Zelle settle-up links.</p>
       ) : (
         <div style={{marginBottom:14}}>
           {items.map(i=>(
-            <div key={i.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid var(--color-border)'}}>
+            <div key={i.id} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'9px 0',borderBottom:'1px solid var(--color-border)'}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:'.9rem',fontWeight:500,color:'var(--color-ink)'}}>{i.label}</div>
-                {i.day && dayLabel(i.day) && <div style={{fontSize:'.7rem',color:'var(--color-ink-muted)'}}>{dayLabel(i.day)}</div>}
+                <div style={{fontSize:'.7rem',color:'var(--color-ink-muted)'}}>
+                  {[i.day&&dayLabel(i.day), splitInfo(i)].filter(Boolean).join(' · ')}
+                </div>
               </div>
-              <div style={{fontFamily:'var(--font-mono)',fontWeight:500,color:'var(--color-ink)'}}>{fmt(i.amount)}</div>
+              <div style={{fontFamily:'var(--font-mono)',fontWeight:500,color:'var(--color-ink)',whiteSpace:'nowrap'}}>{fmt(i.amount)}</div>
               <button aria-label="Remove expense" onClick={()=>remove(i.id)} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'2px 8px'}}>✕</button>
             </div>
           ))}
@@ -4248,12 +4563,10 @@ function BudgetSection({trip, onUpdateTrip}){
             <span style={{fontWeight:600,color:'var(--color-ink)'}}>Total</span>
             <span style={{fontFamily:'var(--font-mono)',fontWeight:700,color:'var(--color-ink)'}}>{fmt(total)}</span>
           </div>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:4}}>
-            <span style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>Your share{people>1?` (÷ ${people})`:''}</span>
-            <span style={{fontFamily:'var(--font-mono)',fontWeight:600,color:'var(--color-success)'}}>{fmt(perPerson)}</span>
-          </div>
         </div>
       )}
+
+      {/* Add expense */}
       <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
         <input className="input" style={{flex:'2 1 140px'}} placeholder="Expense (e.g. Airbnb)" value={label} onChange={e=>setLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')add();}}/>
         <input className="input" style={{flex:'1 1 90px'}} type="number" inputMode="decimal" placeholder="Amount" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')add();}}/>
@@ -4263,8 +4576,92 @@ function BudgetSection({trip, onUpdateTrip}){
             {days.map((d,idx)=><option key={d.id} value={d.id}>{d.label||('Day '+(idx+1))}</option>)}
           </select>
         )}
+        {members.length>0 && (
+          <select className="input" aria-label="Paid by" style={{flex:'1 1 110px'}} value={paidBy} onChange={e=>setPaidBy(e.target.value)}>
+            <option value="">Paid by…</option>
+            {members.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        )}
         <button className="btn btn-primary" onClick={add}>Add</button>
       </div>
+      {members.length>1 && (
+        <div style={{marginTop:8}}>
+          <button onClick={()=>setShowSplit(s=>!s)} style={{background:'none',border:'none',padding:0,cursor:'pointer',color:'var(--color-accent)',fontSize:'.78rem',fontWeight:500}}>
+            {showSplit?'▾':'▸'} Split options {excluded.length?`(${excluded.length} excluded)`:''}
+          </button>
+          {showSplit && (
+            <div style={{marginTop:8,display:'flex',flexWrap:'wrap',gap:6}}>
+              {members.map(m=>{
+                const isIn=!excluded.includes(m.id);
+                return (
+                  <button key={m.id} onClick={()=>setExcluded(ex=>ex.includes(m.id)?ex.filter(x=>x!==m.id):[...ex,m.id])}
+                    className={`pill ${isIn?'pill-accent':'pill-neutral'}`} style={{cursor:'pointer',border:'none',opacity:isIn?1:.55}}>
+                    {isIn?'✓ ':'✕ '}{m.name}
+                  </button>
+                );
+              })}
+              <span style={{width:'100%',fontSize:'.7rem',color:'var(--color-ink-muted)'}}>Tap to exclude someone from this expense's split (e.g. a child). Default splits evenly among everyone checked.</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Balances + settle up */}
+      {members.length>=2 && items.length>0 && (
+        <div style={{marginTop:16,paddingTop:14,borderTop:'1px solid var(--color-border)'}}>
+          <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',fontWeight:600,marginBottom:10}}>Who owes what</p>
+          {members.map(m=>{
+            const v=bal[m.id]||0; const owed=v>0.004, owes=v<-0.004;
+            return (
+              <div key={m.id} style={{display:'flex',alignItems:'center',gap:8,padding:'4px 0'}}>
+                <span style={{width:22,height:22,borderRadius:'50%',background:m.avatarColor,color:'#0E1117',display:'inline-flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'.68rem',flexShrink:0}}>{(m.name||'?').charAt(0).toUpperCase()}</span>
+                <span style={{flex:1,minWidth:0,fontSize:'.85rem',color:'var(--color-ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{m.name}</span>
+                <span style={{fontFamily:'var(--font-mono)',fontSize:'.82rem',fontWeight:600,color: owed?'var(--color-success)':owes?'var(--color-flag)':'var(--color-ink-muted)'}}>
+                  {owed?`is owed ${fmt(v)}`:owes?`owes ${fmt(-v)}`:'settled'}
+                </span>
+              </div>
+            );
+          })}
+          {settlements.length>0 ? (
+            <div style={{marginTop:12}}>
+              <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',fontWeight:600,marginBottom:8}}>Settle up</p>
+              {settlements.map((s,idx)=>{
+                const to=members.find(m=>m.id===s.to)||{};
+                const note=`${trip.title||'Trip'} settle-up`;
+                return (
+                  <div key={idx} style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',padding:'7px 0',borderTop:idx?'1px solid var(--color-border)':'none'}}>
+                    <span style={{flex:'1 1 auto',fontSize:'.85rem',color:'var(--color-ink)'}}>
+                      <strong>{nameOf(s.from)}</strong> → <strong>{nameOf(s.to)}</strong> <span style={{fontFamily:'var(--font-mono)',color:'var(--color-flag)'}}>{fmt(s.amount)}</span>
+                    </span>
+                    {to.venmo && <a className="btn btn-secondary btn-sm" href={venmoPayUrl(to.venmo,s.amount,note)} target="_blank" rel="noopener noreferrer">Venmo</a>}
+                    {to.zelle && <button className="btn btn-secondary btn-sm" onClick={()=>{navigator.clipboard?.writeText(to.zelle).then(()=>showToast(`Zelle for ${to.name}: ${to.zelle} copied`,'info',3500)).catch(()=>showToast(`Zelle: ${to.zelle}`,'info',4000));}}>Zelle</button>}
+                    <button className="btn btn-ghost btn-sm" onClick={()=>recordPayment(s.from,s.to,s.amount)}>Mark paid</button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p style={{marginTop:10,fontSize:'.82rem',color:'var(--color-success)'}}>✓ All settled up.</p>
+          )}
+          {payments.length>0 && (
+            <details style={{marginTop:12}}>
+              <summary style={{cursor:'pointer',fontSize:'.75rem',color:'var(--color-ink-muted)'}}>Recorded payments ({payments.length})</summary>
+              <div style={{marginTop:6}}>
+                {payments.map(p=>(
+                  <div key={p.id} style={{display:'flex',alignItems:'center',gap:8,fontSize:'.8rem',padding:'4px 0'}}>
+                    <span style={{flex:1}}>{nameOf(p.from)} paid {nameOf(p.to)} <span style={{fontFamily:'var(--font-mono)'}}>{fmt(p.amount)}</span></span>
+                    <button className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)'}} onClick={()=>undoPayment(p.id)}>Undo</button>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+          <p style={{marginTop:12,fontSize:'.68rem',color:'var(--color-ink-muted)',lineHeight:1.5}}>Venmo opens a prefilled payment; Zelle has no web link, so we copy the recipient's handle for you to paste in your bank app. Add each person's handle on the Crew tab.</p>
+        </div>
+      )}
+      {members.length<2 && items.length>0 && (
+        <p style={{marginTop:12,fontSize:'.8rem',color:'var(--color-ink-light)'}}>Add 2+ people on the <strong>Crew</strong> tab to split costs unevenly and get settle-up links.</p>
+      )}
     </div>
   );
 }
@@ -4446,6 +4843,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
                   });
                 }
               }} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>🔗 Share</button>
+              <button onClick={()=>downloadTripICS(trip)} title="Add itinerary to your calendar" style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>📅 Calendar</button>
               <button onClick={()=>generateTripPDF(trip)} style={{background:'rgba(255,255,255,.2)',border:'none',borderRadius:20,padding:'6px 14px',color:'#fff',fontSize:'.85rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>↓ PDF</button>
               <button aria-label="Delete trip" onClick={()=>{ if(window.confirm(`Delete "${trip.title}"? This can't be undone.`)) onDelete(trip.id); }} style={{background:'rgba(255,80,80,.3)',border:'none',borderRadius:20,padding:'6px 12px',color:'#fff',fontSize:'1rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>🗑</button>
             </div>
@@ -4557,14 +4955,14 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
                 <div style={{background:'var(--color-surface)',borderRadius:'20px 20px 0 0',padding:'28px 24px 40px',width:'100%',maxWidth:480}}>
                   <div style={{width:40,height:4,background:'var(--color-border)',borderRadius:2,margin:'0 auto 20px'}}/>
                   <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600,marginBottom:8}}>Update your itinerary</h3>
-                  <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:14}}>Tell us what changed — new ideas, different plans, or things you want to swap out. We'll regenerate around your updates.</p>
+                  <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:14}}>Tell us what changed — and be specific. Name exact days, who's doing what if the group splits up, and any travel between cities (those become fixed events we won't drop).</p>
                   <textarea
                     className="input"
-                    rows={4}
-                    placeholder="e.g. We want to skip Knott's Berry Farm and add a beach day in Laguna instead. Also add a nice dinner on Saturday night."
+                    rows={5}
+                    placeholder={`e.g. "On Saturday the guys do the ASU vs Kansas State game at Wembley while the women + toddler do a park + museum. Monday we check out of London and take the Eurostar to Paris — add a reminder to book the train tickets. Swap Knott's for a beach day in Laguna."`}
                     value={regenPrompt}
                     onChange={e=>setRegenPrompt(e.target.value)}
-                    style={{marginBottom:12,resize:'none'}}
+                    style={{marginBottom:12,resize:'vertical',minHeight:120,lineHeight:1.55}}
                   />
                   <label style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'10px',border:'1px dashed var(--color-border)',borderRadius:10,cursor:regenUploading?'default':'pointer',marginBottom:10,color:'var(--color-ink-light)',fontSize:'.85rem',textAlign:'center'}}>
                     {regenUploading ? 'Reading your confirmations…' : '📎 Attach flight/hotel confirmations (optional · multiple OK)'}
@@ -5390,6 +5788,71 @@ class ErrorBoundary extends React.Component {
   // ── NEW v0.9: taste profile prompt ─
   assert('profilePromptText empty without profile', profilePromptText(null) === '');
   assert('profilePromptText includes interests', profilePromptText({style:'Live like a local',interests:['Food & restaurants']}).includes('Food & restaurants'));
+
+  // ── NEW v1.0 (2.1): budget split + settle-up ─
+  // Venmo prefill link
+  const vurl = venmoPayUrl('alex-m', 25.5, 'Paris settle-up');
+  assert('venmoPayUrl targets venmo.com', vurl.startsWith('https://venmo.com/?txn=pay'));
+  assert('venmoPayUrl includes recipient', vurl.includes('recipients=alex-m'));
+  assert('venmoPayUrl formats amount to 2dp', vurl.includes('amount=25.50'));
+  // computeSettlements greedy matching
+  const s1 = computeSettlements({a:10, b:-10});
+  assert('settle: single debtor→creditor', s1.length===1 && s1[0].from==='b' && s1[0].to==='a' && Math.abs(s1[0].amount-10)<1e-6);
+  const s2 = computeSettlements({a:0, b:0});
+  assert('settle: all-zero yields no transfers', s2.length===0);
+  const s3 = computeSettlements({a:20, b:-5, c:-15});
+  assert('settle: two debtors cover one creditor', s3.length===2 && Math.abs(s3.reduce((t,x)=>t+x.amount,0)-20)<1e-6 && s3.every(x=>x.to==='a'));
+  // Balance math: A pays $30 dinner split 3 ways among A,B,C → A is owed 20, B & C owe 10 each
+  (()=>{
+    const members=[{id:'A'},{id:'B'},{id:'C'}];
+    const items=[{amount:30,paidBy:'A',excluded:[]}];
+    const bal={}; members.forEach(m=>bal[m.id]=0);
+    items.forEach(it=>{ const inc=members.filter(m=>!it.excluded.includes(m.id)); const sh=it.amount/inc.length; inc.forEach(m=>bal[m.id]-=sh); bal[it.paidBy]+=it.amount; });
+    assert('balance: payer is owed their share back', Math.abs(bal.A-20)<1e-6);
+    assert('balance: non-payers each owe equal share', Math.abs(bal.B+10)<1e-6 && Math.abs(bal.C+10)<1e-6);
+  })();
+  // Uneven split: exclude the child C → A pays $30 split between A,B only
+  (()=>{
+    const members=[{id:'A'},{id:'B'},{id:'C'}];
+    const it={amount:30,paidBy:'A',excluded:['C']};
+    const bal={}; members.forEach(m=>bal[m.id]=0);
+    const inc=members.filter(m=>!it.excluded.includes(m.id)); const sh=it.amount/inc.length;
+    inc.forEach(m=>bal[m.id]-=sh); bal[it.paidBy]+=it.amount;
+    assert('uneven: excluded member owes nothing', bal.C===0);
+    assert('uneven: cost splits among included only', Math.abs(bal.B+15)<1e-6 && Math.abs(bal.A-15)<1e-6);
+  })();
+  // Recorded payment zeroes out a balance
+  (()=>{
+    const bal={A:20,B:-20};
+    const pay={from:'B',to:'A',amount:20};
+    bal[pay.from]+=pay.amount; bal[pay.to]-=pay.amount;
+    assert('payment settles both sides to zero', bal.A===0 && bal.B===0);
+  })();
+  // ── NEW v1.0 (2.6): attribution helpers ─
+  assert('relativeAgo empty for null', relativeAgo(null)==='');
+  assert('relativeAgo recent → just now', relativeAgo(Date.now()-5000)==='just now');
+  assert('relativeAgo hours', relativeAgo(Date.now()-3*3600*1000)==='3h ago');
+  assert('fmtStopTime pads & formats', fmtStopTime('9:30')==='09:30' && fmtStopTime('13:00')==='13:00');
+  assert('fmtStopTime empty passthrough', fmtStopTime('')==='');
+  assert('resolveStopAuthor matches collaborator', resolveStopAuthor({collaborators:[{id:'c1',name:'Maya',avatarColor:'#2BB6A3'}]},{addedBy:'c1'})?.name==='Maya');
+  assert('resolveStopAuthor null when unknown', resolveStopAuthor({collaborators:[]},{addedBy:null})===null);
+
+  // ── NEW v1.0 (2.4): .ics export ─
+  assert('icsEsc escapes commas/semis/newlines', icsEsc('a, b; c\nd')==='a\\, b\\; c\\nd');
+  assert('icsDateLocal timed', JSON.stringify(icsDateLocal('2026-09-17','09:30'))===JSON.stringify({value:'20260917T093000',allDay:false}));
+  assert('icsDateLocal all-day when no time', icsDateLocal('2026-09-17','').allDay===true && icsDateLocal('2026-09-17','').value==='20260917');
+  assert('icsDateFromISO converts flight time', icsDateFromISO('2026-09-17T10:30:00')==='20260917T103000');
+  assert('addMinutesToICS rolls the clock', addMinutesToICS('20260917T093000',90)==='20260917T110000');
+  const icsTrip={title:'Euro 2026',destinations:[{id:'d1',city:'London'}],
+    days:[{id:'day1',date:'2026-09-17',destinationId:'d1',activities:[{id:'a1',name:"Musée d'Orsay",time:'09:30',address:'Paris'}],restaurants:[{id:'r1',name:'Dante',time:'13:00'}]}],
+    flights:[{id:'f1',airline:'BA',flightNumber:'BA286',departureTime:'2026-09-16T11:00:00',arrivalTime:'2026-09-16T18:00:00',departureAirport:'SFO',arrivalAirport:'LHR'}],
+    lodging:[{id:'l1',name:'The Hoxton',checkIn:'2026-09-16',checkInTime:'15:00',address:'London'}]};
+  const ics=buildTripICS(icsTrip);
+  assert('buildTripICS wraps VCALENDAR', ics.startsWith('BEGIN:VCALENDAR') && ics.trim().endsWith('END:VCALENDAR'));
+  assert('buildTripICS has an event per stop+flight+checkin', (ics.match(/BEGIN:VEVENT/g)||[]).length===4);
+  assert('buildTripICS includes timed activity', ics.includes('DTSTART:20260917T093000'));
+  assert('buildTripICS includes flight summary', ics.includes('BA286'));
+  assert('buildTripICS escapes accented/quoted names', ics.includes("Mus") && ics.includes('Orsay'));
 
   // Summary
   if (failed === 0) {
