@@ -1277,26 +1277,55 @@ function getCountryFlag(code){
   // Convert country code to flag emoji via regional indicator symbols
   try{return code.toUpperCase().replace(/./g,c=>String.fromCodePoint(0x1F1E6-65+c.charCodeAt(0)));}catch(e){return'📍';}
 }
-function getAirlineCheckinUrl(fn){
-  if(!fn)return null;
-  const code=fn.replace(/\s+/g,'').toUpperCase().slice(0,2);
-  const urls={
-    SW:'https://www.southwest.com/air/check-in/',
-    WN:'https://www.southwest.com/air/check-in/',
+// Resolve the most useful "manage/check-in" link for a flight or train segment.
+// Returns {url, label, train, track} — label is the CTA, track=FlightAware (flights only).
+function carrierInfo(flight){
+  const f = (typeof flight==='string') ? {flightNumber:flight} : (flight||{});
+  const fn = (f.flightNumber||'').replace(/\s+/g,'').toUpperCase();
+  const name = (f.airline||'').toLowerCase();
+  const code = fn.slice(0,2);
+  const track = fn ? `https://www.flightaware.com/live/flight/${fn}` : null;
+  // Rail / non-airline carriers, matched by name (no IATA code)
+  const rail=[
+    {re:/eurostar/,        url:'https://managemybooking.eurostar.com/',                 label:'Manage booking'},
+    {re:/amtrak/,          url:'https://www.amtrak.com/manage-trip',                    label:'Manage trip'},
+    {re:/trenitalia/,      url:'https://www.trenitalia.com/en.html',                    label:'Manage booking'},
+    {re:/italo/,           url:'https://www.italotreno.com/en',                         label:'Manage booking'},
+    {re:/renfe/,           url:'https://www.renfe.com/es/en',                           label:'Manage booking'},
+    {re:/\bsncf|tgv|ouigo/,url:'https://www.sncf-connect.com/en-en/account/orders',     label:'Manage booking'},
+    {re:/deutsche bahn|\bdb\b|ice/,url:'https://www.bahn.com/en',                       label:'Manage booking'},
+    {re:/thalys/,          url:'https://www.thalys.com/',                               label:'Manage booking'},
+  ];
+  for(const r of rail){ if(r.re.test(name)) return {url:r.url, label:r.label, train:true, track:null}; }
+  // Airlines by IATA prefix
+  const air={
+    WN:'https://www.southwest.com/air/check-in/', SW:'https://www.southwest.com/air/check-in/',
     DL:'https://www.delta.com/us/en/check-in/overview',
-    AA:'https://www.aa.com/checkin',
-    UA:'https://www.united.com/en/us/checkin',
-    B6:'https://www.jetblue.com/check-in',
-    AS:'https://www.alaskaair.com/check-in',
-    F9:'https://www.flyfrontier.com/travel/check-in/',
-    NK:'https://www.spirit.com/checkin',
-    WS:'https://www.westjet.com/en-ca/check-in',
-    BA:'https://www.britishairways.com/travel/checkin',
-    AF:'https://www.airfrance.com/en/information/checkin',
-    LH:'https://www.lufthansa.com/us/en/check-in',
+    AA:'https://www.aa.com/checkin', UA:'https://www.united.com/en/us/checkin',
+    B6:'https://www.jetblue.com/check-in', AS:'https://www.alaskaair.com/check-in',
+    F9:'https://www.flyfrontier.com/travel/check-in/', NK:'https://www.spirit.com/checkin',
+    WS:'https://www.westjet.com/en-ca/check-in', AC:'https://www.aircanada.com/us/en/aco/home/book/check-in.html',
+    BA:'https://www.britishairways.com/travel/olcilanding/public/en_us', VS:'https://www.virginatlantic.com/check-in',
+    AF:'https://www.airfrance.us/check-in', KL:'https://www.klm.com/check-in', LH:'https://www.lufthansa.com/us/en/online-check-in',
+    IB:'https://www.iberia.com/web/onlineCheckin.do', EI:'https://www.aerlingus.com/html/checkin/',
+    AY:'https://www.finnair.com/checkin', SK:'https://www.flysas.com/check-in/',
+    EK:'https://www.emirates.com/us/english/manage-booking/online-check-in/', QR:'https://www.qatarairways.com/en/manage-booking.html',
+    QF:'https://www.qantas.com/au/en/manage-booking/check-in.html', NH:'https://www.ana.co.jp/en/us/', JL:'https://www.jal.co.jp/en/',
+    TP:'https://www.flytap.com/en-us/check-in', LX:'https://www.swiss.com/us/en/check-in',
   };
-  return urls[code]||`https://www.flightaware.com/live/flight/${fn.replace(/\s+/g,'')}`;
+  // try airline-name fallbacks for common carriers when no code match
+  const nameMap=[
+    {re:/delta/,k:'DL'},{re:/american/,k:'AA'},{re:/united/,k:'UA'},{re:/southwest/,k:'WN'},
+    {re:/jetblue/,k:'B6'},{re:/alaska/,k:'AS'},{re:/british airways/,k:'BA'},{re:/virgin atlantic/,k:'VS'},
+    {re:/air france/,k:'AF'},{re:/\bklm\b/,k:'KL'},{re:/lufthansa/,k:'LH'},{re:/iberia/,k:'IB'},
+    {re:/emirates/,k:'EK'},{re:/qatar/,k:'QR'},{re:/qantas/,k:'QF'},{re:/aer lingus/,k:'EI'},
+  ];
+  let key = air[code] ? code : (nameMap.find(n=>n.re.test(name))?.k);
+  if(key && air[key]) return {url:air[key], label:'Check in', train:false, track};
+  return {url: track || 'https://www.flightaware.com/', label:'Track flight', train:false, track};
 }
+// Back-compat wrapper (older callers passed just a flight number)
+function getAirlineCheckinUrl(fn){ return carrierInfo(fn).url; }
 function getCountdownInfo(d){
   if(!d)return{label:'',cls:'',days:9999,urgent:false};
   const today=new Date();today.setHours(0,0,0,0);
@@ -2676,10 +2705,95 @@ function Avatar22({initial,color}){
   return <span style={{width:22,height:22,borderRadius:'50%',background:color,color:'#0E1117',display:'inline-flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'.68rem',flexShrink:0}}>{initial}</span>;
 }
 
+// ── FLIGHTS STRIP — tappable pills that open an in-app flight detail (PRD 2.5) ────
+function FlightsStrip({flights}){
+  const [sel,setSel]=React.useState(null);
+  const fmtT=(iso)=>{ if(!iso) return ''; const m=/T(\d{2}):(\d{2})/.exec(iso); return m?`${m[1]}:${m[2]}`:''; };
+  const dep=(f)=>f.departureAirport||f.origin||'';
+  const arr=(f)=>f.arrivalAirport||f.destination||'';
+  const dateOf=(f)=>(f.departureTime?.slice(0,10))||f.departureDate||'';
+  return (
+    <>
+      <div style={{marginTop:16,display:'flex',gap:8,overflowX:'auto',paddingBottom:4}}>
+        {flights.map(fl=>(
+          <button key={fl.id} onClick={()=>setSel(fl)} aria-label={`Flight ${fl.flightNumber||''} details`}
+            style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:10,padding:'8px 12px',color:'#fff',fontSize:'.78rem',whiteSpace:'nowrap',backdropFilter:'blur(4px)',flexShrink:0,cursor:'pointer'}}>
+            ✈ {fl.flightNumber||'Flight'}{dep(fl)||arr(fl)?` · ${dep(fl)}→${arr(fl)}`:''}{dateOf(fl)?` · ${formatDateShort(dateOf(fl))}`:''} <span style={{opacity:.8}}>›</span>
+          </button>
+        ))}
+      </div>
+      {sel && (()=>{
+        const info=carrierInfo(sel);
+        const close=()=>setSel(null);
+        return (
+          <div className="overlay" onClick={e=>e.target===e.currentTarget&&close()} role="dialog" aria-modal="true" aria-label="Flight details">
+            <div className="sheet" style={{maxWidth:480}}>
+              <div className="sheet-handle"/>
+              <div style={{padding:'8px 22px 26px'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12,marginBottom:14}}>
+                  <div style={{minWidth:0}}>
+                    <p style={{fontFamily:'var(--font-display)',fontSize:'1.25rem',fontWeight:600}}>{info.train?'🚆':'✈️'} {sel.airline||'Flight'} {sel.flightNumber||''}</p>
+                    {sel.direction&&<p style={{fontSize:'.78rem',color:'var(--color-ink-muted)',textTransform:'capitalize'}}>{sel.direction}</p>}
+                  </div>
+                  <button aria-label="Close" onClick={close} className="btn btn-ghost" style={{flexShrink:0}}>✕</button>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:12,background:'var(--color-cream-dark)',borderRadius:12,padding:'14px 16px',marginBottom:14}}>
+                  <div style={{textAlign:'center',minWidth:0}}>
+                    <div style={{fontFamily:'var(--font-mono)',fontWeight:700,fontSize:'1.05rem'}}>{dep(sel)||'—'}</div>
+                    <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)'}}>{fmtT(sel.departureTime)}</div>
+                  </div>
+                  <div style={{flex:1,height:1,background:'var(--color-border)',position:'relative'}}><span style={{position:'absolute',top:-9,left:'50%',transform:'translateX(-50%)'}}>{info.train?'🚆':'✈️'}</span></div>
+                  <div style={{textAlign:'center',minWidth:0}}>
+                    <div style={{fontFamily:'var(--font-mono)',fontWeight:700,fontSize:'1.05rem'}}>{arr(sel)||'—'}</div>
+                    <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)'}}>{fmtT(sel.arrivalTime)}</div>
+                  </div>
+                </div>
+                <div style={{fontSize:'.85rem',color:'var(--color-ink-light)',lineHeight:1.7,marginBottom:16}}>
+                  {dateOf(sel)&&<div>📅 {formatDate(dateOf(sel))}</div>}
+                  {sel.confirmationNumber&&<div>🎫 Confirmation: <strong>{sel.confirmationNumber}</strong></div>}
+                  {sel.seatNumber&&<div>💺 Seat {sel.seatNumber}</div>}
+                  {sel.notes&&<div style={{fontStyle:'italic'}}>📝 {sel.notes}</div>}
+                </div>
+                <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                  <a href={info.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{flex:'1 1 auto',textAlign:'center'}}>{info.label} ↗</a>
+                  {info.track && <a href={info.track} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{flex:'1 1 auto',textAlign:'center'}}>Track flight ↗</a>}
+                </div>
+                <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)',marginTop:12,lineHeight:1.5}}>Opens the {info.train?'operator':'airline'}'s official site — your live ticket lives in their app/account, which only they can show. We link you to the right page to check in or manage the booking.</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </>
+  );
+}
+
+// ── STOP MINI MAP — inline OpenStreetMap embed (no API key) + Google fallback ─────
+function StopMiniMap({query}){
+  const [coords,setCoords]=React.useState(undefined); // undefined=loading, null=miss
+  React.useEffect(()=>{ let on=true; geocodeStop(query).then(c=>{ if(on) setCoords(c||null); }).catch(()=>on&&setCoords(null)); return ()=>{on=false;}; },[query]);
+  const gmaps=`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  const fallback=(msg)=>(<div style={{padding:'10px 12px',border:'1px solid var(--color-border)',borderRadius:10,background:'var(--color-surface)',fontSize:'.8rem',color:'var(--color-ink-muted)'}}>{msg} <a href={gmaps} target="_blank" rel="noopener noreferrer" style={{color:'var(--color-accent)'}}>Open in Google Maps ↗</a></div>);
+  if(coords===undefined) return <div style={{marginTop:10}}>{fallback('Locating…')}</div>;
+  if(coords===null) return <div style={{marginTop:10}}>{fallback("Couldn't place this address on the map.")}</div>;
+  const d=0.006;
+  const bbox=`${coords.lon-d},${coords.lat-d},${coords.lon+d},${coords.lat+d}`;
+  const src=`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${coords.lat},${coords.lon}`;
+  return (
+    <div style={{marginTop:10}}>
+      <iframe title={`Map of ${query}`} src={src} loading="lazy" style={{width:'100%',height:200,border:'1px solid var(--color-border)',borderRadius:10,display:'block'}}/>
+      <div style={{display:'flex',justifyContent:'flex-end',marginTop:6}}>
+        <a href={gmaps} target="_blank" rel="noopener noreferrer" style={{fontSize:'.75rem',color:'var(--color-accent)'}}>Open full map in Google Maps ↗</a>
+      </div>
+    </div>
+  );
+}
+
 // ── TIMELINE STOP — one row in the day plan (prototype style) ────────────────────
 function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDeleteComment, onMoveUp, onMoveDown, canMoveUp, canMoveDown}){
   const [open,setOpen]=useState(false);
   const [draft,setDraft]=useState('');
+  const [showMap,setShowMap]=useState(false);
   const author=resolveStopAuthor(trip,item);
   const accent = author ? author.color : (type==='restaurant'?'#E8A13A':'var(--color-accent)');
   const time=fmtStopTime(item.time);
@@ -2729,11 +2843,12 @@ function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDelet
               <button className="btn btn-secondary btn-sm" disabled={!draft.trim()} onClick={post}>Post</button>
             </div>
             <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
-              <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">🗺️ Maps</a>
+              <button className="btn btn-secondary btn-sm" aria-expanded={showMap} onClick={()=>setShowMap(s=>!s)}>🗺️ {showMap?'Hide map':'Map'}</button>
               {(item.bookingUrl||item.reservationUrl)&&<a href={item.bookingUrl||item.reservationUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">Book →</a>}
               {onEdit&&<button className="btn btn-ghost btn-sm" onClick={()=>onEdit(item)}>✏️ Edit</button>}
               {onDelete&&<button className="btn btn-ghost btn-sm" aria-label="Remove item" style={{color:'var(--color-flag)'}} onClick={()=>{if(window.confirm('Remove this item?'))onDelete(item.id);}}>🗑</button>}
             </div>
+            {showMap && <StopMiniMap query={item.address?`${item.address}`:`${item.name}${item.neighborhood?', '+item.neighborhood:''}`}/>}
           </div>
         )}
        </div>
@@ -4939,16 +5054,8 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
               ))}
             </div>
           )}
-          {/* Flights strip */}
-          {trip.flights?.length>0&&(
-            <div style={{marginTop:16,display:'flex',gap:8,overflowX:'auto',paddingBottom:4}}>
-              {trip.flights.map(fl=>(
-                <a key={fl.id} href={getAirlineCheckinUrl(fl.flightNumber)} target="_blank" rel="noopener" style={{background:'rgba(255,255,255,.15)',borderRadius:10,padding:'8px 12px',textDecoration:'none',color:'#fff',fontSize:'.78rem',whiteSpace:'nowrap',backdropFilter:'blur(4px)',flexShrink:0}}>
-                  ✈ {fl.flightNumber} · {fl.origin}→{fl.destination} · {formatDateShort(fl.departureDate)} · <span style={{opacity:.8}}>Check in →</span>
-                </a>
-              ))}
-            </div>
-          )}
+          {/* Flights strip — tappable pills → in-app flight detail (PRD 2.5) */}
+          {trip.flights?.length>0&&<FlightsStrip flights={trip.flights}/>}
         </div>
       </div>
 
@@ -5953,6 +6060,15 @@ class ErrorBoundary extends React.Component {
     assert('reorder: clamps at bottom (no move)', moveStop(2,1)===null);
   })();
   assert('FREE_GENERATION_CAP raised to 5', FREE_GENERATION_CAP===5);
+
+  // ── NEW v1.1 (2.5): carrierInfo flight/train links ─
+  assert('carrierInfo: Delta code → check-in', (()=>{const c=carrierInfo({airline:'Delta',flightNumber:'DL83'});return c.label==='Check in'&&/delta\.com/.test(c.url)&&!c.train;})());
+  assert('carrierInfo: Eurostar by name → manage booking (train)', (()=>{const c=carrierInfo({airline:'Eurostar',flightNumber:'ES9108'});return c.train&&/eurostar/.test(c.url)&&c.label==='Manage booking'&&c.track===null;})());
+  assert('carrierInfo: British Airways code → check-in', /britishairways/.test(carrierInfo({airline:'British Airways',flightNumber:'BA286'}).url));
+  assert('carrierInfo: unknown airline → track flight', (()=>{const c=carrierInfo({airline:'Mystery Air',flightNumber:'ZZ100'});return c.label==='Track flight'&&/flightaware/.test(c.url);})());
+  assert('carrierInfo: name fallback when code unknown', /united\.com/.test(carrierInfo({airline:'United Airlines',flightNumber:'X1'}).url));
+  assert('carrierInfo: flights get a FlightAware track link', !!carrierInfo({airline:'Delta',flightNumber:'DL83'}).track);
+  assert('getAirlineCheckinUrl back-compat still returns a url', typeof getAirlineCheckinUrl('DL83')==='string');
 
   // Summary
   if (failed === 0) {
