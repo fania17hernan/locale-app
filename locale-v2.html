@@ -1147,9 +1147,32 @@ function safeJSONParse(raw){
   try{ return JSON.parse(fixed); }catch(e){ return null; }
 }
 function validateIdeation(o){
-  if(!o||typeof o!=='object'||Array.isArray(o)) return null;
+  if(!o||typeof o!=='object') return null;
+  // Tolerate shapes the model sometimes returns for long/multi-city prompts:
+  // an array wrapper, a single-key wrapper, or one object per city.
+  if(Array.isArray(o)){ o = o.find(x=>x&&typeof x==='object'&&!Array.isArray(x)) || {}; }
+  const looksLikeIdeation=(x)=> x && typeof x==='object' && (typeof x.destination_summary==='string' || Array.isArray(x.neighborhoods));
+  if(!looksLikeIdeation(o)){
+    const ideationLike=Object.entries(o).filter(([,v])=>v&&typeof v==='object'&&!Array.isArray(v)&&looksLikeIdeation(v));
+    if(ideationLike.length===1){
+      // single nested ideation object (e.g. {recommendations:{...}})
+      o=ideationLike[0][1];
+    } else if(ideationLike.length>1){
+      // one object per city (e.g. {London:{...},Paris:{...}}) → merge & tag names with city
+      const merged={destination_summary:'',best_time:null,neighborhoods:[],day_trips:[],tips:[]};
+      for(const [city,v] of ideationLike){
+        if(typeof v.destination_summary==='string') merged.destination_summary+=(merged.destination_summary?' ':'')+v.destination_summary;
+        if(!merged.best_time && v.best_time) merged.best_time=v.best_time;
+        const tag=(arr)=>Array.isArray(arr)?arr.map(n=>n&&n.name&&!/\(/.test(n.name)?{...n,name:`${n.name} (${city})`}:n):[];
+        if(Array.isArray(v.neighborhoods)) merged.neighborhoods.push(...tag(v.neighborhoods));
+        if(Array.isArray(v.day_trips)) merged.day_trips.push(...v.day_trips);
+        if(Array.isArray(v.tips)) merged.tips.push(...v.tips);
+      }
+      o=merged;
+    }
+  }
   const str=(v,max=400)=>typeof v==='string'?v.slice(0,max):'';
-  const list=(v,map)=>Array.isArray(v)?v.slice(0,8).map(map).filter(x=>x&&(x.name||x.length)):[];
+  const list=(v,map)=>Array.isArray(v)?v.slice(0,10).map(map).filter(x=>x&&(x.name||x.length)):[];
   const out={
     destination_summary:str(o.destination_summary,600),
     best_time:{when:str(o.best_time?.when,120),why:str(o.best_time?.why,400)},
@@ -3785,7 +3808,7 @@ Trip idea:
 - Occasion: ${trip.occasion} · Travelers: ${trip.travelerCount||2}
 ${trip.startDate?`- Tentative dates: ${trip.startDate} to ${trip.endDate}`:'- No dates yet — recommending the best time is part of your job'}
 ${profile}
-Return ONLY a valid JSON object — no markdown, no commentary — with this exact shape:
+Return ONLY a single valid JSON object — no markdown, no commentary, no day-by-day itinerary — with this EXACT flat shape:
 {
   "destination_summary": "2-3 sentences on how this destination fits THIS traveler specifically",
   "best_time": {"when": "e.g. late September to mid October", "why": "weather, crowds, prices, events"},
@@ -3793,7 +3816,11 @@ Return ONLY a valid JSON object — no markdown, no commentary — with this exa
   "day_trips": [{"name": "", "why": ""}],
   "tips": ["2-4 practical, traveler-specific tips"]
 }
-Rules: 3-5 neighborhoods ordered best-fit first. 1-3 day trips. Be specific and opinionated — name real neighborhoods and real reasons. If the user's message adds constraints, honor every one of them.`;
+Rules:
+- Output the SINGLE flat object above and NOTHING else — even if the traveler wrote a long, detailed message. Do not write an itinerary or prose; this screen is only "where to stay / when to go / top tips".
+- If the trip spans MULTIPLE cities, cover them all inside these same flat fields: mention each city in destination_summary, and include neighborhoods for every city, prefixing each name with its city e.g. "Le Marais (Paris)". Do NOT nest the JSON by city and do NOT use city names as keys.
+- 3-6 neighborhoods ordered best-fit first; 1-4 day trips; 2-5 tips. Keep every field concise (one or two sentences each) so the whole object stays small and complete.
+- Be specific and opinionated — name real neighborhoods and real reasons. Honor the traveler's stated constraints (family/kids, food preferences, pace).`;
   };
 
   const ideate = async () => {
@@ -3805,18 +3832,17 @@ Rules: 3-5 neighborhoods ordered best-fit first. 1-3 day trips. Be specific and 
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method:'POST',
           headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-          body: JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:4096,system:buildIdeationPrompt(),messages})
+          body: JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:8192,system:buildIdeationPrompt(),messages})
         });
         if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err?.error?.message||`API error ${res.status}`);}
         const data=await res.json(); full=data?.content?.[0]?.text||'';
       } else {
-        full = await callAIProxy({feature:'ideate',system:buildIdeationPrompt(),messages,max_tokens:4096,onDelta:t=>setStreamText(t)});
+        full = await callAIProxy({feature:'ideate',system:buildIdeationPrompt(),messages,max_tokens:8192,onDelta:t=>setStreamText(t)});
         refreshUsage&&refreshUsage();
       }
       const obj = safeJSONParse(full);
-      if(!obj) throw new Error('No recommendations found in the response. Tap "Get recommendations" to try again.');
-      const parsed = validateIdeation(obj);
-      if(!parsed) throw new Error("The response wasn't formatted correctly — your trip is unchanged. Try again.");
+      const parsed = obj && validateIdeation(obj);
+      if(!parsed) throw new Error("Couldn't read the recommendations this time — your trip is unchanged. Tap Get recommendations to try again. (Very long notes can trip this up; a shorter summary of your must-haves works best here — you can add full day-by-day detail later under 'plan my days'.)");
       onUpdateTrip({...trip, ideation: parsed});
       setStreamText('');
     } catch(e){ setError(e.message); }
@@ -5952,6 +5978,14 @@ class ErrorBoundary extends React.Component {
   assert('validateIdeation keeps valid neighborhoods only', ide.neighborhoods.length === 1);
   assert('validateIdeation keeps string tips only', ide.tips.length === 1);
   assert('validateIdeation rejects junk input', validateIdeation('nope') === null && validateIdeation([1,2]) === null);
+  // v1.1: tolerate shapes the model returns for long/multi-city prompts
+  assert('validateIdeation unwraps array wrapper', (()=>{const r=validateIdeation([{destination_summary:'Fits you.',neighborhoods:[{name:'Soho'}]}]);return r&&r.destination_summary==='Fits you.';})());
+  assert('validateIdeation unwraps single-key wrapper', (()=>{const r=validateIdeation({recommendations:{destination_summary:'Hi.',neighborhoods:[{name:'Soho'}]}});return r&&r.neighborhoods.length===1;})());
+  assert('validateIdeation merges per-city objects + tags names', (()=>{
+    const r=validateIdeation({London:{destination_summary:'London bit.',neighborhoods:[{name:'Notting Hill',why:'leafy'}]},Paris:{destination_summary:'Paris bit.',neighborhoods:[{name:'Le Marais',why:'central'}]}});
+    return r && /London bit\./.test(r.destination_summary) && /Paris bit\./.test(r.destination_summary)
+      && r.neighborhoods.length===2 && r.neighborhoods.some(n=>n.name==='Notting Hill (London)') && r.neighborhoods.some(n=>n.name==='Le Marais (Paris)');
+  })());
 
   // ── NEW v0.9: day route URL ─
   const routeTrip = {lodging:[{name:'The Standard',address:'848 Washington St, New York, NY'}],destinations:[{id:'d1',city:'New York'}]};
