@@ -4407,6 +4407,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
   const TABS = [
     {id:'overview',label:'Overview',icon:''},
     {id:'crew',label:'Crew',icon:''},
+    {id:'budget',label:'Budget',icon:''},
     {id:'checklist',label:'Pre-Trip',icon:''},
     {id:'days',label:'Days',icon:''},
     {id:'packing',label:'Packing',icon:''},
@@ -4511,10 +4512,10 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
           <div>
             {/* ── Edit Trip Dates ── */}
             <TripDateEditor trip={trip} onUpdateTrip={onUpdateTrip}/>
-            {/* Trip Color Picker */}
-            <div style={{background:'var(--color-surface)',borderRadius:12,padding:'16px 18px',border:'1px solid var(--color-border)',marginBottom:12}}>
-              <p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',marginBottom:10,fontWeight:600}}>Trip Color</p>
-              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {/* Trip Color Picker — collapsed by default */}
+            <details style={{background:'var(--color-surface)',borderRadius:12,border:'1px solid var(--color-border)',marginBottom:12}}>
+              <summary style={{listStyle:'none',cursor:'pointer',padding:'14px 18px',fontSize:'.75rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',fontWeight:600}}>🎨 Trip color</summary>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',padding:'0 18px 16px'}}>
                 {[
                   {key:'generic',label:'Ocean',color:'#2B5F6E'},
                   {key:'paris',label:'Navy',color:'#3D5A7A'},
@@ -4535,8 +4536,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
                   );
                 })}
               </div>
-            </div>
-            <BudgetSection trip={trip} onUpdateTrip={onUpdateTrip}/>
+            </details>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:10,marginBottom:12}}>
               {trip.destinations.map(d=>(
                 <div key={d.id} style={{background:'var(--color-surface)',borderRadius:12,padding:'14px 12px',border:'1px solid var(--color-border)',textAlign:'center'}}>
@@ -4567,17 +4567,22 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
                     style={{marginBottom:12,resize:'none'}}
                   />
                   <label style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'10px',border:'1px dashed var(--color-border)',borderRadius:10,cursor:regenUploading?'default':'pointer',marginBottom:10,color:'var(--color-ink-light)',fontSize:'.85rem',textAlign:'center'}}>
-                    {regenUploading ? 'Reading your confirmation…' : '📎 Attach a flight or hotel confirmation (optional) — AI plans around it'}
-                    <input type="file" accept="image/*,application/pdf" style={{display:'none'}} disabled={regenUploading}
-                      onChange={async e=>{ const f=e.target.files?.[0]; e.target.value=''; if(!f) return;
+                    {regenUploading ? 'Reading your confirmations…' : '📎 Attach flight/hotel confirmations (optional · multiple OK)'}
+                    <input type="file" accept="image/*,application/pdf" multiple style={{display:'none'}} disabled={regenUploading}
+                      onChange={async e=>{ const files=Array.from(e.target.files||[]); e.target.value=''; if(!files.length) return;
                         setRegenUploading(true); setRegenUploadMsg('');
-                        try{
-                          const parsed = await parseConfirmationFile(f);
-                          const {trip:updated, kind, label} = mergeBookingIntoTrip(trip, parsed);
-                          if(kind){ onUpdateTrip(updated); setRegenUploadMsg('Saved '+(kind==='lodging'?'lodging':'flight'+((parsed.flights||[]).length>1?'s':''))+(label?(' · '+label):'')+' ✓ — regenerate to plan around it.'); }
-                          else { setRegenUploadMsg("Couldn't tell if that was a flight or hotel — try another file."); }
-                        }catch(err){ setRegenUploadMsg('Upload failed: '+err.message); }
-                        finally{ setRegenUploading(false); }
+                        let cur = trip; const saved=[]; let failed=0;
+                        for(const f of files){
+                          try{
+                            const parsed = await parseConfirmationFile(f);
+                            const {trip:updated, kind, label} = mergeBookingIntoTrip(cur, parsed);
+                            if(kind){ cur = updated; saved.push((kind==='lodging'?'lodging':'flight')+(label?(' · '+label):'')); }
+                            else failed++;
+                          }catch(err){ failed++; }
+                        }
+                        if(saved.length) onUpdateTrip(cur);
+                        setRegenUploadMsg(saved.length ? ('Saved '+saved.length+': '+saved.join('; ')+' ✓ — regenerate to plan around them.'+(failed?(' ('+failed+" couldn't be read)"):'')) : "Couldn't read those — try clearer flight/hotel confirmations.");
+                        setRegenUploading(false);
                       }}/>
                   </label>
                   {regenUploadMsg && <p style={{fontSize:'.78rem',color:regenUploadMsg.startsWith('Saved')?'var(--color-success)':'var(--color-flag)',marginBottom:12,lineHeight:1.4}}>{regenUploadMsg}</p>}
@@ -4599,7 +4604,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
                     style={{marginLeft:'auto',background:'none',border:'1px solid var(--color-border)',borderRadius:20,padding:'4px 12px',fontSize:'.75rem',color:'var(--color-ink-muted)',cursor:'pointer'}}
                   >✨ Update itinerary</button>
                 </div>
-                {activeDay && <DayView trip={trip} day={(trip.days||[]).find(d=>d.id===activeDay)} onUpdateTrip={onUpdateTrip}/>}
+                {activeDay && <DayView key={activeDay} trip={trip} day={(trip.days||[]).find(d=>d.id===activeDay)} onUpdateTrip={onUpdateTrip}/>}
               </>
             ) : (
               <ItineraryAIPlanner trip={trip} onUpdateTrip={(updated)=>{ onUpdateTrip({...updated,_regenPrompt:undefined}); setActiveDay(updated.days?.[0]?.id||null); }}/>
@@ -4608,6 +4613,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
         )}
         {activeTab==='checklist' && <ChecklistView trip={trip} onUpdate={handleChecklistUpdate} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='crew' && <CrewSection trip={trip} onUpdateTrip={onUpdateTrip}/>}
+        {activeTab==='budget' && <div style={{padding:'0 0 8px'}}><BudgetSection trip={trip} onUpdateTrip={onUpdateTrip}/></div>}
         {activeTab==='packing' && <PackingView trip={trip} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='tidbits' && <CityTidbits destinations={trip.destinations} trip={trip} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='celebrate' && <CelebrationSection trip={trip} onUpdateTrip={onUpdateTrip}/>}
@@ -4685,12 +4691,12 @@ function Dashboard({trips, onSelectTrip, onNewTrip, cloudUser, setCloudUser}) {
   return (
     <div style={{minHeight:'100vh',background:'var(--color-cream)'}}>
       <div className="dashboard-header">
-        <div style={{maxWidth:1100,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div style={{maxWidth:1100,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'12px 16px'}}>
           <div>
             <h1 className="dashboard-wordmark">Loc<span>a</span>le</h1>
             <p style={{fontSize:'.78rem',color:'var(--color-ink-muted)',marginTop:3,fontStyle:'italic',fontFamily:'var(--font-display)'}}>Your trips, beautifully kept.</p>
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',justifyContent:'flex-end'}}>
             <SyncButton user={cloudUser} onChange={setCloudUser}/>
             <select className="input" style={{padding:'6px 10px',fontSize:'.8rem',width:'auto'}} value={sort} onChange={e=>setSort(e.target.value)}>
               <option value="date">Sort: Date</option>
