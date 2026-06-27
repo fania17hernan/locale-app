@@ -942,6 +942,11 @@ const FLAGS = {
 const AI_KEY_SK = 'locale_ai_key';
 function getAIKey(){try{return localStorage.getItem(AI_KEY_SK)||'';}catch(e){return '';}}
 function setAIKey(k){try{localStorage.setItem(AI_KEY_SK,k);}catch(e){}}
+// Owner key: a secret that flags this device as the app owner so the proxy skips
+// the free-tier caps and rate limits (kill-switch + monthly budget still apply server-side).
+const OWNER_KEY_SK = 'locale_owner_key';
+function getOwnerKey(){try{return localStorage.getItem(OWNER_KEY_SK)||'';}catch(e){return '';}}
+function setOwnerKey(k){try{ if(k) localStorage.setItem(OWNER_KEY_SK,k); else localStorage.removeItem(OWNER_KEY_SK); }catch(e){}}
 
 // ── BACKEND (Supabase) — AI proxy with per-user free tier ─────────────────────
 // The Anthropic key lives server-side in a Supabase Edge Function. The anon key
@@ -1018,13 +1023,16 @@ function cloudPushDebounced(trips){ clearTimeout(_cloudPushTimer); _cloudPushTim
 // returns the full text either way. onDelta(textSoFar) fires during streaming.
 async function callAIProxy({feature, system, messages, max_tokens, onDelta}){
   const session = await ensureAnonSession();
+  const headers={
+    'Content-Type':'application/json',
+    'Authorization':'Bearer '+session.access_token,
+    'apikey': SUPABASE_ANON_KEY,
+  };
+  const ownerKey=getOwnerKey();
+  if(ownerKey) headers['x-locale-owner']=ownerKey;
   const res = await fetch(AI_PROXY_URL, {
     method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'Authorization':'Bearer '+session.access_token,
-      'apikey': SUPABASE_ANON_KEY,
-    },
+    headers,
     body: JSON.stringify({feature, system, messages, max_tokens}),
   });
   if(!res.ok){
@@ -1938,7 +1946,15 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
             </div>
             {(trip?.lodging||[]).length===0 && (()=>{
               const q=encodeURIComponent(dest.city||'');
-              const pinnedStays=(trip?.pinnedIdeas||[]).filter(p=>/^stay in|^day trip|neighborhood/i.test(p.text));
+              // Show a pinned idea only under the city it mentions (pins are tagged "(City)").
+              // Pins that don't name any trip city are shown everywhere as a fallback.
+              const allCities=(trip?.destinations||[]).map(d=>d.city).filter(Boolean);
+              const mentions=(text,c)=> !!c && new RegExp('\\b'+c.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')+'\\b','i').test(text||'');
+              const pinnedStays=(trip?.pinnedIdeas||[]).filter(p=>{
+                if(!/^stay in|^day trip|neighborhood/i.test(p.text)) return false;
+                const named=allCities.filter(c=>mentions(p.text,c));
+                return named.length===0 ? true : named.includes(dest.city);
+              });
               return (
                 <div className="card" style={{marginBottom:8,padding:'14px 16px',borderLeft:'3px solid var(--color-accent)'}}>
                   <p style={{fontWeight:600,fontSize:'.875rem',marginBottom:4}}>🏨 Where to stay</p>
@@ -2748,8 +2764,8 @@ function FlightsStrip({flights}){
       {sel && (()=>{
         const info=carrierInfo(sel);
         const close=()=>setSel(null);
-        return (
-          <div className="overlay" onClick={e=>e.target===e.currentTarget&&close()} role="dialog" aria-modal="true" aria-label="Flight details">
+        return ReactDOM.createPortal(
+          <div className="overlay" style={{zIndex:9500}} onClick={e=>e.target===e.currentTarget&&close()} role="dialog" aria-modal="true" aria-label="Flight details">
             <div className="sheet" style={{maxWidth:480}}>
               <div className="sheet-handle"/>
               <div style={{padding:'8px 22px 26px'}}>
@@ -2784,7 +2800,8 @@ function FlightsStrip({flights}){
                 <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)',marginTop:12,lineHeight:1.5}}>Opens the {info.train?'operator':'airline'}'s official site — your live ticket lives in their app/account, which only they can show. We link you to the right page to check in or manage the booking.</p>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
     </>
@@ -3797,6 +3814,8 @@ function IdeationPlanner({trip, onUpdateTrip, apiKey, refreshUsage, freeLeft}) {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [streamText, setStreamText] = React.useState('');
+  const [ownerOn, setOwnerOn] = React.useState(()=>!!getOwnerKey());
+  const promptOwnerKey = ()=>{ const k=window.prompt('Paste your app owner key to lift the AI limits on this device:', getOwnerKey()); if(k!==null){ setOwnerKey(k.trim()); setOwnerOn(!!k.trim()); showToast(k.trim()?'Owner mode on — limits lifted on this device.':'Owner key cleared.','info',3500); } };
   const result = trip.ideation || null;
 
   const buildIdeationPrompt = () => {
@@ -3872,9 +3891,14 @@ Rules:
         <p style={{color:'rgba(255,255,255,.7)',fontSize:'.75rem',letterSpacing:'.08em',textTransform:'uppercase',marginBottom:4}}>Trip Ideation</p>
         <h3 style={{fontFamily:'var(--font-display)',color:'#fff',fontSize:'1.4rem',fontWeight:600,marginBottom:4}}>{trip.title}</h3>
         <p style={{color:'rgba(255,255,255,.75)',fontSize:'.83rem'}}>Where to stay · when to go · tailored to your taste</p>
-        {!apiKey && freeLeft!=null && (
-          <div style={{marginTop:12,display:'inline-flex',background:'rgba(255,255,255,.14)',border:'1px solid rgba(255,255,255,.22)',borderRadius:20,padding:'4px 12px'}}>
-            <span style={{fontSize:'.75rem',color:'#fff'}}>✨ {freeLeft} of {FREE_GENERATION_CAP} free AI generations left</span>
+        {!apiKey && (
+          <div style={{marginTop:12,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+            {ownerOn ? (
+              <span style={{display:'inline-flex',background:'rgba(255,255,255,.14)',border:'1px solid rgba(255,255,255,.22)',borderRadius:20,padding:'4px 12px',fontSize:'.75rem',color:'#fff'}}>👑 Owner mode — unlimited</span>
+            ) : (
+              <span style={{display:'inline-flex',background:'rgba(255,255,255,.14)',border:'1px solid rgba(255,255,255,.22)',borderRadius:20,padding:'4px 12px',fontSize:'.75rem',color:'#fff'}}>✨ {freeLeft!=null?`${freeLeft} of ${FREE_GENERATION_CAP} free AI generations left`:'Includes free AI generations'}</span>
+            )}
+            <button onClick={promptOwnerKey} title="App owner? Enter your key to remove limits on this device" style={{background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.2)',borderRadius:20,padding:'4px 10px',fontSize:'.72rem',color:'rgba(255,255,255,.85)',cursor:'pointer'}}>{ownerOn?'⚙︎ owner key':'👑 owner?'}</button>
           </div>
         )}
       </div>
@@ -3974,6 +3998,7 @@ Rules:
 function ItineraryAIPlanner({trip, onUpdateTrip}) {
   const [apiKey, setApiKeyState] = React.useState(getAIKey);
   const [showKeyInput, setShowKeyInput] = React.useState(false);
+  const [ownerOn, setOwnerOn] = React.useState(()=>!!getOwnerKey());
   const [prompt, setPrompt] = React.useState(trip._regenPrompt || '');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -4358,6 +4383,16 @@ Only include fields you can actually read from the document. Use null for anythi
             Clear saved key
           </button>
         )}
+        {/* App owner — secret key that lifts the free-tier limits on this device */}
+        <div style={{marginTop:18,paddingTop:16,borderTop:'1px solid var(--color-border)'}}>
+          <p style={{fontSize:'.8rem',fontWeight:600,marginBottom:4}}>👑 App owner {ownerOn && <span style={{color:'var(--color-success)',fontWeight:500}}>· active</span>}</p>
+          <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',marginBottom:10,lineHeight:1.5}}>If this is your app, paste your owner key to skip the free-tier limits on this device. Enter it once per device. (Your monthly budget cap still protects you.)</p>
+          <input className="input" type="password" placeholder="locale-owner-…" id="owner-key-input" defaultValue={getOwnerKey()} style={{marginBottom:10}}/>
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn btn-secondary" style={{flex:2}} onClick={()=>{ const v=(document.getElementById('owner-key-input').value||'').trim(); setOwnerKey(v); setOwnerOn(!!v); showToast(v?'Owner mode on — limits lifted on this device.':'Owner key cleared.','info',3500); }}>Save owner key</button>
+            {ownerOn && <button className="btn btn-ghost" style={{flex:1}} onClick={()=>{ setOwnerKey(''); setOwnerOn(false); const el=document.getElementById('owner-key-input'); if(el)el.value=''; showToast('Owner key cleared.','info',3000); }}>Clear</button>}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -4379,7 +4414,12 @@ Only include fields you can actually read from the document. Use null for anythi
               <button onClick={()=>setShowKeyInput(true)} title="Optional: use your own Anthropic API key for unlimited generations" style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 10px',color:'rgba(255,255,255,.8)',fontSize:'.72rem',cursor:'pointer'}}>{apiKey ? '🔑 Your key' : '⚙︎'}</button>
             </div>
           </div>
-          {!apiKey && (
+          {!apiKey && ownerOn && (
+            <div style={{marginTop:12,display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.14)',border:'1px solid rgba(255,255,255,.22)',borderRadius:20,padding:'4px 12px'}}>
+              <span style={{fontSize:'.75rem',color:'#fff'}}>👑 Owner mode — unlimited</span>
+            </div>
+          )}
+          {!apiKey && !ownerOn && (
             <div style={{marginTop:12,display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.14)',border:'1px solid rgba(255,255,255,.22)',borderRadius:20,padding:'4px 12px'}}>
               <span style={{fontSize:'.75rem',color:'#fff'}}>
                 {freeLeft == null ? '✨ Includes free AI itineraries' : freeLeft > 0 ? `✨ ${freeLeft} of ${FREE_GENERATION_CAP} free ${freeLeft === 1 ? 'itinerary' : 'itineraries'} left` : '✨ Free itineraries used'}
@@ -4539,7 +4579,7 @@ Only include fields you can actually read from the document. Use null for anythi
         </div>
       )}
 
-      {!apiKey && freeLeft === 0 ? (
+      {!apiKey && !ownerOn && freeLeft === 0 ? (
         <div style={{background:'var(--color-surface)',border:'1px solid var(--color-border)',borderRadius:12,padding:'16px 18px',textAlign:'center'}}>
           <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:6}}>You've used your {FREE_GENERATION_CAP} free AI itineraries</p>
           <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',lineHeight:1.6,marginBottom:10}}>
