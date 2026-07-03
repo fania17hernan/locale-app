@@ -3072,7 +3072,7 @@ function DayView({trip,day,onUpdateTrip}){
       if(myRole!=='crew'){ showToast("Viewers can't add notes on this trip.",'warn'); return; }
       const c=sb();
       const targetType=(day.activities||[]).some(a=>a.id===item.id)?'activity':'restaurant';
-      if(c) c.rpc('add_trip_comment',{p_trip_id:trip.id,p_target_type:targetType,p_target_id:item.id,p_text:text}).catch(()=>showToast("Couldn't post note — try again.",'error'));
+      if(c) (async()=>{ try{ const {error}=await c.rpc('add_trip_comment',{p_trip_id:trip.id,p_target_type:targetType,p_target_id:item.id,p_text:text}); if(error) throw error; }catch(e){ showToast("Couldn't post note — try again.",'error'); } })();
     }
     updateDay({...day,[lk]:(day[lk]||[]).map(s=>s.id===item.id?{...s,comments:[...(s.comments||[]),{id:uuid(),author:myName,color:myColor,text,ts:Date.now()}]}:s)});
   };
@@ -3085,7 +3085,7 @@ function DayView({trip,day,onUpdateTrip}){
     if(!isOwner){
       if(myRole!=='crew'){ showToast("Viewers can't add notes on this trip.",'warn'); return; }
       const c=sb();
-      if(c) c.rpc('add_trip_comment',{p_trip_id:trip.id,p_target_type:'day',p_target_id:day.id,p_text:text}).catch(()=>showToast("Couldn't post note — try again.",'error'));
+      if(c) (async()=>{ try{ const {error}=await c.rpc('add_trip_comment',{p_trip_id:trip.id,p_target_type:'day',p_target_id:day.id,p_text:text}); if(error) throw error; }catch(e){ showToast("Couldn't post note — try again.",'error'); } })();
     }
     updateDay({...day,comments:[...(day.comments||[]),{id:uuid(),author:myName,color:myColor,text,ts:Date.now()}]});
   };
@@ -4821,7 +4821,7 @@ function CrewSection({trip, onUpdateTrip}){
       // has to go through the guarded function since trips are owner-write-only.
       if(id!==trip._myCollaboratorId) return;
       const c=sb();
-      if(c) c.rpc('set_my_rsvp',{p_trip_id:trip.id,p_rsvp:rsvp}).catch(()=>showToast("Couldn't update RSVP — try again.",'error'));
+      if(c) (async()=>{ try{ const {error}=await c.rpc('set_my_rsvp',{p_trip_id:trip.id,p_rsvp:rsvp}); if(error) throw error; }catch(e){ showToast("Couldn't update RSVP — try again.",'error'); } })();
       return;
     }
     save(members.map(m=>m.id===id?{...m, rsvp}:m));
@@ -5873,7 +5873,11 @@ function App() {
       setCloudUser(u);
       if(!u) return;
       syncTasteProfile(); // reconcile taste-profile quiz answers too; independent of trip sync below
-      c?.rpc('claim_pending_trip_invites').catch(()=>{}); // link any pending Crew invites to this login (Phase 4)
+      // NOTE: supabase-js v2 query/rpc builders are thenable but do NOT implement
+      // .catch()/.finally() until awaited — calling .catch() directly throws
+      // "not a function" synchronously, which aborted syncIn() before it ever
+      // reached cloudPull() below. Wrap in an async IIFE + try/catch instead.
+      (async()=>{ try{ await c?.rpc('claim_pending_trip_invites'); }catch(e){} })(); // link any pending Crew invites to this login (Phase 4)
       const pulled=await cloudPull(); if(!active) return;
       const merged=mergeCloudTrips(pulled);
       if(merged) cloudPush(merged); // backstop: push up anything that never made it to the cloud
@@ -6525,7 +6529,7 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v14-crew-sharing';
+const CACHE = 'locale-v15-sync-fix';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
