@@ -8,6 +8,18 @@
 <meta name="apple-mobile-web-app-title" content="Locale">
 <meta name="theme-color" content="#FF5A4D">
 <title>Locale — Your trips, beautifully kept.</title>
+<!-- Link-preview card (Messages/Slack/email unfurl this when the link is shared).
+     Same card for every trip — a hash-fragment URL can't be personalized per-trip
+     without a small server component, since crawlers only ever see this static
+     <head>, never the #trip=... part. A branded generic card is still a big
+     upgrade over the raw giant URL with no preview at all. -->
+<meta property="og:title" content="Locale — Your trips, beautifully kept">
+<meta property="og:description" content="You've been invited to plan a trip together. Tap to open it in Locale.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fania17hernan.github.io/locale-app/locale-v2.html">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Locale — Your trips, beautifully kept">
+<meta name="twitter:description" content="You've been invited to plan a trip together. Tap to open it in Locale.">
 <link id="manifest-link" rel="manifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -926,6 +938,22 @@ const CITY_LOCAL_TIPS={
   },
 };
 
+// ── CITY-SPECIFIC TRANSIT APPS — paired with CITY_LOCAL_TIPS above ────────────
+// There's no reliable free "live" API for global transit-app lookup (checked —
+// options are paid/keyed or narrow-coverage), so this uses the same curated,
+// no-key approach as the rest of City Tips. Keyed lowercase to match
+// CITY_LOCAL_TIPS. Cities not listed here fall back to Uber/Lyft only, which is
+// already the accurate recommendation for car-dependent cities like Anaheim,
+// Austin, and Nashville.
+const CITY_TRANSIT_APPS={
+  'new york':  [{label:'🚇 MTA TrainTime',url:'https://new.mta.info/'},{label:'🗺️ Citymapper',url:'https://citymapper.com/nyc'}],
+  'chicago':   [{label:'🚆 Ventra',url:'https://www.ventrachicago.com/'},{label:'🗺️ Citymapper',url:'https://citymapper.com/chicago'}],
+  'las vegas': [{label:'🚌 RTC Transit',url:'https://www.rtcsnv.com/'}],
+  'miami':     [{label:'🚈 Miami-Dade Transit',url:'https://www.miamidade.gov/global/transportation/home.page'}],
+  'london':    [{label:'🚇 TfL Go',url:'https://tfl.gov.uk/plan-a-journey/tfl-go'},{label:'🗺️ Citymapper',url:'https://citymapper.com/london'}],
+  'paris':     [{label:'🚇 Bonjour RATP',url:'https://www.ratp.fr/en/apps-ratp'},{label:'🗺️ Citymapper',url:'https://citymapper.com/paris'}],
+};
+
 // ── APP VERSION & FEATURE FLAGS ────────────────────────────────────────────────
 const APP_VERSION = '0.9';
 const SCHEMA_VERSION = 4; // increment when trip data shape changes (v4: planningStage + ideation)
@@ -954,6 +982,7 @@ function setOwnerKey(k){try{ if(k) localStorage.setItem(OWNER_KEY_SK,k); else lo
 const SUPABASE_URL = 'https://pdbqrjqlwqjqzefmmlhd.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkYnFyanFsd3FqcXplZm1tbGhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExODQxMDEsImV4cCI6MjA5Njc2MDEwMX0.lPxZMp-Ff6RSR-R1DtHj3pJKCiXzqwm1encEB0tHuVc';
 const AI_PROXY_URL = SUPABASE_URL + '/functions/v1/ai-proxy';
+const SEND_INVITE_URL = SUPABASE_URL + '/functions/v1/send-invite';
 const FREE_GENERATION_CAP = 5;   // mirrors server config (server is the enforcer — keep ai_config.free_generation_cap in sync)
 const FREE_EXTRACTION_CAP = 10;
 
@@ -999,21 +1028,59 @@ async function cloudSignIn(email){
   if(error) throw error;
 }
 async function cloudSignOut(){ try{ const c=sb(); if(c) await c.auth.signOut(); }catch(e){} }
+// trips is one row per trip (id, user_id, data jsonb) as of the Phase 3 schema
+// restructure — was one row per user holding ALL trips in a single JSONB array,
+// which made per-trip sharing impossible under RLS. cloudPull/cloudPush below
+// are the only two functions that needed to change; everything that calls them
+// still sees the same {trips, updatedAt} / trips[] interface as before.
 async function cloudPull(){
   try{
     const c=sb(); if(!c) return null;
     const u=await cloudGetUser(); if(!u) return null;
-    const { data, error } = await c.from('trips').select('data,updated_at').eq('user_id',u.id).maybeSingle();
+    // No .eq('user_id', u.id) filter here on purpose: RLS already returns only
+    // trips this user owns OR is a linked Crew/Viewer member of (trip_members).
+    // The second query tells us which of those are "mine" vs shared-with-me,
+    // and at what role, so the UI can gate edits accordingly.
+    const [{ data, error }, { data: memberships }] = await Promise.all([
+      c.from('trips').select('id,user_id,data,updated_at'),
+      c.from('trip_members').select('trip_id,role,collaborator_id').eq('user_id',u.id),
+    ]);
     if(error) return null;
-    return { trips: (data?.data)||[], updatedAt: data?.updated_at||null };
+    const roleByTrip={}, collabByTrip={};
+    (memberships||[]).forEach(m=>{ roleByTrip[m.trip_id]=m.role; collabByTrip[m.trip_id]=m.collaborator_id; });
+    const trips=(data||[]).map(row=>{
+      if(!row.data) return null;
+      const mine = row.user_id===u.id;
+      return {...row.data,
+        _ownerId: row.user_id,
+        _myRole: mine ? 'owner' : (roleByTrip[row.id]||'viewer'),
+        _myCollaboratorId: mine ? null : (collabByTrip[row.id]||null),
+      };
+    }).filter(Boolean);
+    const updatedAt=(data||[]).reduce((max,row)=> (row.updated_at && (!max||row.updated_at>max)) ? row.updated_at : max, null);
+    return { trips, updatedAt };
   }catch(e){ return null; }
 }
 async function cloudPush(trips){
   try{
     const c=sb(); if(!c) return;
     const u=await cloudGetUser(); if(!u) return;
-    const payload=(trips||[]).filter(t=>!t.isDemo);
-    await c.from('trips').upsert({ user_id:u.id, data:payload, updated_at:new Date().toISOString() }, { onConflict:'user_id' });
+    // Only push trips this user actually owns — a shared trip's row belongs to
+    // someone else, and RLS would reject (and fail the whole batch) if we tried.
+    const payload=(trips||[]).filter(t=>!t.isDemo && t.id && (!t._ownerId || t._ownerId===u.id));
+    const ids=payload.map(t=>t.id);
+    if(payload.length){
+      await c.from('trips').upsert(
+        payload.map(t=>{ const {_ownerId,_myRole,_myCollaboratorId,...clean}=t; return { id:t.id, user_id:u.id, data:clean, updated_at:new Date().toISOString() }; }),
+        { onConflict:'id' }
+      );
+    }
+    // Each trip is its own row now, so a deleted-locally trip needs an explicit
+    // delete — a single overwrite (the old one-row-per-user approach) can't
+    // express "this trip is gone" anymore.
+    let del=c.from('trips').delete().eq('user_id',u.id);
+    if(ids.length) del=del.not('id','in','('+ids.join(',')+')');
+    await del;
   }catch(e){ /* offline cache still holds the data; will resync next save */ }
 }
 let _cloudPushTimer=null;
@@ -1095,9 +1162,38 @@ function validateAIDays(days){
 }
 
 // ── TASTE PROFILE — captured once, flavors every AI call ──────────────────────
+// localStorage is the fast synchronous cache every prompt-builder reads from.
+// When signed in (real account), it also syncs to public.profiles so quiz
+// answers survive a device switch instead of living in one browser only.
 const PROFILE_SK = 'locale_profile_v1';
 function getTasteProfile(){try{const p=JSON.parse(localStorage.getItem(PROFILE_SK));return p&&typeof p==='object'?p:null;}catch(e){return null;}}
 function setTasteProfile(p){try{localStorage.setItem(PROFILE_SK,JSON.stringify(p));}catch(e){}}
+async function cloudPullProfile(){
+  try{
+    const c=sb(); if(!c) return null;
+    const u=await cloudGetUser(); if(!u) return null;
+    const { data, error } = await c.from('profiles').select('taste_profile').eq('id',u.id).maybeSingle();
+    if(error) return null;
+    return data?.taste_profile || null;
+  }catch(e){ return null; }
+}
+async function cloudPushProfile(p){
+  try{
+    const c=sb(); if(!c) return;
+    const u=await cloudGetUser(); if(!u) return;
+    await c.from('profiles').upsert({ id:u.id, taste_profile:p, updated_at:new Date().toISOString() }, { onConflict:'id' });
+  }catch(e){ /* localStorage still holds it; will resync next sign-in */ }
+}
+// Reconciles the local (fast, offline-first) profile with the cloud copy for a
+// signed-in user. Cloud wins if both exist (mirrors the trips sync policy); a
+// local-only profile gets pushed up so it isn't stranded on one device.
+async function syncTasteProfile(){
+  const local = getTasteProfile();
+  const cloud = await cloudPullProfile();
+  if(cloud){ setTasteProfile(cloud); return cloud; }
+  if(local){ cloudPushProfile(local); }
+  return local;
+}
 function profilePromptText(p){
   if(!p) return '';
   const bits=[];
@@ -1983,10 +2079,18 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
                   </button>
                   {open[k]&&(
                     <div style={{padding:'0 16px 14px',borderTop:'1px solid var(--color-border)'}}>
-                      {s.type==='transport'&&(
+                      {s.type==='transport'&&(()=>{
+                        const transitApps=CITY_TRANSIT_APPS[(s.city||'').toLowerCase()]||[];
+                        return (
                         <div style={{paddingTop:10}}>
                           <p style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.65,marginBottom:12}}>{s.body}</p>
                           <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                            {transitApps.map(t=>(
+                              <a key={t.url} href={t.url} target="_blank" rel="noopener noreferrer"
+                                style={{display:'inline-flex',alignItems:'center',gap:6,background:'var(--color-accent)',color:'#fff',borderRadius:20,padding:'7px 14px',fontSize:'.78rem',fontWeight:500,textDecoration:'none'}}>
+                                {t.label}
+                              </a>
+                            ))}
                             <a href="https://m.uber.com/ul/" target="_blank" rel="noopener noreferrer"
                               style={{display:'inline-flex',alignItems:'center',gap:6,background:'#000',color:'#fff',borderRadius:20,padding:'7px 14px',fontSize:'.78rem',fontWeight:500,textDecoration:'none'}}>
                               🚗 Open Uber
@@ -1997,7 +2101,8 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
                             </a>
                           </div>
                         </div>
-                      )}
+                        );
+                      })()}
                       {s.type==='body'&&<p style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.65,paddingTop:10}}>{s.body}</p>}
                       {s.type==='tips'&&s.items.map((t,j)=>(
                         <p key={j} style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.55,marginTop:8,paddingLeft:4,borderLeft:'2px solid var(--color-accent-warm)'}}>  {t}</p>
@@ -2672,33 +2777,47 @@ function DayRouteMap({trip,day}){
   const [progress,setProgress]=React.useState('');
   React.useEffect(()=>{
     let cancelled=false;
+    setStatus('loading'); setProgress('');
     (async()=>{
       try{
         await loadLeaflet();
+        if(cancelled)return;
         const stops=dayStopsForRoute(trip,day);
         if(!stops.length){setStatus('empty');return;}
+        const L=window.L;
+        if(mapObj.current){mapObj.current.remove();mapObj.current=null;}
+        const m=L.map(mapRef.current,{scrollWheelZoom:false});
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(m);
+        mapObj.current=m;
+        // Geocode one stop at a time (Nominatim's free tier requires max 1 req/sec —
+        // can't be parallelized without switching to a paid/keyed provider). To avoid
+        // a long blank wait, the map appears and gets its first marker the moment the
+        // FIRST stop resolves, instead of waiting for every stop to finish.
         const points=[];
+        let shown=false;
         for(let i=0;i<stops.length;i++){
           if(cancelled)return;
           setProgress(`Locating ${i+1} of ${stops.length}…`);
           const isCached=geoCache()[stops[i].query.toLowerCase().trim()]!==undefined;
           const pt=await geocodeStop(stops[i].query);
-          if(pt)points.push({...pt,label:stops[i].label});
+          if(cancelled)return;
+          if(pt){
+            points.push({...pt,label:stops[i].label});
+            L.marker([pt.lat,pt.lon]).addTo(m).bindPopup(`<strong>${points.length}.</strong> ${stops[i].label.replace(/</g,'&lt;')}`);
+            if(!shown){
+              shown=true; setStatus('ready');
+              // container was display:none until 'ready' — Leaflet needs a size
+              // recalculation once it's actually visible, or tiles render wrong.
+              setTimeout(()=>{ if(!cancelled){ m.invalidateSize(); m.setView([pt.lat,pt.lon],13); } },50);
+            } else if(points.length>1){
+              m.fitBounds(points.map(p=>[p.lat,p.lon]),{padding:[28,28]});
+            }
+          }
           if(!isCached&&i<stops.length-1)await new Promise(r=>setTimeout(r,1100)); // Nominatim: max 1 req/sec
         }
         if(cancelled)return;
         if(points.length<1){setStatus('empty');return;}
-        const L=window.L;
-        if(mapObj.current){mapObj.current.remove();mapObj.current=null;}
-        const m=L.map(mapRef.current,{scrollWheelZoom:false});
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(m);
-        points.forEach((p,i)=>{
-          L.marker([p.lat,p.lon]).addTo(m).bindPopup(`<strong>${i+1}.</strong> ${p.label.replace(/</g,'&lt;')}`);
-        });
         if(points.length>1) L.polyline(points.map(p=>[p.lat,p.lon]),{color:'#FF5A4D',weight:3,opacity:.75,dashArray:'6 8'}).addTo(m);
-        m.fitBounds(points.map(p=>[p.lat,p.lon]),{padding:[28,28]});
-        mapObj.current=m;
-        setStatus('ready');
       }catch(e){if(!cancelled)setStatus('error');}
     })();
     return()=>{cancelled=true;if(mapObj.current){mapObj.current.remove();mapObj.current=null;}};
@@ -2735,11 +2854,18 @@ function resolveStopAuthor(trip, item){
   if(item.addedByName) return {name:item.addedByName, color:AVATAR_COLORS[0], initial:item.addedByName.charAt(0).toUpperCase()};
   return null;
 }
-function fmtStopTime(t){
+// Converts a "HH:MM" (24h wall-clock) string to a friendly "h:mm am/pm" display.
+// These times are already local to the stop (e.g. a Paris arrival is Paris local
+// time) — no timezone math needed, just a nicer format than military time.
+function fmt12h(t){
   if(!t) return '';
   const m=/^(\d{1,2}):(\d{2})/.exec(String(t)); if(!m) return String(t);
-  return m[1].padStart(2,'0')+':'+m[2];
+  let h=parseInt(m[1],10); const min=m[2];
+  const ap = h>=12 ? 'pm' : 'am';
+  h = h % 12; if(h===0) h=12;
+  return h+':'+min+' '+ap;
 }
+function fmtStopTime(t){ return fmt12h(t); }
 function Avatar22({initial,color}){
   return <span style={{width:22,height:22,borderRadius:'50%',background:color,color:'#0E1117',display:'inline-flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'.68rem',flexShrink:0}}>{initial}</span>;
 }
@@ -2747,7 +2873,7 @@ function Avatar22({initial,color}){
 // ── FLIGHTS STRIP — tappable pills that open an in-app flight detail (PRD 2.5) ────
 function FlightsStrip({flights}){
   const [sel,setSel]=React.useState(null);
-  const fmtT=(iso)=>{ if(!iso) return ''; const m=/T(\d{2}):(\d{2})/.exec(iso); return m?`${m[1]}:${m[2]}`:''; };
+  const fmtT=(iso)=>{ if(!iso) return ''; const m=/T(\d{2}):(\d{2})/.exec(iso); return m?fmt12h(m[1]+':'+m[2]):''; };
   const dep=(f)=>f.departureAirport||f.origin||'';
   const arr=(f)=>f.arrivalAirport||f.destination||'';
   const dateOf=(f)=>(f.departureTime?.slice(0,10))||f.departureDate||'';
@@ -2830,7 +2956,7 @@ function StopMiniMap({query}){
 }
 
 // ── TIMELINE STOP — one row in the day plan (prototype style) ────────────────────
-function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDeleteComment, onMoveUp, onMoveDown, canMoveUp, canMoveDown}){
+function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDeleteComment, draggable}){
   const [open,setOpen]=useState(false);
   const [draft,setDraft]=useState('');
   const [showMap,setShowMap]=useState(false);
@@ -2840,29 +2966,28 @@ function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDelet
   const comments=item.comments||[];
   const mapsUrl=`https://maps.google.com/?q=${encodeURIComponent(item.address||item.name)}`;
   const post=()=>{ if(draft.trim()){ onAddComment(item, draft.trim()); setDraft(''); if(!open)setOpen(true); } };
-  const showReorder = !!(onMoveUp||onMoveDown);
-  const reorderBtn=(enabled)=>({width:40,height:34,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:8,border:'1px solid var(--color-border)',background:'var(--color-cream-dark)',color:'var(--color-ink)',cursor:enabled?'pointer':'default',opacity:enabled?1:.3,fontSize:'.8rem',lineHeight:1,padding:0});
   return(
-    <div style={{display:'flex',position:'relative'}}>
+    <div className={draggable?'sortable-item':undefined} data-id={item.id} style={{display:'flex',position:'relative'}}>
+      {draggable&&<span className="drag-handle" title="Drag to reorder" aria-label={`Drag to reorder ${item.name}`} style={{marginTop:14}}>⠿</span>}
       <div style={{width:3,borderRadius:2,background:accent,flexShrink:0,alignSelf:'stretch'}}/>
       <div style={{flex:1,minWidth:0,padding:'0 0 18px 14px',display:'flex',gap:8,alignItems:'flex-start'}}>
        <div style={{flex:1,minWidth:0}}>
         {time && <div style={{fontFamily:'var(--font-mono)',fontSize:'.72rem',color:'var(--color-ink-muted)',letterSpacing:'.04em',marginBottom:3}}>{time}</div>}
-        <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+        {/* Tapping the title (not a separate small link) opens notes/details — bigger, thumb-friendly target. */}
+        <button onClick={()=>setOpen(o=>!o)} aria-expanded={open} aria-label={`${item.name}, ${comments.length?comments.length+' note'+(comments.length>1?'s':''):'no notes yet'} — tap for details`}
+          style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',background:'none',border:'none',padding:0,margin:0,cursor:'pointer',textAlign:'left',width:'100%'}}>
           <span style={{fontWeight:700,fontSize:'1rem',color:'var(--color-ink)'}}>{item.emoji?item.emoji+' ':''}{item.name}</span>
           {item.bucket==='must-do'&&<span className="badge-must">★</span>}
           {item.bucket==='nice-to-have'&&<span className="badge-nice">✨</span>}
           {(item.bookingRequired||item.reservationRequired)&&<span className="pill pill-flag" style={{padding:'1px 6px',fontSize:'.68rem'}}>Booking</span>}
-        </div>
+          {comments.length>0 && <span style={{marginLeft:'auto',fontSize:'.72rem',color:'var(--color-accent)',fontWeight:500,flexShrink:0}}>💬 {comments.length}</span>}
+        </button>
         {author && (
           <div style={{display:'flex',alignItems:'center',gap:7,marginTop:6}}>
             <Avatar22 initial={author.initial} color={author.color}/>
             <span style={{fontSize:'.8rem',color:'var(--color-ink-muted)'}}>Added by {author.name}{item.addedAt?' · '+relativeAgo(item.addedAt):''}</span>
           </div>
         )}
-        <button onClick={()=>setOpen(o=>!o)} style={{marginTop:8,background:'none',border:'none',padding:0,cursor:'pointer',display:'flex',alignItems:'center',gap:6,color:comments.length?'var(--color-accent)':'var(--color-ink-muted)',fontSize:'.8rem',fontWeight:500}}>
-          💬 {comments.length ? (comments.length+' note'+(comments.length>1?'s':'')) : 'add a note'}
-        </button>
         {open && (
           <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--color-border)'}}>
             {item.neighborhood&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginBottom:4}}>📍 {item.neighborhood}</p>}
@@ -2892,18 +3017,14 @@ function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDelet
           </div>
         )}
        </div>
-       {showReorder && (
-         <div style={{display:'flex',flexDirection:'column',gap:4,flexShrink:0}} role="group" aria-label="Reorder stop">
-           <button type="button" aria-label={`Move ${item.name} earlier`} disabled={!canMoveUp} onClick={onMoveUp} style={reorderBtn(canMoveUp)}>▲</button>
-           <button type="button" aria-label={`Move ${item.name} later`} disabled={!canMoveDown} onClick={onMoveDown} style={reorderBtn(canMoveDown)}>▼</button>
-         </div>
-       )}
       </div>
     </div>
   );
 }
 
 function DayView({trip,day,onUpdateTrip}){
+  const isOwner = trip._myRole==='owner' || !trip._myRole; // untagged (never-synced) trips are always mine
+  const myRole = trip._myRole || 'owner';
   const [notes,setNotes]=useState(day.notes||'');
   const [filter,setFilter]=useState('all');
   const [addingType,setAddingType]=useState(null); // 'activity'|'restaurant'|null
@@ -2941,16 +3062,37 @@ function DayView({trip,day,onUpdateTrip}){
     updateDay({...day,[listKey]:(day[listKey]||[]).filter(x=>x.id!==id)});
   };
   const listKeyOf=(item)=> (day.activities||[]).some(a=>a.id===item.id) ? 'activities' : 'restaurants';
+  // Crew/Viewer members don't have write access to the trip document (owner-only
+  // RLS) — a linked 'crew' member's note goes through the guarded add_trip_comment
+  // function instead, which only lets them append a comment, nothing else. A
+  // local echo keeps the UI responsive either way; the next sync reconciles it.
   const addStopComment=(item,text)=>{
     const lk=listKeyOf(item);
+    if(!isOwner){
+      if(myRole!=='crew'){ showToast("Viewers can't add notes on this trip.",'warn'); return; }
+      const c=sb();
+      const targetType=(day.activities||[]).some(a=>a.id===item.id)?'activity':'restaurant';
+      if(c) c.rpc('add_trip_comment',{p_trip_id:trip.id,p_target_type:targetType,p_target_id:item.id,p_text:text}).catch(()=>showToast("Couldn't post note — try again.",'error'));
+    }
     updateDay({...day,[lk]:(day[lk]||[]).map(s=>s.id===item.id?{...s,comments:[...(s.comments||[]),{id:uuid(),author:myName,color:myColor,text,ts:Date.now()}]}:s)});
   };
   const deleteStopComment=(item,cid)=>{
+    if(!isOwner) return; // deleting a note isn't wired to a guarded function yet — owner-only for now
     const lk=listKeyOf(item);
     updateDay({...day,[lk]:(day[lk]||[]).map(s=>s.id===item.id?{...s,comments:(s.comments||[]).filter(c=>c.id!==cid)}:s)});
   };
-  const addDayComment=(text)=> updateDay({...day,comments:[...(day.comments||[]),{id:uuid(),author:myName,color:myColor,text,ts:Date.now()}]});
-  const deleteDayComment=(cid)=> updateDay({...day,comments:(day.comments||[]).filter(c=>c.id!==cid)});
+  const addDayComment=(text)=>{
+    if(!isOwner){
+      if(myRole!=='crew'){ showToast("Viewers can't add notes on this trip.",'warn'); return; }
+      const c=sb();
+      if(c) c.rpc('add_trip_comment',{p_trip_id:trip.id,p_target_type:'day',p_target_id:day.id,p_text:text}).catch(()=>showToast("Couldn't post note — try again.",'error'));
+    }
+    updateDay({...day,comments:[...(day.comments||[]),{id:uuid(),author:myName,color:myColor,text,ts:Date.now()}]});
+  };
+  const deleteDayComment=(cid)=>{
+    if(!isOwner) return;
+    updateDay({...day,comments:(day.comments||[]).filter(c=>c.id!==cid)});
+  };
 
   const hotel=trip.lodging?.find(l=>!l.destinationId||l.destinationId===day.destinationId);
   const wxMap={GB:{icon:'🌤',cond:'Partly Cloudy',hi:17,lo:12,unit:'C',rain:30},FR:{icon:'☀️',cond:'Mild & Sunny',hi:20,lo:14,unit:'C',rain:10},US:{icon:'☀️',cond:'Sunny',hi:30,lo:24,unit:'F',rain:5}};
@@ -2969,19 +3111,34 @@ function DayView({trip,day,onUpdateTrip}){
       if(!ta&&tb) return 1;
       return 0;
     });
-  // Move a stop up/down in the merged timeline; persists a unified sortOrder across both lists.
-  const moveStop=(i,dir)=>{
-    const j=i+dir;
-    if(j<0||j>=merged.length) return;
-    const arr=merged.map(m=>m.item);
-    [arr[i],arr[j]]=[arr[j],arr[i]];
-    const orderMap=new Map(arr.map((s,k)=>[s.id,k]));
-    const reindex=(list)=>(list||[]).map(s=>orderMap.has(s.id)?{...s,sortOrder:orderMap.get(s.id)}:s);
-    updateDay({...day,activities:reindex(day.activities),restaurants:reindex(day.restaurants)});
-  };
   const canReorder = filter==='all'; // reordering a filtered subset is ambiguous
   const totalStops=(day.activities||[]).length+(day.restaurants||[]).length;
   const dayComments=day.comments||[];
+
+  // Drag-to-reorder (SortableJS, CDN-loaded) replaces the old up/down buttons.
+  // A ref holds the latest merged/day/updateDay so the drag handler (bound once
+  // per canReorder toggle) never closes over stale data.
+  const listRef=React.useRef(null);
+  const dragStateRef=React.useRef({});
+  dragStateRef.current={merged,day,updateDay};
+  React.useEffect(()=>{
+    if(!canReorder || !listRef.current || !window.Sortable) return;
+    const sortable=window.Sortable.create(listRef.current,{
+      handle:'.drag-handle', animation:150, ghostClass:'sortable-ghost',
+      onEnd:(evt)=>{
+        const {oldIndex,newIndex}=evt;
+        if(oldIndex==null||newIndex==null||oldIndex===newIndex) return;
+        const {merged:m,day:d,updateDay:upd}=dragStateRef.current;
+        const arr=m.map(x=>x.item);
+        const [moved]=arr.splice(oldIndex,1);
+        arr.splice(newIndex,0,moved);
+        const orderMap=new Map(arr.map((s,k)=>[s.id,k]));
+        const reindex=(list)=>(list||[]).map(s=>orderMap.has(s.id)?{...s,sortOrder:orderMap.get(s.id)}:s);
+        upd({...d,activities:reindex(d.activities),restaurants:reindex(d.restaurants)});
+      }
+    });
+    return ()=>sortable.destroy();
+  },[canReorder]);
 
   return(
     <div style={{padding:'0 16px 32px'}}>
@@ -3060,21 +3217,21 @@ function DayView({trip,day,onUpdateTrip}){
         <ActivityForm type={addingType}
           onSave={f=>handleSaveActivity(f,addingType)} onCancel={()=>setAddingType(null)}/>
       )}
-      {/* Timeline card */}
-      <div className="card" style={{padding:'18px 16px 4px',marginBottom:16}}>
+      {/* Timeline card — drag the ⠿ handle to reorder (only when unfiltered) */}
+      <div className="card" ref={listRef} style={{padding:'18px 16px 4px',marginBottom:16}}>
         {merged.length===0 ? (
           <p style={{fontSize:'.85rem',color:'var(--color-ink-muted)',padding:'4px 0 16px'}}>
             {totalStops===0 ? 'No stops yet — tap + Activity or + Food to start this day.' : 'Nothing matches this filter.'}
           </p>
-        ) : merged.map(({item,type},i)=>(
+        ) : merged.map(({item,type})=>(
           <TimelineStop key={item.id} trip={trip} item={item} type={type}
             onEdit={it=>{setAddingType(null);setEditingItem({item:it,type});}}
             onDelete={id=>handleDelete(id,type==='restaurant'?'restaurants':'activities')}
             onAddComment={addStopComment} onDeleteComment={deleteStopComment}
-            onMoveUp={canReorder?()=>moveStop(i,-1):null} onMoveDown={canReorder?()=>moveStop(i,1):null}
-            canMoveUp={canReorder&&i>0} canMoveDown={canReorder&&i<merged.length-1}/>
+            draggable={canReorder}/>
         ))}
       </div>
+      {canReorder && merged.length>1 && <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:-10,marginBottom:16}}>⠿ Drag to reorder</p>}
       {/* Notes on this day — attributed */}
       <div className="card" style={{padding:16}}>
         <p className="section-label" style={{marginBottom:dayComments.length?12:8}}>Notes on this day</p>
@@ -4019,6 +4176,15 @@ function ItineraryAIPlanner({trip, onUpdateTrip}) {
   const freeLeft = usage ? Math.max(0, FREE_GENERATION_CAP - (usage.free_generations_used || 0)) : null;
   const [profile, setProfileState] = React.useState(getTasteProfile);
   const [showQuiz, setShowQuiz] = React.useState(()=>!getTasteProfile());
+  React.useEffect(() => {
+    let on = true;
+    syncTasteProfile().then(p => {
+      if(!on || !p) return;
+      setProfileState(p);
+      setShowQuiz(false);
+    }).catch(()=>{});
+    return () => { on = false; };
+  }, []);
 
   const nightCount = trip.startDate && trip.endDate
     ? Math.round((new Date(trip.endDate) - new Date(trip.startDate)) / 86400000)
@@ -4252,6 +4418,14 @@ Only include fields you can actually read from the document. Use null for anythi
 
   const generate = async () => {
     if (!prompt.trim()) { setError('Tell me what you want to do on this trip first.'); return; }
+    // Guards against a real bug: without a start date, the day-dating math below
+    // (new Date(trip.startDate+...)) throws and the raw "Invalid Date" error was
+    // leaking straight to the UI — AFTER already spending one of the free AI
+    // generations. Catching it here, before the AI call, fixes both problems.
+    if (!trip.startDate || isNaN(new Date(trip.startDate+'T12:00:00').getTime())) {
+      setError('This trip needs a start date before I can plan it day by day — add one on the Overview tab.');
+      return;
+    }
     setLoading(true); setError(''); setStreamText('');
 
     try {
@@ -4348,7 +4522,7 @@ Only include fields you can actually read from the document. Use null for anythi
   };
 
   // One-time taste profile, then ideation mode for dream trips
-  if (showQuiz) return <ProfileQuiz initial={profile} onDone={(p)=>{ if(p){ setTasteProfile(p); setProfileState(p); } setShowQuiz(false); }}/>;
+  if (showQuiz) return <ProfileQuiz initial={profile} onDone={(p)=>{ if(p){ setTasteProfile(p); setProfileState(p); cloudPushProfile(p); } setShowQuiz(false); }}/>;
   if (trip.planningStage === 'idea') return <IdeationPlanner trip={trip} onUpdateTrip={onUpdateTrip} apiKey={apiKey} refreshUsage={refreshUsage} freeLeft={freeLeft}/>;
 
   if (showKeyInput) return (
@@ -4522,7 +4696,7 @@ Only include fields you can actually read from the document. Use null for anythi
                   {trip.flights.map(f=>(
                     <div key={f.id} style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6,marginBottom:4}}>
                       <strong>{f.flightNumber}</strong> {f.departureAirport}→{f.arrivalAirport}
-                      {f.departureTime&&<span> · {f.departureTime.slice(0,10)} {f.departureTime.slice(11,16)}</span>}
+                      {f.departureTime&&<span> · {f.departureTime.slice(0,10)} {fmt12h(f.departureTime.slice(11,16))}</span>}
                       {f.confirmationNumber&&<span> · Conf: {f.confirmationNumber}</span>}
                     </div>
                   ))}
@@ -4639,20 +4813,32 @@ Only include fields you can actually read from the document. Use null for anythi
 function CrewSection({trip, onUpdateTrip}){
   const members = trip.collaborators || [];
   const counts = members.reduce((a,m)=>{const r=m.rsvp||'pending';a[r]=(a[r]||0)+1;return a;},{});
+  const isOwner = trip._myRole==='owner' || !trip._myRole; // untagged (locally-created, never synced) trips are always mine
   const save = (next)=> onUpdateTrip({...trip, collaborators: next});
-  const setRsvp = (id, rsvp)=> save(members.map(m=>m.id===id?{...m, rsvp}:m));
+  const setRsvp = (id, rsvp)=>{
+    if(!isOwner){
+      // Not the owner — the only write I'm allowed is MY OWN rsvp, and even that
+      // has to go through the guarded function since trips are owner-write-only.
+      if(id!==trip._myCollaboratorId) return;
+      const c=sb();
+      if(c) c.rpc('set_my_rsvp',{p_trip_id:trip.id,p_rsvp:rsvp}).catch(()=>showToast("Couldn't update RSVP — try again.",'error'));
+      return;
+    }
+    save(members.map(m=>m.id===id?{...m, rsvp}:m));
+  };
   const setPay = (id, field, val)=> save(members.map(m=>m.id===id?{...m, [field]:val}:m));
   const remove = (id)=> { if(window.confirm('Remove this person from the trip?')) save(members.filter(m=>m.id!==id)); };
   const [name,setName]=React.useState('');
   const [email,setEmail]=React.useState('');
   const [phone,setPhone]=React.useState('');
   const [rsvp,setR]=React.useState('pending');
+  const [role,setRole]=React.useState('crew'); // 'crew' can add notes/suggestions; 'viewer' is read-only + rsvp
   const add = ()=>{
     if(!name.trim()){ showToast('Add a name.','warn'); return; }
     if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())){ showToast('That email looks off.','warn'); return; }
     const color = AVATAR_COLORS[members.length % AVATAR_COLORS.length];
-    save([...members, {id:uuid(), name:name.trim(), email:email.trim(), phone:phone.trim(), rsvp, avatarColor:color}]);
-    setName(''); setEmail(''); setPhone(''); setR('pending');
+    save([...members, {id:uuid(), name:name.trim(), email:email.trim(), phone:phone.trim(), rsvp, role, avatarColor:color}]);
+    setName(''); setEmail(''); setPhone(''); setR('pending'); setRole('crew');
   };
   const shareInvite = ()=>{
     const encoded = encodeTrip(trip);
@@ -4660,6 +4846,43 @@ function CrewSection({trip, onUpdateTrip}){
     const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
     if(navigator.share){ navigator.share({title:trip.title, text:'Join my trip on Locale', url}).catch(()=>{}); }
     else { navigator.clipboard.writeText(url).then(()=>showToast('Invite link copied — recipients can view this trip.','info',4000)).catch(()=>prompt('Copy invite link:', url)); }
+  };
+  // Phase 2: if this person has an email, try to actually send them an invite
+  // via the send-invite Edge Function (Resend). Falls back to the Phase 1
+  // manual share/copy-link flow if that fails for any reason (no Resend key
+  // configured yet, offline, trip not synced, etc.) — never a dead end.
+  const inviteMember = async (m)=>{
+    const encoded = encodeTrip(trip);
+    if(!encoded){ showToast('Could not create an invite link.','error'); return; }
+    const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
+    const markSent = ()=> save(members.map(x=>x.id===m.id?{...x, invitedAt:Date.now(), inviteSentCount:(x.inviteSentCount||0)+1}:x));
+    const shareOrCopyLink = ()=>{
+      if(navigator.share){ navigator.share({title:trip.title, text:`Join "${trip.title||'my trip'}" on Locale`, url}).then(markSent).catch(()=>{}); }
+      else {
+        navigator.clipboard.writeText(url)
+          .then(()=>{ markSent(); showToast(`Invite link copied for ${m.name} — paste it into a text or email.`,'info',4500); })
+          .catch(()=>{ markSent(); prompt(`Copy invite link for ${m.name}:`, url); });
+      }
+    };
+    if(m.email){
+      try{
+        const c=sb();
+        const sess = c ? (await c.auth.getSession()).data.session : null;
+        if(!c || !sess){ shareOrCopyLink(); return; }
+        const { data: inv, error } = await c.from('trip_invites')
+          .insert({trip_id:trip.id, collaborator_id:m.id, email:m.email.trim(), role: m.role==='viewer'?'viewer':'crew'})
+          .select('id').single();
+        if(error || !inv){ shareOrCopyLink(); return; }
+        const resp = await fetch(SEND_INVITE_URL, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+sess.access_token, 'apikey': SUPABASE_ANON_KEY },
+          body: JSON.stringify({ invite_id: inv.id, invite_url: url }),
+        });
+        if(resp.ok){ markSent(); showToast(`Invite emailed to ${m.name} ✓`,'info',4000); return; }
+        showToast(`Couldn't email ${m.name} — sharing a link instead.`,'warn',3500);
+      }catch(e){ /* fall through to manual share below */ }
+    }
+    shareOrCopyLink();
   };
   return (
     <div>
@@ -4670,48 +4893,69 @@ function CrewSection({trip, onUpdateTrip}){
       </div>
       <div className="card" style={{marginBottom:12,padding:0}}>
         {members.length===0 && <div style={{padding:16,color:'var(--color-ink-light)',fontSize:'.9rem'}}>No one added yet. Add travelers below, then share the invite link.</div>}
-        {members.map(m=>(
+        {members.map(m=>{
+          const isMe = !isOwner && m.id===trip._myCollaboratorId;
+          const canEditRsvp = isOwner || isMe;
+          return (
           <div key={m.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderBottom:'1px solid var(--color-border)'}}>
             <span style={{width:36,height:36,borderRadius:'50%',background:m.avatarColor,color:'#0E1117',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,flexShrink:0,boxShadow:'0 0 0 2px var(--color-surface), 0 0 0 4px '+m.avatarColor}}>{(m.name||'?').charAt(0).toUpperCase()}</span>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:600,color:'var(--color-ink)'}}>{m.name}</div>
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <div style={{fontWeight:600,color:'var(--color-ink)'}}>{m.name}</div>
+                <span className={`pill ${m.role==='viewer'?'pill-muted':'pill-neutral'}`} style={{padding:'1px 6px',fontSize:'.65rem'}}>{m.role==='viewer'?'👀 Viewer':'✏️ Crew'}</span>
+              </div>
               <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{[m.email,m.phone].filter(Boolean).join(' · ') || 'No contact info'}</div>
-              <details style={{marginTop:4}}>
-                <summary style={{cursor:'pointer',fontSize:'.7rem',color:'var(--color-accent)',listStyle:'none'}}>💸 {(m.venmo||m.zelle)?'Payment set':'Add Venmo/Zelle'}</summary>
-                <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:6}}>
-                  <input className="input" style={{flex:'1 1 120px',fontSize:'.78rem',padding:'5px 8px'}} placeholder="Venmo (without @)" value={m.venmo||''} onChange={e=>setPay(m.id,'venmo',e.target.value.replace(/^@/,'').trim())}/>
-                  <input className="input" style={{flex:'1 1 120px',fontSize:'.78rem',padding:'5px 8px'}} placeholder="Zelle (email/phone)" value={m.zelle||''} onChange={e=>setPay(m.id,'zelle',e.target.value.trim())}/>
-                </div>
-              </details>
+              {m.invitedAt && <div style={{fontSize:'.68rem',color:'var(--color-ink-muted)',marginTop:2}}>Invited {relativeAgo(m.invitedAt)}{m.inviteSentCount>1?` · sent ${m.inviteSentCount}×`:''}</div>}
+              {isOwner && (
+                <details style={{marginTop:4}}>
+                  <summary style={{cursor:'pointer',fontSize:'.7rem',color:'var(--color-accent)',listStyle:'none'}}>💸 {(m.venmo||m.zelle)?'Payment set':'Add Venmo/Zelle'}</summary>
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:6}}>
+                    <input className="input" style={{flex:'1 1 120px',fontSize:'.78rem',padding:'5px 8px'}} placeholder="Venmo (without @)" value={m.venmo||''} onChange={e=>setPay(m.id,'venmo',e.target.value.replace(/^@/,'').trim())}/>
+                    <input className="input" style={{flex:'1 1 120px',fontSize:'.78rem',padding:'5px 8px'}} placeholder="Zelle (email/phone)" value={m.zelle||''} onChange={e=>setPay(m.id,'zelle',e.target.value.trim())}/>
+                  </div>
+                </details>
+              )}
             </div>
-            <select className="input" aria-label="RSVP status" style={{width:'auto',padding:'4px 8px',fontSize:'.78rem'}} value={m.rsvp||'pending'} onChange={e=>setRsvp(m.id, e.target.value)}>
+            {isOwner && <button aria-label={m.invitedAt?`Resend invite to ${m.name}`:`Invite ${m.name}`} onClick={()=>inviteMember(m)} className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',padding:'4px 8px',whiteSpace:'nowrap'}}>{m.invitedAt?'↻ Resend':'✉️ Invite'}</button>}
+            <select className="input" aria-label="RSVP status" style={{width:'auto',padding:'4px 8px',fontSize:'.78rem'}} value={m.rsvp||'pending'} disabled={!canEditRsvp} onChange={e=>setRsvp(m.id, e.target.value)}>
               <option value="going">Going</option>
               <option value="pending">Pending</option>
               <option value="no">Can't make it</option>
             </select>
-            <button aria-label="Remove person" onClick={()=>remove(m.id)} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'2px 8px'}}>✕</button>
+            {isOwner && <button aria-label="Remove person" onClick={()=>remove(m.id)} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'2px 8px'}}>✕</button>}
           </div>
-        ))}
+          );
+        })}
       </div>
-      <div className="card" style={{marginBottom:12}}>
-        <p className="section-label">Add a traveler</p>
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          <input className="input" placeholder="Name *" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')add();}}/>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            <input className="input" style={{flex:'1 1 160px'}} type="email" autoComplete="off" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/>
-            <input className="input" style={{flex:'1 1 140px'}} type="tel" placeholder="Phone" value={phone} onChange={e=>setPhone(e.target.value)}/>
+      {isOwner ? (
+        <>
+          <div className="card" style={{marginBottom:12}}>
+            <p className="section-label">Add a traveler</p>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              <input className="input" placeholder="Name *" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')add();}}/>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                <input className="input" style={{flex:'1 1 160px'}} type="email" autoComplete="off" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/>
+                <input className="input" style={{flex:'1 1 140px'}} type="tel" placeholder="Phone" value={phone} onChange={e=>setPhone(e.target.value)}/>
+              </div>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                <select className="input" aria-label="Role" style={{flex:'1 1 140px'}} value={role} onChange={e=>setRole(e.target.value)}>
+                  <option value="crew">✏️ Crew — can add notes/suggestions</option>
+                  <option value="viewer">👀 Viewer — sees itinerary only</option>
+                </select>
+                <select className="input" style={{flex:'1 1 auto'}} value={rsvp} onChange={e=>setR(e.target.value)}>
+                  <option value="going">Going</option>
+                  <option value="pending">Pending</option>
+                  <option value="no">Can't make it</option>
+                </select>
+              </div>
+              <button className="btn btn-primary" onClick={add}>Add</button>
+            </div>
           </div>
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <select className="input" style={{flex:'1 1 auto'}} value={rsvp} onChange={e=>setR(e.target.value)}>
-              <option value="going">Going</option>
-              <option value="pending">Pending</option>
-              <option value="no">Can't make it</option>
-            </select>
-            <button className="btn btn-primary" onClick={add}>Add</button>
-          </div>
-        </div>
-      </div>
-      <button className="btn btn-secondary" style={{width:'100%'}} onClick={shareInvite}>🔗 Share invite link</button>
+          <button className="btn btn-secondary" style={{width:'100%'}} onClick={shareInvite}>🔗 Share invite link</button>
+        </>
+      ) : (
+        <p style={{fontSize:'.8rem',color:'var(--color-ink-muted)',textAlign:'center',padding:'8px 0'}}>You're viewing this trip as {trip._myRole==='crew'?'Crew':'a Viewer'}{isMe?' — you can set your own RSVP above':''}.</p>
+      )}
     </div>
   );
 }
@@ -4734,6 +4978,81 @@ function computeSettlements(balMap){
   }
   return res;
 }
+// ── EDITABLE BUDGET ROW — tap ✏️ to change amount/label/day/paid-by/split ──────
+function BudgetItemRow({item, members, days, fmt, dayLabel, splitInfo, onSave, onRemove}){
+  const [editing,setEditing]=React.useState(false);
+  const [label,setLabel]=React.useState(item.label);
+  const [amount,setAmount]=React.useState(String(item.amount));
+  const [dayId,setDayId]=React.useState(item.day||'');
+  const [paidBy,setPaidBy]=React.useState(item.paidBy||'');
+  const [excluded,setExcluded]=React.useState(item.excluded||[]);
+  const startEdit=()=>{
+    setLabel(item.label); setAmount(String(item.amount)); setDayId(item.day||''); setPaidBy(item.paidBy||''); setExcluded(item.excluded||[]);
+    setEditing(true);
+  };
+  const save=()=>{
+    const a=parseFloat(amount);
+    if(!label.trim()||!(a>=0)){ showToast('Add a label and an amount.','warn'); return; }
+    onSave({label:label.trim(), amount:a, day:dayId||null, paidBy:paidBy||null, excluded:[...excluded]});
+    setEditing(false);
+  };
+  if(editing){
+    return (
+      <div style={{padding:'9px 0',borderBottom:'1px solid var(--color-border)'}}>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:6}}>
+          <input className="input" style={{flex:'2 1 120px'}} value={label} onChange={e=>setLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')save();}}/>
+          <input className="input" style={{flex:'1 1 80px'}} type="number" inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')save();}}/>
+        </div>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:6}}>
+          {days.length>0 && (
+            <select className="input" aria-label="Day" style={{flex:'1 1 110px'}} value={dayId} onChange={e=>setDayId(e.target.value)}>
+              <option value="">Whole trip</option>
+              {days.map((d,idx)=><option key={d.id} value={d.id}>{d.label||('Day '+(idx+1))}</option>)}
+            </select>
+          )}
+          {members.length>0 && (
+            <select className="input" aria-label="Paid by" style={{flex:'1 1 110px'}} value={paidBy} onChange={e=>setPaidBy(e.target.value)}>
+              <option value="">Paid by…</option>
+              {members.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          )}
+        </div>
+        {members.length>1 && (
+          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
+            <span style={{width:'100%',fontSize:'.7rem',color:'var(--color-ink-muted)'}}>Split among:</span>
+            {members.map(m=>{
+              const isIn=!excluded.includes(m.id);
+              return (
+                <button key={m.id} type="button" onClick={()=>setExcluded(ex=>ex.includes(m.id)?ex.filter(x=>x!==m.id):[...ex,m.id])}
+                  className={`pill ${isIn?'pill-accent':'pill-neutral'}`} style={{cursor:'pointer',border:'none',opacity:isIn?1:.55}}>
+                  {isIn?'✓ ':'✕ '}{m.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div style={{display:'flex',gap:8}}>
+          <button className="btn btn-primary btn-sm" onClick={save}>Save</button>
+          <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(false)}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{display:'flex',alignItems:'flex-start',gap:8,padding:'9px 0',borderBottom:'1px solid var(--color-border)'}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:'.9rem',fontWeight:500,color:'var(--color-ink)'}}>{item.label}</div>
+        <div style={{fontSize:'.7rem',color:'var(--color-ink-muted)'}}>
+          {[item.day&&dayLabel(item.day), splitInfo(item)].filter(Boolean).join(' · ')}
+        </div>
+      </div>
+      <div style={{fontFamily:'var(--font-mono)',fontWeight:500,color:'var(--color-ink)',whiteSpace:'nowrap'}}>{fmt(item.amount)}</div>
+      <button aria-label="Edit expense" onClick={startEdit} className="btn btn-ghost btn-sm" style={{padding:'2px 8px'}}>✏️</button>
+      <button aria-label="Remove expense" onClick={onRemove} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'2px 8px'}}>✕</button>
+    </div>
+  );
+}
+
 function BudgetSection({trip, onUpdateTrip}){
   const budget = (trip.budget && Array.isArray(trip.budget.items)) ? trip.budget : {currency:'USD', items:[], payments:[]};
   const items = budget.items;
@@ -4762,6 +5081,7 @@ function BudgetSection({trip, onUpdateTrip}){
     setLabel(''); setAmount(''); setDayId(''); setExcluded([]); setShowSplit(false);
   };
   const remove = (id)=> saveItems(items.filter(i=>i.id!==id));
+  const update = (id,patch)=> saveItems(items.map(i=>i.id===id?{...i,...patch}:i));
   const recordPayment=(from,to,amt)=> savePayments([...payments,{id:uuid(),from,to,amount:amt,ts:Date.now()}]);
   const undoPayment=(id)=> savePayments(payments.filter(p=>p.id!==id));
 
@@ -4795,16 +5115,8 @@ function BudgetSection({trip, onUpdateTrip}){
       ) : (
         <div style={{marginBottom:14}}>
           {items.map(i=>(
-            <div key={i.id} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'9px 0',borderBottom:'1px solid var(--color-border)'}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:'.9rem',fontWeight:500,color:'var(--color-ink)'}}>{i.label}</div>
-                <div style={{fontSize:'.7rem',color:'var(--color-ink-muted)'}}>
-                  {[i.day&&dayLabel(i.day), splitInfo(i)].filter(Boolean).join(' · ')}
-                </div>
-              </div>
-              <div style={{fontFamily:'var(--font-mono)',fontWeight:500,color:'var(--color-ink)',whiteSpace:'nowrap'}}>{fmt(i.amount)}</div>
-              <button aria-label="Remove expense" onClick={()=>remove(i.id)} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'2px 8px'}}>✕</button>
-            </div>
+            <BudgetItemRow key={i.id} item={i} members={members} days={days} fmt={fmt} dayLabel={dayLabel} splitInfo={splitInfo}
+              onSave={patch=>update(i.id,patch)} onRemove={()=>remove(i.id)}/>
           ))}
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:12}}>
             <span style={{fontWeight:600,color:'var(--color-ink)'}}>Total</span>
@@ -5525,21 +5837,48 @@ function App() {
   React.useEffect(()=>{
     let active=true;
     const c=sb();
-    async function syncIn(){
-      const u=await cloudGetUser(); if(!active) return;
-      setCloudUser(u);
-      if(!u) return;
-      const pulled=await cloudPull(); if(!active||!pulled) return;
+    let tripsChannel=null;
+
+    // Cloud-wins merge, shared by the initial pull and every live update.
+    const mergeCloudTrips = (pulled) => {
+      if(!pulled) return null;
+      let merged=null;
       setTrips(prev=>{
         const byId={};
         prev.filter(t=>!t.isDemo).forEach(t=>{ byId[t.id]=t; });
         (pulled.trips||[]).map(normalizeTrip).forEach(t=>{ byId[t.id]=t; }); // cloud wins
-        const merged=Object.values(byId);
+        merged=Object.values(byId);
         saveTrips(merged);
-        cloudPush(merged); // push any local-only trips up
         return merged;
       });
+      return merged;
+    };
+
+    // Live sync: when another device changes this row, pull + merge automatically —
+    // no manual refresh or re-auth needed. Realtime is included in Supabase's tier
+    // (no extra cost); RLS (owner-only) still governs who can receive the event.
+    const subscribeRealtime = (uid) => {
+      if(!c || tripsChannel) return;
+      tripsChannel = c.channel('trips-sync-'+uid)
+        .on('postgres_changes', { event:'*', schema:'public', table:'trips', filter:'user_id=eq.'+uid }, async ()=>{
+          if(!active) return;
+          const pulled = await cloudPull();
+          if(active) mergeCloudTrips(pulled);
+        })
+        .subscribe();
+    };
+
+    async function syncIn(){
+      const u=await cloudGetUser(); if(!active) return;
+      setCloudUser(u);
+      if(!u) return;
+      syncTasteProfile(); // reconcile taste-profile quiz answers too; independent of trip sync below
+      c?.rpc('claim_pending_trip_invites').catch(()=>{}); // link any pending Crew invites to this login (Phase 4)
+      const pulled=await cloudPull(); if(!active) return;
+      const merged=mergeCloudTrips(pulled);
+      if(merged) cloudPush(merged); // backstop: push up anything that never made it to the cloud
       showToast('Synced across your devices ✓','info',3000);
+      subscribeRealtime(u.id);
     }
     syncIn();
     let sub=null;
@@ -5551,10 +5890,14 @@ function App() {
       });
       sub=data?.subscription;
     }
-    return ()=>{ active=false; if(sub) sub.unsubscribe(); };
+    return ()=>{ active=false; if(sub) sub.unsubscribe(); if(tripsChannel && c) c.removeChannel(tripsChannel); };
   },[]);
 
-  const saveAndSet = (newTrips) => { setTrips(newTrips); saveTrips(newTrips); if(cloudUser) cloudPushDebounced(newTrips); };
+  // Not gated on cloudUser state anymore — that gate was the bug: a trip created
+  // right after page load, before the async cloudUser check resolved, would
+  // silently never push to the cloud. cloudPushDebounced/cloudPush already check
+  // the real signed-in state themselves and no-op safely if signed out.
+  const saveAndSet = (newTrips) => { setTrips(newTrips); saveTrips(newTrips); cloudPushDebounced(newTrips); };
 
   const handleNewTrip = (trip) => {
     try {
@@ -6182,7 +6525,7 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v13-nostore';
+const CACHE = 'locale-v14-crew-sharing';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
