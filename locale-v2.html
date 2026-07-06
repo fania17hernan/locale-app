@@ -1032,6 +1032,15 @@ async function cloudSignIn(email){
   if(error) throw error;
 }
 async function cloudSignOut(){ try{ const c=sb(); if(c) await c.auth.signOut(); }catch(e){} }
+// Fire-and-forget product analytics -> public.usage_events (insert-only RLS).
+// Never blocks or breaks the UI; silently no-ops offline. NOTE: supabase-js
+// builders are thenable but don't implement .catch() directly — use .then(ok,err).
+function track(event, props){
+  try{
+    const c=sb(); if(!c) return;
+    c.from('usage_events').insert({ event: String(event).slice(0,64), props: props||null }).then(()=>{},()=>{});
+  }catch(_){}
+}
 // trips is one row per trip (id, user_id, data jsonb) as of the Phase 3 schema
 // restructure — was one row per user holding ALL trips in a single JSONB array,
 // which made per-trip sharing impossible under RLS. cloudPull/cloudPush below
@@ -1379,6 +1388,7 @@ function buildTripICS(trip){
   return lines.join('\r\n');
 }
 function downloadTripICS(trip){
+  track('ics_export');
   try{
     const ics=buildTripICS(trip);
     const eventCount=(ics.match(/BEGIN:VEVENT/g)||[]).length;
@@ -2477,6 +2487,7 @@ function PackingView({trip, onUpdateTrip}){
   useEffect(()=>{
     if(isOwner && !initialised && !didInit.current){
       didInit.current = true;
+      track('packing_generated', { auto:true });
       onUpdateTrip({...trip, packingList: buildPackingDefaults(trip)});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2489,6 +2500,7 @@ function PackingView({trip, onUpdateTrip}){
   }
 
   function initDefaults(){
+    track('packing_generated', { auto:false });
     saveItems(buildPackingDefaults(trip));
   }
 
@@ -3818,6 +3830,7 @@ function NewTripSheet({onClose, onSave}) {
 }
 
 function generateTripPDF(trip) {
+  track('pdf_export');
   const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const gradMap = {
     'gradient-generic':  'linear-gradient(135deg,#1C4A56,#2B5F6E,#3D5A7A)',
@@ -4846,6 +4859,7 @@ function CrewSection({trip, onUpdateTrip}){
     if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())){ showToast('That email looks off.','warn'); return; }
     const color = AVATAR_COLORS[members.length % AVATAR_COLORS.length];
     save([...members, {id:uuid(), name:name.trim(), email:email.trim(), phone:phone.trim(), rsvp, role, avatarColor:color}]);
+    track('crew_add', { role, hasEmail: !!email.trim() });
     setName(''); setEmail(''); setPhone(''); setR('pending'); setRole('crew');
   };
   const shareInvite = ()=>{
@@ -4865,6 +4879,7 @@ function CrewSection({trip, onUpdateTrip}){
     const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
     const markSent = ()=> save(members.map(x=>x.id===m.id?{...x, invitedAt:Date.now(), inviteSentCount:(x.inviteSentCount||0)+1}:x));
     const shareOrCopyLink = ()=>{
+      track('crew_invite',{via:'link'});
       if(navigator.share){ navigator.share({title:trip.title, text:`Join "${trip.title||'my trip'}" on Locale`, url}).then(()=>{ markSent(); showToast(`Invite shared for ${m.name} \u2713`,'info',3500); }).catch(()=>{}); }
       else {
         navigator.clipboard.writeText(url)
@@ -4886,7 +4901,7 @@ function CrewSection({trip, onUpdateTrip}){
           headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+sess.access_token, 'apikey': SUPABASE_ANON_KEY },
           body: JSON.stringify({ invite_id: inv.id, invite_url: url }),
         });
-        if(resp.ok){ markSent(); showToast(`Invite emailed to ${m.name} ✓`,'info',4000); return; }
+        if(resp.ok){ markSent(); track('crew_invite',{via:'email'}); showToast(`Invite emailed to ${m.name} ✓`,'info',4000); return; }
         showToast(`Couldn't email ${m.name} — sharing a link instead.`,'warn',3500);
       }catch(e){ /* fall through to manual share below */ }
     }
@@ -5087,6 +5102,7 @@ function BudgetSection({trip, onUpdateTrip}){
     const a=parseFloat(amount);
     if(!label.trim() || !(a>=0)){ showToast('Add a label and an amount.','warn'); return; }
     saveItems([...items, {id:uuid(), label:label.trim(), amount:a, day:dayId||null, paidBy:paidBy||null, excluded:[...excluded]}]);
+    track('budget_add', { split: excluded.length>0 });
     setLabel(''); setAmount(''); setDayId(''); setExcluded([]); setShowSplit(false);
   };
   const remove = (id)=> saveItems(items.filter(i=>i.id!==id));
@@ -5403,6 +5419,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
           {(()=>{
             const iconBtn=(danger)=>({width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',background:danger?'rgba(255,80,80,.28)':'rgba(255,255,255,.18)',border:'none',borderRadius:12,color:'#fff',fontSize:'1.15rem',cursor:'pointer',backdropFilter:'blur(4px)',flexShrink:0});
             const doShare=()=>{
+              track('share_link');
               const encoded = encodeTrip(trip);
               if(!encoded){alert('Could not encode trip.');return;}
               const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
@@ -5454,7 +5471,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
       <div style={{position:'sticky',top:0,zIndex:100,background:'var(--color-surface)',padding:'10px 16px',overflowX:'auto',whiteSpace:'nowrap',borderBottom:'1px solid var(--color-border)',boxShadow:'none'}}>
         <div style={{display:'inline-flex',gap:8,maxWidth:720,margin:'0 auto'}}>
           {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`pill ${activeTab===t.id?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>
+            <button key={t.id} onClick={()=>{setActiveTab(t.id);track('tab_view',{tab:t.id});}} className={`pill ${activeTab===t.id?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>
               {t.label}
             </button>
           ))}
@@ -5633,7 +5650,7 @@ function SyncButton({user, onChange}){
                     const em=email.trim();
                     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ showToast('Enter a valid email address.','warn'); return; }
                     setBusy(true);
-                    try{ await cloudSignIn(em); setSent(true); }
+                    try{ await cloudSignIn(em); setSent(true); track('sync_signin_requested'); }
                     catch(err){ showToast('Could not send the link — try again.','error'); }
                     finally{ setBusy(false); }
                   }}>{busy?'Sending…':'Send link'}</button>
@@ -5915,6 +5932,14 @@ function App() {
       showToast('Synced across your devices ✓','info',3000);
       subscribeRealtime(u.id);
     }
+    track('app_open', { version: APP_VERSION, standalone: (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||false, width: window.innerWidth });
+    // Global error telemetry (capped at 5/session)
+    if(window.__errTracked===undefined){
+      window.__errTracked=0;
+      const errH=(msg,srcKind)=>{ if(window.__errTracked>=5) return; window.__errTracked++; track('client_error',{ message:String(msg||'unknown').slice(0,300), src:srcKind, view:'global' }); };
+      window.addEventListener('error', e=>errH(e.message,'window'));
+      window.addEventListener('unhandledrejection', e=>errH((e.reason&&e.reason.message)||e.reason,'promise'));
+    }
     syncIn();
     let sub=null;
     if(c){
@@ -5939,6 +5964,7 @@ function App() {
       const normalized = normalizeTrip(trip);
       const updated = [...trips, normalized];
       saveAndSet(updated);
+      track('trip_created', { stage: normalized.planningStage||null, destinations: (normalized.destinations||[]).length });
       setShowNew(false);
       setActiveTripId(normalized.id);
       setView('detail');
@@ -6163,6 +6189,7 @@ class ErrorBoundary extends React.Component {
   }
   componentDidCatch(error, info) {
     console.error('Locale caught an error:', error, info);
+    try{ track('client_error', { message: String(error?.message||error).slice(0,300), src:'boundary', view:'render' }); }catch(_){}
     // Store error in localStorage for debugging
     try {
       const log = JSON.parse(localStorage.getItem('locale_error_log') || '[]');
@@ -6585,7 +6612,7 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v18-feedback';
+const CACHE = 'locale-v19-telemetry';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
