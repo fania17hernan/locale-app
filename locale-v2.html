@@ -6017,6 +6017,7 @@ function BugReportButton({ currentView }) {
   const [open, setOpen] = React.useState(false);
   const [desc, setDesc] = React.useState('');
   const [sent, setSent] = React.useState(false);
+  const [sentVia, setSentVia] = React.useState('db'); // 'db' = saved to Locale, 'mail' = mailto fallback
 
   const deviceInfo = (() => {
     try {
@@ -6038,10 +6039,34 @@ function BugReportButton({ currentView }) {
     } catch(_) { return 'Could not read error log.'; }
   })();
 
-  const sendReport = () => {
+  const sendReport = async () => {
+    const message = (desc || '').trim() || '(no description provided)';
+    // Preferred path: save to the feedback table (insert-only RLS) so it shows
+    // up in the ops dashboard. Falls back to the original mailto if that fails.
+    try {
+      const c = sb();
+      if (!c) throw new Error('offline');
+      let email = null;
+      try { const u = await cloudGetUser(); email = u?.email || null; } catch(_) {}
+      const { error } = await c.from('feedback').insert({
+        message,
+        email,
+        context: {
+          view: currentView, version: APP_VERSION,
+          ua: (navigator.userAgent||'').slice(0,300),
+          viewport: window.innerWidth + 'x' + window.innerHeight,
+          errors: errorLog.slice(0, 800),
+        },
+      });
+      if (error) throw error;
+      setSentVia('db');
+      setSent(true);
+      setTimeout(() => { setOpen(false); setSent(false); setDesc(''); }, 2500);
+      return;
+    } catch(_) { /* fall through to mailto */ }
     const body = [
-      '## Bug Description',
-      desc || '(no description provided)',
+      '## Feedback',
+      message,
       '',
       '## Device Info',
       deviceInfo,
@@ -6049,9 +6074,9 @@ function BugReportButton({ currentView }) {
       '## Recent Error Log',
       errorLog,
     ].join('\n');
-
-    const mailto = `mailto:s.borboa9@gmail.com?subject=${encodeURIComponent(`[Locale Bug] v${APP_VERSION} – ${currentView} screen`)}&body=${encodeURIComponent(body)}`;
+    const mailto = `mailto:s.borboa9@gmail.com?subject=${encodeURIComponent(`[Locale Feedback] v${APP_VERSION} – ${currentView} screen`)}&body=${encodeURIComponent(body)}`;
     window.location.href = mailto;
+    setSentVia('mail');
     setSent(true);
     setTimeout(() => { setOpen(false); setSent(false); setDesc(''); }, 2500);
   };
@@ -6061,7 +6086,7 @@ function BugReportButton({ currentView }) {
       {/* Floating button */}
       <button
         onClick={() => setOpen(true)}
-        title="Report a bug"
+        title="Feedback & bug report"
         style={{
           position: 'fixed', bottom: 24, right: 16, zIndex: 9000,
           width: 40, height: 40, borderRadius: '50%',
@@ -6073,7 +6098,7 @@ function BugReportButton({ currentView }) {
         }}
         onMouseEnter={e => e.currentTarget.style.transform='scale(1.1)'}
         onMouseLeave={e => e.currentTarget.style.transform='scale(1)'}
-      >🐞</button>
+      >💬</button>
 
       {/* Modal */}
       {open && (
@@ -6090,21 +6115,21 @@ function BugReportButton({ currentView }) {
             {sent ? (
               <div style={{textAlign:'center',padding:'20px 0'}}>
                 <div style={{fontSize:'2rem',marginBottom:8}}>✅</div>
-                <p style={{fontWeight:600,color:'var(--color-ink)'}}>Thanks! Report sent.</p>
-                <p style={{fontSize:'.82rem',color:'var(--color-ink-light)',marginTop:4}}>Your email app will open with the details pre-filled.</p>
+                <p style={{fontWeight:600,color:'var(--color-ink)'}}>Thanks! Feedback sent.</p>
+                <p style={{fontSize:'.82rem',color:'var(--color-ink-light)',marginTop:4}}>{sentVia==='mail' ? 'Your email app will open with the details pre-filled.' : 'We got it — thanks for helping make Locale better.'}</p>
               </div>
             ) : (
               <>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
-                  <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.1rem',fontWeight:600,color:'var(--color-ink)'}}>🐞 Report a Bug</h3>
+                  <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.1rem',fontWeight:600,color:'var(--color-ink)'}}>💬 Feedback & bugs</h3>
                   <button onClick={()=>setOpen(false)} style={{background:'none',border:'none',fontSize:'1.2rem',cursor:'pointer',color:'var(--color-ink-light)',lineHeight:1}}>×</button>
                 </div>
 
-                <label className="section-label" style={{display:'block',marginBottom:6}}>What happened?</label>
+                <label className="section-label" style={{display:'block',marginBottom:6}}>What's on your mind?</label>
                 <textarea
                   className="input"
                   rows={4}
-                  placeholder="Describe what you were doing and what went wrong…"
+                  placeholder="An idea, something confusing, or a bug — all welcome…"
                   value={desc}
                   onChange={e=>setDesc(e.target.value)}
                   style={{resize:'vertical',marginBottom:12,fontSize:'.875rem',lineHeight:1.5}}
@@ -6115,9 +6140,9 @@ function BugReportButton({ currentView }) {
                 </div>
 
                 <button className="btn btn-primary" style={{width:'100%'}} onClick={sendReport}>
-                  Send bug report →
+                  Send feedback →
                 </button>
-                <p style={{textAlign:'center',fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:8}}>Opens your email app with details pre-filled</p>
+                <p style={{textAlign:'center',fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:8}}>Goes straight to the Locale team</p>
               </>
             )}
           </div>
@@ -6560,7 +6585,7 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v17-domain';
+const CACHE = 'locale-v18-feedback';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
