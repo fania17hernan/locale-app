@@ -25,6 +25,8 @@
   --ink:#F2EFEA; --ink-light:#C9C4BC; --ink-muted:#8A8F9C;
   --bg:#0E1117; --surface:#161B24; --surface-2:#1D2430; --border:#28303E;
   --coral:#FF8A3D; --pink:#FF3D7F; --grad:linear-gradient(120deg,#FF8A3D,#FF3D7F);
+  /* Darker gradient for buttons so white text meets WCAG AA (>=4.5:1); bright --grad stays for large display text */
+  --grad-btn:linear-gradient(120deg,#C2410C,#D01E63);
   --cream:#F5F1EC; --success:#5AC98F;
   --font-display:'Bricolage Grotesque',sans-serif; --font-body:'Inter',sans-serif; --font-mono:'JetBrains Mono',monospace;
 }
@@ -37,7 +39,7 @@ a{color:inherit}
 .eyebrow{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--coral);margin-bottom:14px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;font-weight:600;font-family:var(--font-body);text-decoration:none;cursor:pointer;transition:transform .15s,box-shadow .15s;border:none;font-size:1rem}
 .btn:active{transform:scale(.98)}
-.btn-primary{background:var(--grad);color:#fff;padding:16px 34px;box-shadow:0 8px 28px rgba(255,90,90,.32)}
+.btn-primary{background:var(--grad-btn);color:#fff;padding:16px 34px;box-shadow:0 8px 28px rgba(255,90,90,.32)}
 .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 34px rgba(255,90,90,.42)}
 .btn-ghost{background:var(--surface);border:1px solid var(--border);color:var(--ink);padding:15px 28px}
 .btn-ghost:hover{border-color:var(--coral)}
@@ -48,7 +50,7 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:6
 nav .links{display:flex;gap:22px;align-items:center;font-size:.88rem;color:var(--ink-light)}
 nav .links a{text-decoration:none}
 nav .links a:hover{color:var(--ink)}
-nav .links .cta{background:var(--grad);color:#fff;padding:8px 18px;border-radius:999px;font-weight:600}
+nav .links .cta{background:var(--grad-btn);color:#fff;padding:8px 18px;border-radius:999px;font-weight:600}
 @media(max-width:640px){nav .links a.hideable{display:none}}
 /* Hero */
 .hero{padding:84px 0 60px;text-align:center;position:relative;overflow:hidden}
@@ -86,15 +88,25 @@ h2{font-family:var(--font-display);font-size:clamp(1.7rem,4.4vw,2.5rem);font-wei
 .test-card .btn{margin-top:16px;font-size:.92rem;padding:12px 24px}
 .step-num{font-family:var(--font-mono);color:var(--coral)}
 /* Banner CTA */
-.banner{background:var(--grad);border-radius:24px;padding:52px 36px;text-align:center;margin:20px 0 8px}
+.banner{background:var(--grad-btn);border-radius:24px;padding:52px 36px;text-align:center;margin:20px 0 8px}
 .banner h2{color:#fff;margin-bottom:10px}
 .banner p{color:rgba(255,255,255,.92);max-width:560px;margin:0 auto 26px}
 .banner .btn{background:#0E1117;color:#fff}
 footer{padding:44px 0 60px;text-align:center;color:var(--ink-muted);font-size:.82rem;border-top:1px solid var(--border)}
 footer .logo{font-size:1.1rem}
+/* Accessibility: visible keyboard focus */
+a:focus-visible,.btn:focus-visible{outline:3px solid #FFB27A;outline-offset:3px;border-radius:8px}
+/* Accessibility: skip-to-content link (visible on focus) */
+.skip-link{position:absolute;left:8px;top:-56px;z-index:100;background:var(--surface);color:var(--ink);border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:.9rem;text-decoration:none;transition:top .15s}
+.skip-link:focus{top:8px}
+/* Accessibility: respect reduced-motion preference */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 
 <nav>
   <div class="wrap">
@@ -108,6 +120,7 @@ footer .logo{font-size:1.1rem}
   </div>
 </nav>
 
+<main id="main">
 <header class="hero">
   <div class="wrap">
     <div class="badge"><span class="dot"></span> Now in small-group beta — testers wanted</div>
@@ -127,12 +140,12 @@ footer .logo{font-size:1.1rem}
     <h2>Everything a group trip needs.<br>Nothing it doesn't.</h2>
     <p class="section-sub">Built by a traveler who got tired of trips living across six group chats, three spreadsheets, and someone's Notes app.</p>
     <div class="grid">
-      <div class="card"><span class="icon">🗓</span><h3>Day-by-day itineraries, drafted by AI</h3><p>Tell Locale where you're going and what you're into — get a realistic, geo-clustered plan for every day. Then drag, edit, and make it yours.</p></div>
-      <div class="card"><span class="icon">👥</span><h3>Your crew, in the loop</h3><p>Invite friends as Crew or Viewers. Everyone sees the plan, RSVPs, and adds notes on days — while the trip stays safely in the owner's hands.</p></div>
-      <div class="card"><span class="icon">💸</span><h3>Split costs without the awkward math</h3><p>Track shared expenses, exclude the toddler from the bar tab, and settle up with prefilled Venmo links or Zelle handles.</p></div>
-      <div class="card"><span class="icon">🧳</span><h3>Packing & pre-trip checklists</h3><p>Auto-generated packing lists tuned to your trip, plus a readiness checklist that can read your flight and hotel confirmations for you.</p></div>
-      <div class="card"><span class="icon">🧭</span><h3>Local tips & transit, per city</h3><p>City-specific tidbits, day maps, one-tap Google Maps routes, and the right transit apps for where you are — TfL Go in London, Citymapper in Paris.</p></div>
-      <div class="card"><span class="icon">☁️</span><h3>On every device you own</h3><p>Sign in once with a magic link and your trips follow you — laptop to phone, live. Share a read-only snapshot link or a polished PDF with anyone.</p></div>
+      <div class="card"><span class="icon" aria-hidden="true">🗓</span><h3>Day-by-day itineraries, drafted by AI</h3><p>Tell Locale where you're going and what you're into — get a realistic, geo-clustered plan for every day. Then drag, edit, and make it yours.</p></div>
+      <div class="card"><span class="icon" aria-hidden="true">👥</span><h3>Your crew, in the loop</h3><p>Invite friends as Crew or Viewers. Everyone sees the plan, RSVPs, and adds notes on days — while the trip stays safely in the owner's hands.</p></div>
+      <div class="card"><span class="icon" aria-hidden="true">💸</span><h3>Split costs without the awkward math</h3><p>Track shared expenses, exclude the toddler from the bar tab, and settle up with prefilled Venmo links or Zelle handles.</p></div>
+      <div class="card"><span class="icon" aria-hidden="true">🧳</span><h3>Packing & pre-trip checklists</h3><p>Auto-generated packing lists tuned to your trip, plus a readiness checklist that can read your flight and hotel confirmations for you.</p></div>
+      <div class="card"><span class="icon" aria-hidden="true">🧭</span><h3>Local tips & transit, per city</h3><p>City-specific tidbits, day maps, one-tap Google Maps routes, and the right transit apps for where you are — TfL Go in London, Citymapper in Paris.</p></div>
+      <div class="card"><span class="icon" aria-hidden="true">☁️</span><h3>On every device you own</h3><p>Sign in once with a magic link and your trips follow you — laptop to phone, live. Share a read-only snapshot link or a polished PDF with anyone.</p></div>
     </div>
   </div>
 </section>
@@ -143,12 +156,12 @@ footer .logo{font-size:1.1rem}
     <h2>Your plans are yours. <span class="grad-text">Period.</span></h2>
     <p class="section-sub">Locale was built privacy-first from day one — here's exactly how your data is protected.</p>
     <div class="sec-list">
-      <div class="sec-item"><span class="check">✓</span><div><h4>No passwords to steal</h4><p>Sign-in is a one-time magic link to your email. There's no password to reuse, leak, or forget.</p></div></div>
-      <div class="sec-item"><span class="check">✓</span><div><h4>Private by default, enforced by the database</h4><p>Row-level security means the server itself only ever returns your own trips — or ones explicitly shared with you. Not even a buggy client can leak someone else's plans.</p></div></div>
-      <div class="sec-item"><span class="check">✓</span><div><h4>You control who sees what</h4><p>Trips are invite-only. Crew can add notes and RSVP; Viewers can only look. Only the owner can change or delete a trip.</p></div></div>
-      <div class="sec-item"><span class="check">✓</span><div><h4>AI runs server-side, rate-limited & capped</h4><p>AI requests go through a locked-down proxy — keys never touch your browser, usage is audited, and abuse is throttled per user and per network.</p></div></div>
-      <div class="sec-item"><span class="check">✓</span><div><h4>Works offline, saved on your device</h4><p>Your trips are cached locally first, so airplane mode isn't a problem — and you're never locked out of your own plans.</p></div></div>
-      <div class="sec-item"><span class="check">✓</span><div><h4>No ads, no tracking, easy exit</h4><p>Nothing is sold or shared. Export every trip as a JSON backup or PDF anytime — your data leaves with you.</p></div></div>
+      <div class="sec-item"><span class="check" aria-hidden="true">✓</span><div><h4>No passwords to steal</h4><p>Sign-in is a one-time magic link to your email. There's no password to reuse, leak, or forget.</p></div></div>
+      <div class="sec-item"><span class="check" aria-hidden="true">✓</span><div><h4>Private by default, enforced by the database</h4><p>Row-level security means the server itself only ever returns your own trips — or ones explicitly shared with you. Not even a buggy client can leak someone else's plans.</p></div></div>
+      <div class="sec-item"><span class="check" aria-hidden="true">✓</span><div><h4>You control who sees what</h4><p>Trips are invite-only. Crew can add notes and RSVP; Viewers can only look. Only the owner can change or delete a trip.</p></div></div>
+      <div class="sec-item"><span class="check" aria-hidden="true">✓</span><div><h4>AI runs server-side, rate-limited & capped</h4><p>AI requests go through a locked-down proxy — keys never touch your browser, usage is audited, and abuse is throttled per user and per network.</p></div></div>
+      <div class="sec-item"><span class="check" aria-hidden="true">✓</span><div><h4>Works offline, saved on your device</h4><p>Your trips are cached locally first, so airplane mode isn't a problem — and you're never locked out of your own plans.</p></div></div>
+      <div class="sec-item"><span class="check" aria-hidden="true">✓</span><div><h4>No ads, no tracking, easy exit</h4><p>Nothing is sold or shared. Export every trip as a JSON backup or PDF anytime — your data leaves with you.</p></div></div>
     </div>
   </div>
 </section>
@@ -199,6 +212,7 @@ footer .logo{font-size:1.1rem}
     </div>
   </div>
 </section>
+</main>
 
 <footer>
   <div class="wrap">

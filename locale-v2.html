@@ -28,11 +28,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" onerror="console.warn('SortableJS failed to load — drag-to-reorder will be unavailable.');"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js" onerror="console.warn('Supabase client failed to load — free AI features will be unavailable (bring-your-own-key still works).');"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" integrity="sha512-8Q6Y9XnTbOE+JNvjBQwJ2H8S+UV4uA6hiRykhdtIyDYZ2TprdNmWOUaKdGzOhyr4dCyk287OejbPvwl7lrfqrQ==" crossorigin="anonymous" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" integrity="sha512-MOCpqoRoisCTwJ8vQQiciZv0qcpROCidek3GTFS6KTk2+y7munJIlKCVkFCYY+p3ErYFXCjmFjnfTTRSC1OHWQ==" crossorigin="anonymous" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js" integrity="sha512-ND11pbmp3M3Wldj90In1EUlHIt8T7O6FykizQ/yXrFjHtpX+D0SX+/IVeLjqAV91r/Lavq4BpWJIC0nUtw5Kvw==" crossorigin="anonymous" onerror="document.getElementById('root').innerHTML='<div style=\'font-family:system-ui;padding:40px;text-align:center\'><h2>⚠️ Could not load Locale</h2><p style=\'margin-top:12px;color:#666\'>A required script failed to load. Please check your internet connection and refresh.</p></div>';"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" integrity="sha512-TelkP3PCMJv+viMWynjKcvLsQzx6dJHvIGhfqzFtZKgAjKM1YPqcwzzDEoTc/BHjf43PcPzTQOjuTr4YdE8lNQ==" crossorigin="anonymous" onerror="console.warn('SortableJS failed to load — drag-to-reorder will be unavailable.');"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.1/dist/umd/supabase.js" integrity="sha256-c50zjtvXOjOQ31+X38FCl555Ug7CDFllOhWT+59uM/U=" crossorigin="anonymous" onerror="console.warn('Supabase client failed to load — free AI features will be unavailable (bring-your-own-key still works).');"></script>
 <script>/* no-flash: apply saved theme before first paint */(function(){try{var m=localStorage.getItem('locale_theme');if(m==='light'||m==='dark')document.documentElement.setAttribute('data-theme',m);}catch(e){}})();</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1846,12 +1846,28 @@ function loadTrips(){
   localStorage.setItem(SK,JSON.stringify(MOCK_TRIPS));
   return MOCK_TRIPS;
 }
+// Persistent visually-hidden live region so toast messages reach screen readers (WCAG 4.1.3)
+function ensureLiveRegion(id, politeness){
+  let el = document.getElementById(id);
+  if(!el){
+    el = document.createElement('div');
+    el.id = id;
+    el.setAttribute('role', politeness==='assertive'?'alert':'status');
+    el.setAttribute('aria-live', politeness);
+    el.setAttribute('aria-atomic','true');
+    Object.assign(el.style,{position:'absolute',width:'1px',height:'1px',margin:'-1px',padding:'0',overflow:'hidden',clip:'rect(0 0 0 0)',clipPath:'inset(50%)',whiteSpace:'nowrap',border:'0'});
+    document.body.appendChild(el);
+  }
+  return el;
+}
 function showToast(msg, type='info', duration=4000){
   const existing = document.getElementById('locale-toast');
   if(existing) existing.remove();
   const t = document.createElement('div');
   t.id = 'locale-toast';
-  const bg = type==='error'?'#D8392D':type==='warn'?'#C4892A':'#FF5A4D';
+  t.setAttribute('aria-hidden','true'); // visual only; screen readers hear the live region below
+  // Darkened so white text meets WCAG AA (>=4.5:1): info 4.92, warn 5.69, error 6.66
+  const bg = type==='error'?'#B0271A':type==='warn'?'#8A5E12':'#CE3A2C';
   Object.assign(t.style,{
     position:'fixed',bottom:'80px',left:'50%',transform:'translateX(-50%)',
     background:bg,color:'#fff',padding:'10px 20px',borderRadius:'20px',
@@ -1861,7 +1877,35 @@ function showToast(msg, type='info', duration=4000){
   });
   t.textContent = msg;
   document.body.appendChild(t);
+  // Announce to assistive tech: errors are assertive (interrupt), everything else polite
+  const assertive = type==='error';
+  const live = ensureLiveRegion(assertive?'locale-live-assertive':'locale-live-polite', assertive?'assertive':'polite');
+  live.textContent='';
+  setTimeout(()=>{ live.textContent = msg; }, 60);
   setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, duration);
+}
+
+// Accessible modal behavior: move focus in, trap Tab, close on Escape, restore focus on close (WCAG 2.1.2 / 2.4.3)
+function useModalA11y(ref, onClose, active=true){
+  React.useEffect(()=>{
+    if(!active) return;
+    const node = ref.current;
+    if(!node) return;
+    const prev = document.activeElement;
+    const SEL = 'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+    const items = ()=> Array.from(node.querySelectorAll(SEL)).filter(el=> el.offsetWidth>0 || el.offsetHeight>0 || el===document.activeElement);
+    const id = setTimeout(()=>{ const f=items(); if(f[0]){ f[0].focus(); } else { node.setAttribute('tabindex','-1'); node.focus(); } }, 0);
+    const onKey = (e)=>{
+      if(e.key==='Escape'){ e.stopPropagation(); if(onClose) onClose(); return; }
+      if(e.key!=='Tab') return;
+      const f=items(); if(!f.length){ e.preventDefault(); return; }
+      const first=f[0], last=f[f.length-1];
+      if(e.shiftKey){ if(document.activeElement===first || !node.contains(document.activeElement)){ e.preventDefault(); last.focus(); } }
+      else { if(document.activeElement===last || !node.contains(document.activeElement)){ e.preventDefault(); first.focus(); } }
+    };
+    node.addEventListener('keydown', onKey);
+    return ()=>{ clearTimeout(id); node.removeEventListener('keydown', onKey); if(prev && prev.focus){ try{ prev.focus(); }catch(_){} } };
+  }, [active]);
 }
 
 function saveTrips(trips){
@@ -2893,6 +2937,8 @@ function Avatar22({initial,color}){
 // ── FLIGHTS STRIP — tappable pills that open an in-app flight detail (PRD 2.5) ────
 function FlightsStrip({flights}){
   const [sel,setSel]=React.useState(null);
+  const dlgRef=React.useRef(null);
+  useModalA11y(dlgRef, ()=>setSel(null), !!sel);
   const fmtT=(iso)=>{ if(!iso) return ''; const m=/T(\d{2}):(\d{2})/.exec(iso); return m?fmt12h(m[1]+':'+m[2]):''; };
   const dep=(f)=>f.departureAirport||f.origin||'';
   const arr=(f)=>f.arrivalAirport||f.destination||'';
@@ -2911,7 +2957,7 @@ function FlightsStrip({flights}){
         const info=carrierInfo(sel);
         const close=()=>setSel(null);
         return ReactDOM.createPortal(
-          <div className="overlay" style={{zIndex:9500}} onClick={e=>e.target===e.currentTarget&&close()} role="dialog" aria-modal="true" aria-label="Flight details">
+          <div className="overlay" ref={dlgRef} style={{zIndex:9500}} onClick={e=>e.target===e.currentTarget&&close()} role="dialog" aria-modal="true" aria-label="Flight details">
             <div className="sheet" style={{maxWidth:480}}>
               <div className="sheet-handle"/>
               <div style={{padding:'8px 22px 26px'}}>
@@ -3361,11 +3407,13 @@ function CelebrationSection({trip,onUpdateTrip}){
 // ── SHARE SHEET ────────────────────────────────────────────────────────────────
 function ShareSheet({trip,onClose}){
   const [copied,setCopied]=useState(false);
+  const dlgRef=React.useRef(null);
+  useModalA11y(dlgRef,onClose);
   const text=`📍 ${trip.title}\n✈️ ${trip.destinations.map(d=>d.city).join(' → ')}\n📅 ${formatDateShort(trip.startDate)} – ${formatDateShort(trip.endDate)}\n\nPlanned with Locale ✨`;
   function copy(){navigator.clipboard?.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000)});}
   function share(){if(navigator.share){navigator.share({title:trip.title,text}).catch(()=>{});}else copy();}
   return(
-    <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="overlay" ref={dlgRef} role="dialog" aria-modal="true" aria-label="Share trip" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="sheet">
         <div className="sheet-handle"/>
         <div style={{padding:'16px 24px 8px',borderBottom:'1px solid var(--color-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -3543,6 +3591,8 @@ function CityAutocomplete({value, country, onChange, onCountryChange}) {
 
 function NewTripSheet({onClose, onSave}) {
   const [step, setStep] = React.useState(1);
+  const dlgRef = React.useRef(null);
+  useModalA11y(dlgRef, onClose);
   const [form, setForm] = React.useState({
     title:'', emoji:'✈️', occasion:'leisure', travelerCount:2, travelerPassportCountry:'US',
     planningStage:'booked', // 'idea' = still dreaming, 'booked' = flights/lodging confirmed
@@ -3649,7 +3699,7 @@ function NewTripSheet({onClose, onSave}) {
     {code:'YE',label:'Yemen'},{code:'ZM',label:'Zambia'},{code:'ZW',label:'Zimbabwe'},
   ];
   return (
-    <div className="overlay" onClick={onClose}>
+    <div className="overlay" ref={dlgRef} role="dialog" aria-modal="true" aria-label="Create a new trip" onClick={onClose}>
       <div className="sheet" onClick={e=>e.stopPropagation()} style={{maxWidth:520,width:'100%',maxHeight:'92vh',overflowY:'auto'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
           <h2 style={{fontFamily:'var(--font-display)',fontSize:'1.5rem',fontWeight:600}}>New trip</h2>
@@ -5624,6 +5674,8 @@ function SyncButton({user, onChange}){
   const [email,setEmail]=React.useState('');
   const [sent,setSent]=React.useState(false);
   const [busy,setBusy]=React.useState(false);
+  const dlgRef=React.useRef(null);
+  useModalA11y(dlgRef, ()=>setOpen(false), open);
   if(user){
     return (
       <button className="btn btn-ghost btn-sm" title={user.email}
@@ -5636,7 +5688,7 @@ function SyncButton({user, onChange}){
     <span style={{display:'contents'}}>
       <button className="btn btn-ghost btn-sm" onClick={()=>{ setOpen(true); setSent(false); }}>☁ Sync</button>
       {open && (
-        <div className="overlay" onClick={e=>{ if(e.target===e.currentTarget) setOpen(false); }}>
+        <div className="overlay" ref={dlgRef} role="dialog" aria-modal="true" aria-label="Sync across devices" onClick={e=>{ if(e.target===e.currentTarget) setOpen(false); }}>
           <div className="sheet" style={{maxWidth:420}}>
             <div className="sheet-handle"></div>
             {!sent ? (
@@ -6005,6 +6057,13 @@ function App() {
 
   return (
     <div>
+      <a
+        href="#main-content"
+        onClick={e=>{ e.preventDefault(); const m=document.getElementById('main-content'); if(m){ m.setAttribute('tabindex','-1'); m.focus(); } }}
+        onFocus={e=>{ e.target.style.top='8px'; }}
+        onBlur={e=>{ e.target.style.top='-56px'; }}
+        style={{position:'fixed',left:8,top:-56,zIndex:10000,background:'#161B24',color:'#F2EFEA',padding:'10px 16px',borderRadius:8,textDecoration:'none',border:'1px solid #28303E',transition:'top .15s',fontSize:'.9rem'}}
+      >Skip to content</a>
       {sharedTrip && (
         <SharedTripBanner
           trip={sharedTrip}
@@ -6024,12 +6083,14 @@ function App() {
           </div>
         </div>
       )}
+      <main id="main-content">
       {view==='dashboard' && (
         <Dashboard trips={trips} cloudUser={cloudUser} setCloudUser={setCloudUser} onSelectTrip={(id)=>{setActiveTripId(id);setView('detail');}} onNewTrip={()=>setShowNew(true)}/>
       )}
       {view==='detail' && activeTrip && (
         <TripDetail trip={activeTrip} onBack={()=>setView('dashboard')} onUpdateTrip={handleUpdateTrip} onDelete={handleDeleteTrip}/>
       )}
+      </main>
       {showNew && <NewTripSheet onClose={()=>setShowNew(false)} onSave={handleNewTrip}/>}
 
       {/* ── Bug Report Button ── */}
@@ -6044,6 +6105,8 @@ function BugReportButton({ currentView }) {
   const [desc, setDesc] = React.useState('');
   const [sent, setSent] = React.useState(false);
   const [sentVia, setSentVia] = React.useState('db'); // 'db' = saved to Locale, 'mail' = mailto fallback
+  const dlgRef = React.useRef(null);
+  useModalA11y(dlgRef, ()=>setOpen(false), open);
 
   const deviceInfo = (() => {
     try {
@@ -6128,7 +6191,7 @@ function BugReportButton({ currentView }) {
 
       {/* Modal */}
       {open && (
-        <div style={{
+        <div ref={dlgRef} role="dialog" aria-modal="true" aria-label="Feedback and bug report" style={{
           position: 'fixed', inset: 0, zIndex: 9100,
           background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
           padding: '0 0 env(safe-area-inset-bottom,0)',
@@ -6612,13 +6675,13 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v19-telemetry';
+const CACHE = 'locale-v20-supabase-bump';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.1/dist/umd/supabase.js',
 ];
 
 self.addEventListener('install', e => {
