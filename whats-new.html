@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>What's New — Locale</title>
+<meta name="description" content="Release notes for Locale — the latest improvements to your travel planner: crew sharing, budgets, calendar export, accessibility, and more.">
+<meta name="theme-color" content="#0E1117">
+<meta property="og:title" content="What's New — Locale">
+<meta property="og:description" content="See the latest improvements to Locale.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://localetrips.app/whats-new.html">
+<meta property="og:image" content="https://localetrips.app/og-card.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#F2EFEA; --ink-light:#C9C4BC; --ink-muted:#8A8F9C;
+  --bg:#0E1117; --surface:#161B24; --surface-2:#1D2430; --border:#28303E;
+  --coral:#FF8A3D; --pink:#FF3D7F; --grad:linear-gradient(120deg,#FF8A3D,#FF3D7F);
+  /* Darker button gradient so white text meets WCAG AA (>=4.5:1) */
+  --grad-btn:linear-gradient(120deg,#C2410C,#D01E63);
+  --success:#5AC98F;
+  --font-display:'Bricolage Grotesque',sans-serif; --font-body:'Inter',sans-serif; --font-mono:'JetBrains Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.wrap{max-width:760px;margin:0 auto;padding:0 24px}
+.grad-text{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;font-weight:600;text-decoration:none;cursor:pointer;border:none;font-size:.95rem;transition:transform .15s,box-shadow .15s}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--grad-btn);color:#fff;padding:12px 26px;box-shadow:0 8px 28px rgba(255,90,90,.32)}
+.btn-primary:hover{transform:translateY(-2px)}
+.btn-ghost{background:var(--surface);border:1px solid var(--border);color:var(--ink);padding:11px 22px}
+.btn-ghost:hover{border-color:var(--coral)}
+a:focus-visible,.btn:focus-visible{outline:3px solid #FFB27A;outline-offset:3px;border-radius:8px}
+.skip-link{position:absolute;left:8px;top:-56px;z-index:100;background:var(--surface);color:var(--ink);border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:.9rem;text-decoration:none;transition:top .15s}
+.skip-link:focus{top:8px}
+/* Nav */
+nav{position:sticky;top:0;z-index:50;background:rgba(14,17,23,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:64px;max-width:1020px}
+.logo{font-family:var(--font-display);font-weight:800;font-size:1.35rem;text-decoration:none}
+nav .links{display:flex;gap:18px;align-items:center;font-size:.9rem;color:var(--ink-light)}
+nav .links a{text-decoration:none}
+nav .links a:hover{color:var(--ink)}
+nav .links .cta{background:var(--grad-btn);color:#fff;padding:8px 18px;border-radius:999px;font-weight:600}
+/* Header */
+.hero{padding:64px 0 24px;text-align:center}
+.eyebrow{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--coral);margin-bottom:14px}
+.hero h1{font-family:var(--font-display);font-size:clamp(2.2rem,6vw,3.4rem);font-weight:800;line-height:1.08;letter-spacing:-.02em;margin-bottom:16px}
+.hero p{color:var(--ink-light);max-width:520px;margin:0 auto}
+/* Changelog */
+.log{padding:24px 0 72px}
+.entry{position:relative;padding:26px 0;border-top:1px solid var(--border)}
+.entry:first-child{border-top:none}
+.entry .date{font-family:var(--font-mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted);margin-bottom:6px}
+.entry h2{font-family:var(--font-display);font-size:1.35rem;font-weight:700;letter-spacing:-.01em;margin-bottom:4px}
+.entry .tag{display:inline-block;font-family:var(--font-mono);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--coral);background:rgba(255,138,61,.12);border:1px solid rgba(255,138,61,.28);border-radius:999px;padding:2px 10px;margin-bottom:12px}
+.entry ul{list-style:none;display:grid;gap:12px;margin-top:14px}
+.entry li{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.entry li .ic{flex-shrink:0;font-size:1.05rem;line-height:1.5}
+.entry li .txt strong{font-weight:600}
+.entry li .txt p{font-size:.9rem;color:var(--ink-light);margin-top:2px}
+footer{padding:36px 0 60px;text-align:center;color:var(--ink-muted);font-size:.82rem;border-top:1px solid var(--border)}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<nav>
+  <div class="wrap">
+    <a class="logo" href="/">Loc<span class="grad-text">ale</span></a>
+    <div class="links">
+      <a href="/">Home</a>
+      <a class="cta" href="locale-v2.html">Open Locale</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+  <header class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Release notes</p>
+      <h1>What's <span class="grad-text">new</span> in Locale</h1>
+      <p>Every improvement we ship, in one place. We're in beta and moving fast — thanks for coming along.</p>
+    </div>
+  </header>
+
+  <section class="log">
+    <div class="wrap">
+
+      <!-- ── Add new entries at the TOP, newest first. Copy an .entry block. ── -->
+
+      <article class="entry">
+        <p class="date">July 8, 2026</p>
+        <span class="tag">Accessibility &amp; security</span>
+        <h2>Easier for everyone to use — and safer</h2>
+        <ul>
+          <li><span class="ic" aria-hidden="true">🗣️</span><div class="txt"><strong>Screen-reader support</strong><p>Status messages, dialogs, and navigation now announce properly for assistive tech.</p></div></li>
+          <li><span class="ic" aria-hidden="true">🎨</span><div class="txt"><strong>Clearer contrast &amp; focus</strong><p>Buttons and text meet accessibility contrast standards, with a visible keyboard focus outline throughout.</p></div></li>
+          <li><span class="ic" aria-hidden="true">⌨️</span><div class="txt"><strong>Keyboard-friendly dialogs</strong><p>Pop-ups keep focus inside them and close with the Esc key.</p></div></li>
+          <li><span class="ic" aria-hidden="true">🔒</span><div class="txt"><strong>Security &amp; privacy hardening</strong><p>Tightened database access rules and locked-down third-party scripts, plus refreshed foundations under the hood.</p></div></li>
+        </ul>
+      </article>
+
+      <article class="entry">
+        <p class="date">July 5, 2026</p>
+        <span class="tag">Crew &amp; sharing</span>
+        <h2>Plan with your whole crew</h2>
+        <ul>
+          <li><span class="ic" aria-hidden="true">👥</span><div class="txt"><strong>Invite your crew</strong><p>Add people as Crew (can add notes) or Viewers (read-only). The owner always stays in control of the trip.</p></div></li>
+          <li><span class="ic" aria-hidden="true">✅</span><div class="txt"><strong>RSVPs</strong><p>See who's going, who's pending, and who's out — at a glance.</p></div></li>
+          <li><span class="ic" aria-hidden="true">🔗</span><div class="txt"><strong>Share a trip link</strong><p>Send a link so friends can see the plan; sign in later to add their own notes and get updates.</p></div></li>
+        </ul>
+      </article>
+
+      <article class="entry">
+        <p class="date">June 2026</p>
+        <span class="tag">Budgets, calendar &amp; flights</span>
+        <h2>The details that make a trip run smoothly</h2>
+        <ul>
+          <li><span class="ic" aria-hidden="true">💸</span><div class="txt"><strong>Shared budgets &amp; settle-up</strong><p>Split costs unevenly (leave the toddler off the bar tab), track who paid, and settle up with Venmo/Zelle links.</p></div></li>
+          <li><span class="ic" aria-hidden="true">📅</span><div class="txt"><strong>Add to your calendar</strong><p>Export your itinerary as a calendar file that drops straight into Apple or Google Calendar.</p></div></li>
+          <li><span class="ic" aria-hidden="true">✈️</span><div class="txt"><strong>Tappable flight details</strong><p>Flight pills open airline check-in / manage-booking pages and live flight tracking.</p></div></li>
+          <li><span class="ic" aria-hidden="true">🗺️</span><div class="txt"><strong>Inline maps &amp; directions</strong><p>See each stop on a map and get one-tap directions without leaving the app.</p></div></li>
+          <li><span class="ic" aria-hidden="true">🧳</span><div class="txt"><strong>Weather-aware packing</strong><p>Packing lists now match the season and climate of where and when you're going.</p></div></li>
+          <li><span class="ic" aria-hidden="true">🗓️</span><div class="txt"><strong>Redesigned day timeline</strong><p>A cleaner day-by-day view with per-stop notes and who added what.</p></div></li>
+        </ul>
+      </article>
+
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p style="margin-bottom:10px"><a class="btn btn-primary" href="locale-v2.html">Open Locale <span aria-hidden="true">✈️</span></a></p>
+    <p>Locale — your trips, beautifully kept. · Beta</p>
+    <p style="margin-top:6px"><a href="/" style="color:var(--coral);text-decoration:none">← Back to home</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
