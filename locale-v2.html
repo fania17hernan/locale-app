@@ -53,7 +53,8 @@
   --color-success:     #1E9E8C;   /* aqua-teal */
   --color-warning:     #C4892A;
   --color-flag:        #D8392D;
-  --grad:              linear-gradient(135deg,#FF8A3D,#FF3D7F);  /* THE signature */
+  --grad:              linear-gradient(135deg,#FF8A3D,#FF3D7F);  /* THE signature (decorative / large text only) */
+  --grad-btn:          linear-gradient(135deg,#C2410C,#D01E63);  /* darker: white text meets WCAG AA (>=4.5:1) on buttons */
   /* themeable extras */
   --btn-primary-text:        #FFFFFF;
   --btn-primary-hover:       #F0473A;
@@ -86,7 +87,7 @@ img { max-width: 100%; }
   padding: 10px 20px; border-radius: 12px; font-size: .875rem; font-weight: 600;
   border: 1px solid transparent; transition: all .2s ease; white-space: nowrap;
 }
-.btn-primary { background: var(--grad); color: var(--btn-primary-text); border-color: transparent; box-shadow: 0 6px 18px rgba(255,90,77,.28); }
+.btn-primary { background: var(--grad-btn); color: var(--btn-primary-text); border-color: transparent; box-shadow: 0 6px 18px rgba(255,90,77,.28); }
 .btn-primary:hover { filter: brightness(1.06); }
 .btn-secondary { background: transparent; color: var(--color-accent); border-color: var(--color-accent); }
 .btn-secondary:hover { background: var(--color-accent-soft); }
@@ -250,7 +251,7 @@ select.input { background-image: var(--select-arrow); background-repeat: no-repe
 
 /* ── Step dots (new trip flow) ── */
 .step-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .75rem; font-weight: 500; background: var(--color-cream-dark); color: var(--color-ink-muted); border: 1px solid var(--color-border); flex-shrink: 0; transition: all .2s; }
-.step-dot.active { background: var(--grad); color: #fff; border-color: transparent; }
+.step-dot.active { background: var(--grad-btn); color: #fff; border-color: transparent; }
 .step-dot.done { background: var(--color-success); color: #fff; border-color: var(--color-success); }
 
 /* ── Avatar ── */
@@ -268,7 +269,7 @@ select.input { background-image: var(--select-arrow); background-repeat: no-repe
 .sortable-chosen { box-shadow: 0 4px 20px rgba(43,95,110,.18); }
 
 /* ── FAB ── */
-.fab { position: fixed; bottom: 28px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: var(--grad); color: #fff; font-size: 1.6rem; border: none; display: flex; align-items: center; justify-content: center; z-index: 100; transition: transform .2s ease; box-shadow: 0 8px 24px rgba(255,90,77,.4); }
+.fab { position: fixed; bottom: 28px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: var(--grad-btn); color: #fff; font-size: 1.6rem; border: none; display: flex; align-items: center; justify-content: center; z-index: 100; transition: transform .2s ease; box-shadow: 0 8px 24px rgba(255,90,77,.4); }
 .fab:hover { transform: scale(1.08); }
 
 /* ── Banners ── */
@@ -3330,15 +3331,16 @@ function DayView({trip,day,onUpdateTrip}){
 }
 
 // ── AT A GLANCE ────────────────────────────────────────────────────────────────
-function AtAGlance({trip}){
+function AtAGlance({trip, onStartPlanning}){
   const allCount=trip.days.reduce((n,d)=>n+(d.activities||[]).length+(d.restaurants||[]).length,0);
   return(
     <div style={{padding:'0 16px 32px'}}>
       {trip.days.length===0||allCount===0?(
-        <div className="card" style={{padding:20,marginBottom:16,textAlign:'center',borderStyle:'dashed',borderColor:'var(--color-accent-warm)'}}>
-          <div style={{fontSize:'1.6rem',marginBottom:8}}>🗺️</div>
-          <p style={{fontWeight:600,fontSize:'.95rem',marginBottom:4,color:'var(--color-accent)'}}>No itinerary yet</p>
-          <p style={{fontSize:'.82rem',color:'var(--color-ink-light)',lineHeight:1.5}}>Head to the Days tab and tap <strong>Generate Itinerary</strong> to build your trip with AI. Make sure your API key is saved in Settings first.</p>
+        <div className="card" style={{padding:24,marginBottom:16,textAlign:'center',borderStyle:'dashed',borderColor:'var(--color-accent-warm)'}}>
+          <div style={{fontSize:'1.9rem',marginBottom:8}} aria-hidden="true">🗺️</div>
+          <p style={{fontWeight:600,fontSize:'1rem',marginBottom:4,color:'var(--color-accent)'}}>Ready to plan your trip?</p>
+          <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',lineHeight:1.5,marginBottom:16}}>Let AI draft a day-by-day itinerary in seconds — free, no setup needed. You can edit everything by hand after.</p>
+          <button onClick={()=>onStartPlanning&&onStartPlanning()} className="btn btn-primary" style={{fontSize:'.92rem',padding:'12px 26px'}}>✨ Generate my itinerary</button>
         </div>
       ):(
         <div className="card" style={{padding:16,marginBottom:16}}>
@@ -5589,7 +5591,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
                 </div>
               ))}
             </div>
-            <AtAGlance trip={trip}/>
+            <AtAGlance trip={trip} onStartPlanning={()=>setActiveTab('days')}/>
             <CurrencyConverter destinations={trip.destinations}/>
           </div>
         )}
@@ -6193,13 +6195,13 @@ function BugReportButton({ currentView }) {
       {open && (
         <div ref={dlgRef} role="dialog" aria-modal="true" aria-label="Feedback and bug report" style={{
           position: 'fixed', inset: 0, zIndex: 9100,
-          background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
           padding: '0 0 env(safe-area-inset-bottom,0)',
         }} onClick={e=>{ if(e.target===e.currentTarget) setOpen(false); }}>
           <div style={{
-            background: 'var(--color-canvas)', borderRadius: '20px 20px 0 0',
+            background: 'var(--color-surface)', borderTop: '1px solid var(--color-border)', borderRadius: '20px 20px 0 0',
             width: '100%', maxWidth: 480, padding: '24px 20px 32px',
-            boxShadow: '0 -4px 30px rgba(0,0,0,.15)',
+            boxShadow: '0 -8px 40px rgba(0,0,0,.4)',
           }}>
             {sent ? (
               <div style={{textAlign:'center',padding:'20px 0'}}>
@@ -6224,7 +6226,7 @@ function BugReportButton({ currentView }) {
                   style={{resize:'vertical',marginBottom:12,fontSize:'.875rem',lineHeight:1.5}}
                 />
 
-                <div style={{background:'var(--color-surface)',borderRadius:8,padding:'10px 12px',marginBottom:16,fontSize:'.72rem',color:'var(--color-ink-muted)',fontFamily:'monospace',lineHeight:1.6,whiteSpace:'pre-wrap',wordBreak:'break-all'}}>
+                <div style={{background:'var(--color-canvas)',border:'1px solid var(--color-border)',borderRadius:8,padding:'10px 12px',marginBottom:16,fontSize:'.72rem',color:'var(--color-ink-muted)',fontFamily:'monospace',lineHeight:1.6,whiteSpace:'pre-wrap',wordBreak:'break-all'}}>
                   <strong style={{fontFamily:'var(--font-body)',fontSize:'.7rem',color:'var(--color-ink-light)',letterSpacing:'.05em',textTransform:'uppercase'}}>Auto-attached info</strong>{'\n'}{deviceInfo}
                 </div>
 
@@ -6675,7 +6677,7 @@ document.getElementById('manifest-link').href = manifestUrl;
 
 // Service Worker via Blob URL — cache-first offline strategy
 const swCode = `
-const CACHE = 'locale-v20-supabase-bump';
+const CACHE = 'locale-v21-ux-a11y';
 const STATIC = [
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
