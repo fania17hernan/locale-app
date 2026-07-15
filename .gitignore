@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Local/private working docs — keep out of the public repo
+sessions/
+*.pdf
+locale-debug*.html
+HANDOFF-*.md
+UAT-*.md
+SECURITY-REVIEW-*.md
+
+# Node / tooling
+node_modules/
+playwright-report/
+test-results/
