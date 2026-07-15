@@ -1,74 +1,82 @@
 name: Validate & Deploy Locale
 
+# Prod    = push to main → localetrips.app (root)
+# Staging = push to dev  → localetrips.app/stg/  (prod root files come from main and stay untouched)
+# Deploys are atomic: if any validation or build check fails, the live site is unchanged.
+
 on:
   push:
     branches:
-      - main      # production deploy
-      - dev        # staging deploy
+      - main
+      - dev
   pull_request:
     branches:
       - main
 
+env:
+  # The ONLY files that get published. Update this list when adding a page.
+  DEPLOY_FILES: index.html locale.html locale-v2.html og-card.png whats-new.html
+
 jobs:
-  # ── Step 1: Validate the HTML file ──────────────────────────────────────────
   validate:
-    name: Validate HTML
+    name: Validate app files
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check locale.html exists
+      - name: Check all deployable files exist
         run: |
-          if [ ! -f "locale.html" ]; then
-            echo "❌ locale.html not found!"
-            exit 1
-          fi
-          echo "✅ locale.html found ($(wc -c < locale.html) bytes)"
-
-      - name: Check for required script tags
-        run: |
-          REQUIRED=("react.production.min.js" "react-dom.production.min.js" "babel.min.js")
-          for tag in "${REQUIRED[@]}"; do
-            if ! grep -q "$tag" locale.html; then
-              echo "❌ Missing required script: $tag"
+          for f in $DEPLOY_FILES; do
+            if [ ! -f "$f" ]; then
+              echo "❌ $f not found!"
               exit 1
             fi
           done
+          echo "✅ All deployable files present"
+
+      - name: Check required script tags (both app files)
+        run: |
+          for app in locale.html locale-v2.html; do
+            for tag in react.production.min.js react-dom.production.min.js babel.min.js; do
+              if ! grep -q "$tag" "$app"; then
+                echo "❌ $app missing required script: $tag"
+                exit 1
+              fi
+            done
+          done
           echo "✅ All required CDN scripts present"
 
-      - name: Check for unclosed JSX/HTML (basic)
+      - name: Brace balance check (both app files)
         run: |
-          # Fail if there are obvious Babel syntax errors by checking for unmatched braces
-          # (a light check — catches the most common copy-paste accidents)
-          OPEN=$(grep -o '{' locale.html | wc -l)
-          CLOSE=$(grep -o '}' locale.html | wc -l)
-          DIFF=$((OPEN - CLOSE))
-          if [ ${DIFF#-} -gt 50 ]; then
-            echo "⚠️  Brace mismatch detected: $OPEN open, $CLOSE close (diff: $DIFF)"
-            echo "This may indicate a syntax error. Please review locale.html."
+          for app in locale.html locale-v2.html; do
+            OPEN=$(grep -o '{' "$app" | wc -l)
+            CLOSE=$(grep -o '}' "$app" | wc -l)
+            DIFF=$((OPEN - CLOSE))
+            if [ ${DIFF#-} -gt 50 ]; then
+              echo "⚠️ $app brace mismatch: $OPEN open, $CLOSE close (diff: $DIFF)"
+              exit 1
+            fi
+          done
+          echo "✅ Brace balance OK"
+
+      - name: Secret scan (all HTML files)
+        run: |
+          if grep -rlE "sk-ant-[a-zA-Z0-9-]{20,}" --include="*.html" .; then
+            echo "🚨 SECURITY: Anthropic API key found! Remove before deploying."
             exit 1
           fi
-          echo "✅ Brace balance check passed (open: $OPEN, close: $CLOSE)"
-
-      - name: Check for API key accidentally committed
-        run: |
-          if grep -qE "sk-ant-[a-zA-Z0-9\-]{20,}" locale.html; then
-            echo "🚨 SECURITY: API key found in locale.html! Remove it before deploying."
+          if grep -rlE "\bre_[A-Za-z0-9]{20,}" --include="*.html" .; then
+            echo "🚨 SECURITY: possible Resend API key found! Remove before deploying."
             exit 1
           fi
-          echo "✅ No API key found in source"
-
-      - name: Check file size (warn if > 500KB)
-        run: |
-          SIZE=$(wc -c < locale.html)
-          if [ $SIZE -gt 512000 ]; then
-            echo "⚠️  locale.html is $(($SIZE / 1024))KB — consider optimizing"
-          else
-            echo "✅ File size OK: $(($SIZE / 1024))KB"
+          if grep -rl "service_role" --include="*.html" .; then
+            echo "🚨 SECURITY: service_role reference found! Remove before deploying."
+            exit 1
           fi
+          echo "✅ No secrets found"
 
-  # ── Step 2: Deploy to GitHub Pages ──────────────────────────────────────────
+  # ── Production: main → site root ──────────────────────────
   deploy-production:
     name: Deploy to Production
     needs: validate
@@ -85,40 +93,78 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build site (allowlist only)
+        run: |
+          mkdir -p _site
+          cp $DEPLOY_FILES _site/
+
+      - name: Verify build before deploy
+        run: |
+          for f in $DEPLOY_FILES; do
+            if [ ! -f "_site/$f" ]; then
+              echo "❌ _site/$f missing — aborting, live site unchanged"
+              exit 1
+            fi
+          done
+          echo "✅ Build verified — deploying"
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: '_site'
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
 
-  # ── Step 3: Deploy dev branch to /dev/ subfolder ────────────────────────────
+  # ── Staging: dev → /stg/, with prod (main) kept at root ──────────────
   deploy-staging:
-    name: Deploy to Staging (/dev/)
+    name: Deploy Staging (/stg/)
     needs: validate
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
+      - name: Checkout dev
         uses: actions/checkout@v4
 
-      - name: Prepare staging folder
-        run: |
-          mkdir -p staging
-          cp locale.html staging/index.html
-          cp locale-brief.html staging/brief.html 2>/dev/null || true
-          cp locale-uat.html staging/uat.html 2>/dev/null || true
-          echo "<!-- STAGING BUILD - $(date -u) -->" >> staging/index.html
-
-      - name: Deploy staging to gh-pages/dev branch
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Checkout main (prod root stays live)
+        uses: actions/checkout@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./staging
-          destination_dir: dev
-          keep_files: true
+          ref: main
+          path: _main
+
+      - name: Build site (prod at root + dev under /stg/)
+        run: |
+          mkdir -p _site/stg
+          (cd _main && cp $DEPLOY_FILES ../_site/)
+          cp $DEPLOY_FILES _site/stg/
+
+      - name: Verify build before deploy
+        run: |
+          for f in $DEPLOY_FILES; do
+            [ -f "_site/$f" ] || { echo "❌ prod file $f missing — aborting"; exit 1; }
+            [ -f "_site/stg/$f" ] || { echo "❌ staging file $f missing — aborting"; exit 1; }
+          done
+          echo "✅ Build verified — deploying"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
