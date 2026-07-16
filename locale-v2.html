@@ -4129,7 +4129,8 @@ Rules:
   const ideate = async () => {
     setLoading(true); setError(''); setStreamText('');
     try {
-      const messages=[{role:'user',content: prompt.trim() ? 'About this trip: '+prompt : 'Recommend based on my profile and the trip idea above.'}];
+      // Assistant prefill ("{") forces the model to start with the JSON object — no prose preamble (same hardening as itinerary path)
+      const messages=[{role:'user',content: prompt.trim() ? 'About this trip: '+prompt : 'Recommend based on my profile and the trip idea above.'},{role:'assistant',content:'{'}];
       let full='';
       let serverLeft = null;
       if (apiKey) {
@@ -4144,6 +4145,7 @@ Rules:
         full = await callAIProxy({feature:'ideate', trip_id: trip.id, system:buildIdeationPrompt(), messages, max_tokens:8192, onDelta:t=>setStreamText(t), onUsage:(left)=>{ serverLeft = left; }});
         refreshUsage&&refreshUsage();
       }
+      const _t=(full||'').trim(); full = _t.startsWith('{') ? _t : '{'+_t; // re-attach the prefilled opening brace
       const obj = safeJSONParse(full);
       const parsed = obj && validateIdeation(obj);
       if(!parsed) throw new Error("Couldn't read the recommendations this time — your trip is unchanged. Tap Get recommendations to try again. (Very long notes can trip this up; a shorter summary of your must-haves works best here — you can add full day-by-day detail later under 'plan my days'.)");
@@ -4961,10 +4963,12 @@ function MemberEditSheet({member, isOwner, onClose, onSave, onRemove}){
   const [phone,setPhone]=React.useState(member.phone||'');
   const [role,setRole]=React.useState(member.role||'crew');
   const [rsvp,setRsvpVal]=React.useState(member.rsvp||'pending');
+  const [venmo,setVenmo]=React.useState(member.venmo||'');
+  const [zelle,setZelle]=React.useState(member.zelle||'');
   const save=()=>{
     if(isOwner&&!name.trim()){ showToast('Name is required.','warn'); return; }
     if(isOwner&&email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())){ showToast('That email looks off.','warn'); return; }
-    onSave({name:name.trim()||member.name, email:email.trim(), phone:phone.trim(), role, rsvp});
+    onSave({name:name.trim()||member.name, email:email.trim(), phone:phone.trim(), role, rsvp, venmo:venmo.replace(/^@/,'').trim(), zelle:zelle.trim()});
   };
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label="Edit traveler" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -4987,6 +4991,11 @@ function MemberEditSheet({member, isOwner, onClose, onSave, onRemove}){
               <option value="crew">✏️ Crew — can add notes/suggestions</option>
               <option value="viewer">👀 Viewer — read-only</option>
             </select>
+            <label className="section-label" style={{marginTop:8}}>Payment handles <span style={{fontWeight:400,textTransform:'none',letterSpacing:0}}>— powers the settle-up buttons in Budget</span></label>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              <input className="input" style={{flex:'1 1 130px'}} placeholder="Venmo (without @)" value={venmo} onChange={e=>setVenmo(e.target.value)}/>
+              <input className="input" style={{flex:'1 1 130px'}} placeholder="Zelle (email/phone)" value={zelle} onChange={e=>setZelle(e.target.value)}/>
+            </div>
           </>)}
           <label className="section-label" style={{marginTop:8}}>Attendance</label>
           <select className="input" value={rsvp} onChange={e=>setRsvpVal(e.target.value)}>
@@ -5077,8 +5086,18 @@ function CrewSection({trip, onUpdateTrip}){
           body: JSON.stringify({ invite_id: inv.id, invite_url: url }),
         });
         if(resp.ok){ markSent(); track('crew_invite',{via:'email'}); showToast(`Invite emailed to ${m.name} ✓`,'info',4000); return; }
-        showToast(`Couldn't email ${m.name} — sharing a link instead.`,'warn',3500);
-      }catch(e){ /* fall through to manual share below */ }
+        let serverReason=''; try{ const ej=await resp.json(); serverReason=ej?.error?.message||''; }catch(e){}
+        showToast(serverReason || `Couldn't email ${m.name} — ${m.phone?'texting the invite instead.':'sharing a link instead.'}`,'warn',serverReason?7000:3500);
+      }catch(e){ /* fall through to text/share below */ }
+    }
+    if(m.phone){
+      // Text invite — opens the Messages app with the link prefilled; no server needed (works while Resend email is down)
+      const smsUrl = 'sms:' + m.phone.replace(/[^+\d]/g,'') + '?&body=' + encodeURIComponent(`Join "${trip.title||'my trip'}" on Locale: ${url}`);
+      track('crew_invite',{via:'sms'});
+      markSent();
+      showToast(`Opening Messages to text ${m.name}…`,'info',3500);
+      window.location.href = smsUrl;
+      return;
     }
     shareOrCopyLink();
   };
@@ -5437,7 +5456,7 @@ function BudgetSection({trip, onUpdateTrip}){
               </div>
             </details>
           )}
-          <p style={{marginTop:12,fontSize:'.68rem',color:'var(--color-ink-muted)',lineHeight:1.5}}>Venmo opens a prefilled payment; Zelle has no web link, so we copy the recipient's handle for you to paste in your bank app. Add each person's handle on the Crew tab.</p>
+          <p style={{marginTop:12,fontSize:'.68rem',color:'var(--color-ink-muted)',lineHeight:1.5}}>Venmo opens a prefilled payment; Zelle has no web link, so we copy the recipient's handle for you to paste in your bank app. To add someone's handles, tap their name on the Crew tab.</p>
         </div>
       )}
       {members.length<2 && items.length>0 && (
