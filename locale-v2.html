@@ -1416,6 +1416,24 @@ const VWP_COUNTRIES = ['GB','DE','FR','IT','ES','AU','NZ','JP','KR','SG','NL','B
 function uuid(){return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16)})}
 function formatDate(iso){if(!iso)return'';return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
 function formatDateShort(iso){if(!iso)return'';return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+function formatDateDow(iso){if(!iso)return'';return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
+// Maps every trip date to the stop (city) the group is in that day, from stop arrival/departure dates.
+// On transition days the arriving city wins. Used to scaffold AI generation AND to correct its output.
+function dateCityScaffold(trip){
+  if(!trip||!trip.startDate||!trip.endDate||!(trip.destinations||[]).length) return [];
+  const out=[]; const start=new Date(trip.startDate+'T12:00:00'); const end=new Date(trip.endDate+'T12:00:00');
+  if(!(start<=end)) return [];
+  for(let d=new Date(start); d<=end && out.length<40; d.setDate(d.getDate()+1)){
+    const ds=d.toISOString().slice(0,10);
+    const dests=trip.destinations;
+    const arriving=dests.find(x=>x.arrivalDate===ds);
+    const within=dests.find(x=>x.arrivalDate&&x.departureDate&&ds>=x.arrivalDate&&ds<=x.departureDate);
+    const before=dests.find(x=>x.departureDate&&ds<=x.departureDate);
+    const dest=arriving||within||before||dests[dests.length-1];
+    out.push({date:ds, destId:dest?.id||'d1', city:dest?.city||''});
+  }
+  return out;
+}
 function getOccasionEmoji(o){return OCCASION_OPTIONS.find(x=>x.value===o)?.emoji||'✨'}
 function getOccasionLabel(o){return OCCASION_OPTIONS.find(x=>x.value===o)?.label||'Trip'}
 function getFlightAwareUrl(fn){if(!fn)return null;return `https://www.flightaware.com/live/flight/${fn.replace(/\s+/g,'')}`}
@@ -1822,7 +1840,7 @@ function normalizeTrip(t){
   const mustEvents = Array.isArray(t.mustEvents) ? t.mustEvents : [];
   const budget = (t.budget && Array.isArray(t.budget.items))
     ? { currency: t.budget.currency || 'USD',
-        items: t.budget.items.map(i=>({...i, paidBy: i.paidBy||null, excluded: Array.isArray(i.excluded)?i.excluded:[]})),
+        items: t.budget.items.map(i=>({...i, paidBy: i.paidBy||null, excluded: Array.isArray(i.excluded)?i.excluded:[], settledIds: Array.isArray(i.settledIds)?i.settledIds:[]})),
         payments: Array.isArray(t.budget.payments)?t.budget.payments:[] }
     : { currency: 'USD', items: [], payments: [] };
 
@@ -2196,7 +2214,7 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
                                 {(trip.days||[]).map(day=>(
                                   <button key={day.id} className="btn btn-secondary btn-sm" style={{justifyContent:'flex-start',textAlign:'left'}}
                                     onClick={()=>addToDay(p, day.id)}>
-                                    {day.label} · {formatDateShort(day.date)}
+                                    {day.label} · {formatDateDow(day.date)}
                                   </button>
                                 ))}
                               </div>
@@ -3357,7 +3375,7 @@ function AtAGlance({trip, onStartPlanning}){
         const items=[...(day.activities||[]).map(a=>({...a,_t:'activity'})),...(day.restaurants||[]).map(r=>({...r,_t:'restaurant'}))];
         return(
           <div key={day.id} style={{marginBottom:10}}>
-            <p style={{fontSize:'.75rem',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-ink-light)',marginBottom:6,paddingLeft:4}}>{day.label} · {formatDateShort(day.date)}</p>
+            <p style={{fontSize:'.75rem',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-ink-light)',marginBottom:6,paddingLeft:4}}>{day.label} · {formatDateDow(day.date)}</p>
             <div className="card" style={{overflow:'hidden'}}>
               {items.map((item,i)=>(
                 <div key={item.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 16px',borderBottom:i<items.length-1?'1px solid var(--color-border)':'none'}}>
@@ -3366,14 +3384,15 @@ function AtAGlance({trip, onStartPlanning}){
                     <p style={{fontWeight:500,fontSize:'.875rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{item.name}</p>
                     {item.neighborhood&&<p style={{fontSize:'.75rem',color:'var(--color-ink-light)'}}>{item.neighborhood}</p>}
                   </div>
-                  {item.bucket==='must-do'&&<span className="badge-must" style={{flexShrink:0}}>★</span>}
-                  {(item.bookingRequired||item.reservationRequired)&&<span style={{fontSize:'.7rem',color:'var(--color-flag)',flexShrink:0}}>📌</span>}
+                  {item.bucket==='must-do'&&<span className="badge-must" style={{flexShrink:0}} title="Must-do" aria-label="Must-do">★</span>}
+                  {(item.bookingRequired||item.reservationRequired)&&<span style={{fontSize:'.7rem',color:'var(--color-flag)',flexShrink:0}} title="Booking required" aria-label="Booking required">📌</span>}
                 </div>
               ))}
             </div>
           </div>
         );
       })}
+      <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)',paddingLeft:4,marginTop:2}}>★ must-do &nbsp;·&nbsp; 📌 booking required</p>
     </div>
   );
 }
@@ -3416,9 +3435,11 @@ function ShareSheet({trip,onClose}){
   const [copied,setCopied]=useState(false);
   const dlgRef=React.useRef(null);
   useModalA11y(dlgRef,onClose);
-  const text=`📍 ${trip.title}\n✈️ ${trip.destinations.map(d=>d.city).join(' → ')}\n📅 ${formatDateShort(trip.startDate)} – ${formatDateShort(trip.endDate)}\n\nPlanned with Locale ✨`;
+  // Include a tappable read-only snapshot link so recipients can actually open the trip (not just a text dump)
+  const shareUrl=(()=>{try{const enc=encodeTrip(trip);return enc?window.location.origin+window.location.pathname+'#trip='+enc:null;}catch(e){return null;}})();
+  const text=`📍 ${trip.title}\n✈️ ${trip.destinations.map(d=>d.city).join(' → ')}\n📅 ${formatDateShort(trip.startDate)} – ${formatDateShort(trip.endDate)}\n\nPlanned with Locale ✨${shareUrl?'\n'+shareUrl:''}`;
   function copy(){navigator.clipboard?.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000)});}
-  function share(){if(navigator.share){navigator.share({title:trip.title,text}).catch(()=>{});}else copy();}
+  function share(){if(navigator.share){navigator.share(shareUrl?{title:trip.title,text,url:shareUrl}:{title:trip.title,text}).catch(()=>{});}else copy();}
   return(
     <div className="overlay" ref={dlgRef} role="dialog" aria-modal="true" aria-label="Share trip" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="sheet">
@@ -3532,6 +3553,16 @@ function CityAutocomplete({value, country, onChange, onCountryChange}) {
     return ()=>document.removeEventListener('mousedown', handler);
   },[]);
 
+  // Normalize on blur so "ZUrich" → "Zurich" without fighting the user mid-keystroke.
+  // Known cities get canonical casing; unknown ones get per-word title case (hyphen/space aware).
+  const normalizeCity = v => {
+    const t = (v||'').trim();
+    if(!t) return t;
+    const key = t.toLowerCase();
+    if(CITY_TO_COUNTRY[key]) return key.replace(/(^|[\s\-'])(\p{L})/gu, (m,sep,ch)=>sep+ch.toUpperCase());
+    return t.replace(/\p{L}[\p{L}']*/gu, w => w === w.toUpperCase() && w.length <= 3 ? w : w.charAt(0).toUpperCase()+w.slice(1).toLowerCase());
+  };
+
   const handleInput = v => {
     const matches = searchCities(v);
     setSuggestions(matches);
@@ -3563,6 +3594,7 @@ function CityAutocomplete({value, country, onChange, onCountryChange}) {
             value={value}
             onFocus={()=>{ if(value.length>=2) setSuggestions(searchCities(value)); setFocused(true); }}
             onChange={e=>handleInput(e.target.value)}
+            onBlur={()=>{ const n=normalizeCity(value); if(n!==value){ const key=n.toLowerCase().trim(); onChange(n, CITY_TO_COUNTRY[key]||null); } }}
           />
           {showDrop && (
             <div style={{
@@ -4307,7 +4339,10 @@ ${lodgingLines ? `- Lodging (MUST include check-in/check-out in itinerary):\n${l
 ${flightLines ? `- Flights (MUST include in itinerary with exact times and confirmation numbers):\n${flightLines}` : ''}
 ${mustEventLines ? `- MUST-HAPPEN EVENTS (place each on its EXACT date for the EXACT people named — never drop, move, or paraphrase these):\n${mustEventLines}` : ''}
 ${pinnedLines ? `- Pinned ideas the traveler saved (honor these — e.g. stay/area/things they liked):\n${pinnedLines}` : ''}
-
+${(()=>{const sc=dateCityScaffold(trip);return sc.length?`
+DAY-TO-CITY SCAFFOLD (MANDATORY): generate EXACTLY ${sc.length} day objects — one per line below, in order — each using that line's exact "date" and "destinationId", with every stop that day in that city (transition days: end in the old city, arrive and continue in the new one):
+${sc.map(s=>`  • ${s.date} → ${s.city} (destinationId: "${s.destId}")`).join('\n')}
+`:'';})()}
 ${profilePromptText(getTasteProfile())}
 GEOGRAPHY & LOGISTICS RULES (critical — plan each day as an efficient route that MINIMIZES total travel time):
 1. Cluster each day's activities and restaurants in ONE neighborhood or area — never criss-cross the city in a single day.
@@ -4526,10 +4561,12 @@ Only include fields you can actually read from the document. Use null for anythi
     setLoading(true); setError(''); setStreamText('');
 
     try {
-      const genMessages = [{ role: 'user', content: 'User request: ' + prompt }];
+      // Assistant prefill ("[") forces the model to start with the JSON array — no prose preamble (UAT 2026-07-15)
+      const genMessages = [{ role: 'user', content: 'User request: ' + prompt }, { role: 'assistant', content: '[' }];
       let full = '';
       let serverLeft = null;
 
+      const fetchItinerary = async () => {
       if (apiKey) {
         // Power-user path: bring-your-own-key, direct to Anthropic (unlimited)
         const res = await fetch(
@@ -4573,29 +4610,37 @@ Only include fields you can actually read from the document. Use null for anythi
         refreshUsage();
       }
 
-      if (!full) throw new Error('Claude returned an empty response. Please try again.');
-      setStreamText(full);
+        if (!full) throw new Error('Claude returned an empty response. Please try again.');
+        const t = full.trim();
+        return t.startsWith('[') ? t : '[' + t; // re-attach the prefilled opening bracket
+      };
 
-      // Parse the JSON — strip markdown fences, find the outermost array
-      let days;
-      try {
-        // Robustly parse — tolerates fences, trailing commas, and token-limit truncation
-        days = safeJSONParse(full);
-        if (!Array.isArray(days) || days.length === 0) throw new Error('Response contained an empty or invalid itinerary.');
-        days = validateAIDays(days); // sanitize shape/types before touching trip state (Debt-007)
-        if (days.length === 0) throw new Error('Response contained an empty or invalid itinerary.');
-      } catch(parseErr) {
-        console.error('AI response parse failed:', parseErr, '\nRaw response:', full.slice(0, 500));
+      // Parse with ONE silent retry — a rare short/prose response must not surface an error to the user (UAT 2026-07-15)
+      let days = null;
+      for (let attempt = 0; attempt < 2 && !days; attempt++) {
+        full = await fetchItinerary();
+        setStreamText(full);
         try {
-          const log = JSON.parse(localStorage.getItem('locale_error_log') || '[]');
-          log.unshift({ ts: new Date().toISOString(), msg: 'AI parse: ' + parseErr.message, raw: full.slice(0, 300) });
-          localStorage.setItem('locale_error_log', JSON.stringify(log.slice(0, 10)));
-        } catch(e) {}
-        throw new Error('The response wasn\'t formatted correctly — your trip is safe and unchanged. If you were trying to update your checklist, use the "+ Add to Checklist" button instead. Otherwise, try rephrasing your itinerary request and generating again.');
+          // Robustly parse — tolerates fences, trailing commas, and token-limit truncation
+          const parsed = safeJSONParse(full);
+          if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Response contained an empty or invalid itinerary.');
+          const cleaned = validateAIDays(parsed); // sanitize shape/types before touching trip state (Debt-007)
+          if (cleaned.length === 0) throw new Error('Response contained an empty or invalid itinerary.');
+          days = cleaned;
+        } catch(parseErr) {
+          console.error('AI response parse failed (attempt '+(attempt+1)+'):', parseErr, '\nRaw response:', full.slice(0, 500));
+          try {
+            const log = JSON.parse(localStorage.getItem('locale_error_log') || '[]');
+            log.unshift({ ts: new Date().toISOString(), msg: 'AI parse (attempt '+(attempt+1)+'): ' + parseErr.message, raw: full.slice(0, 300) });
+            localStorage.setItem('locale_error_log', JSON.stringify(log.slice(0, 10)));
+          } catch(e) {}
+          if (attempt === 1) throw new Error('The response wasn\'t formatted correctly — your trip is safe and unchanged. If you were trying to update your checklist, use the "+ Add to Checklist" button instead. Otherwise, try rephrasing your itinerary request and generating again.');
+        }
       }
 
       // Assign proper IDs and link destinations
       const destId = trip.destinations[0]?.id || 'd1';
+      const destByDate = Object.fromEntries(dateCityScaffold(trip).map(s=>[s.date, s.destId])); // enforce per-city allocation even if the model ignored the scaffold
       const tripStart = new Date(trip.startDate + 'T12:00:00');
       const normalizedDays = days.map((day, i) => {
         const date = new Date(tripStart);
@@ -4605,7 +4650,7 @@ Only include fields you can actually read from the document. Use null for anythi
           ...day,
           id: uuid(),
           date: day.date || dateStr,
-          destinationId: day.destinationId || destId,
+          destinationId: destByDate[day.date || dateStr] || day.destinationId || destId,
           activities: (day.activities || []).map((a, j) => ({...a, id: uuid(), sortOrder: j})),
           restaurants: (day.restaurants || []).map((r, j) => ({...r, id: uuid(), sortOrder: j})),
         };
@@ -4909,6 +4954,56 @@ Only include fields you can actually read from the document. Use null for anythi
 }
 
 // ── Trip Date Editor ─────────────────────────────────────────────────────────
+// Tap a crew member's name to edit them — contact + role (owner) and attendance (owner or self). UAT 2026-07-15.
+function MemberEditSheet({member, isOwner, onClose, onSave, onRemove}){
+  const [name,setName]=React.useState(member.name||'');
+  const [email,setEmail]=React.useState(member.email||'');
+  const [phone,setPhone]=React.useState(member.phone||'');
+  const [role,setRole]=React.useState(member.role||'crew');
+  const [rsvp,setRsvpVal]=React.useState(member.rsvp||'pending');
+  const save=()=>{
+    if(isOwner&&!name.trim()){ showToast('Name is required.','warn'); return; }
+    if(isOwner&&email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())){ showToast('That email looks off.','warn'); return; }
+    onSave({name:name.trim()||member.name, email:email.trim(), phone:phone.trim(), role, rsvp});
+  };
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" aria-label="Edit traveler" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet">
+        <div className="sheet-handle"/>
+        <div style={{padding:'16px 24px 8px',borderBottom:'1px solid var(--color-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <h2 className="font-display" style={{fontSize:'1.2rem',fontWeight:600}}>{isOwner?'Edit traveler':'My details'}</h2>
+          <button className="btn btn-ghost" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div style={{padding:'20px 24px 32px',display:'flex',flexDirection:'column',gap:6}}>
+          <label className="section-label">Name</label>
+          <input className="input" value={name} disabled={!isOwner} onChange={e=>setName(e.target.value)}/>
+          <label className="section-label" style={{marginTop:8}}>Email</label>
+          <input className="input" type="email" value={email} disabled={!isOwner} onChange={e=>setEmail(e.target.value)}/>
+          <label className="section-label" style={{marginTop:8}}>Mobile number</label>
+          <input className="input" type="tel" value={phone} disabled={!isOwner} onChange={e=>setPhone(e.target.value)}/>
+          {isOwner && (<>
+            <label className="section-label" style={{marginTop:8}}>Role</label>
+            <select className="input" value={role} onChange={e=>setRole(e.target.value)}>
+              <option value="crew">✏️ Crew — can add notes/suggestions</option>
+              <option value="viewer">👀 Viewer — read-only</option>
+            </select>
+          </>)}
+          <label className="section-label" style={{marginTop:8}}>Attendance</label>
+          <select className="input" value={rsvp} onChange={e=>setRsvpVal(e.target.value)}>
+            <option value="going">Going</option>
+            <option value="pending">Pending</option>
+            <option value="no">Can't make it</option>
+          </select>
+          <div style={{display:'flex',gap:8,marginTop:14}}>
+            <button className="btn btn-primary" style={{flex:1}} onClick={save}>Save</button>
+            {onRemove && <button className="btn btn-ghost" style={{color:'var(--color-flag)'}} onClick={onRemove}>Remove</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CrewSection({trip, onUpdateTrip}){
   const members = trip.collaborators || [];
   const counts = members.reduce((a,m)=>{const r=m.rsvp||'pending';a[r]=(a[r]||0)+1;return a;},{});
@@ -4926,7 +5021,9 @@ function CrewSection({trip, onUpdateTrip}){
     save(members.map(m=>m.id===id?{...m, rsvp}:m));
   };
   const setPay = (id, field, val)=> save(members.map(m=>m.id===id?{...m, [field]:val}:m));
+  const updateMember = (id, patch)=> save(members.map(m=>m.id===id?{...m, ...patch}:m));
   const remove = (id)=> { if(window.confirm('Remove this person from the trip?')) save(members.filter(m=>m.id!==id)); };
+  const [editingMemberId,setEditingMemberId]=React.useState(null);
   const [name,setName]=React.useState('');
   const [email,setEmail]=React.useState('');
   const [phone,setPhone]=React.useState('');
@@ -5000,34 +5097,34 @@ function CrewSection({trip, onUpdateTrip}){
           return (
           <div key={m.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderBottom:'1px solid var(--color-border)'}}>
             <span style={{width:36,height:36,borderRadius:'50%',background:m.avatarColor,color:'#0E1117',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,flexShrink:0,boxShadow:'0 0 0 2px var(--color-surface), 0 0 0 4px '+m.avatarColor}}>{(m.name||'?').charAt(0).toUpperCase()}</span>
-            <div style={{flex:1,minWidth:0}}>
+            <div role={canEditRsvp?'button':undefined} tabIndex={canEditRsvp?0:undefined} aria-label={canEditRsvp?`Edit ${m.name}`:undefined}
+              onClick={()=>{ if(canEditRsvp) setEditingMemberId(m.id); }}
+              onKeyDown={e=>{ if(canEditRsvp&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); setEditingMemberId(m.id); } }}
+              style={{flex:1,minWidth:0,cursor:canEditRsvp?'pointer':'default'}}>
               <div style={{display:'flex',alignItems:'center',gap:6}}>
                 <div style={{fontWeight:600,color:'var(--color-ink)'}}>{m.name}</div>
                 <span className={`pill ${m.role==='viewer'?'pill-muted':'pill-neutral'}`} style={{padding:'1px 6px',fontSize:'.65rem'}}>{m.role==='viewer'?'👀 Viewer':'✏️ Crew'}</span>
               </div>
               <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{[m.email,m.phone].filter(Boolean).join(' · ') || 'No contact info'}</div>
               {m.invitedAt && <div style={{fontSize:'.68rem',color:'var(--color-ink-muted)',marginTop:2}}>Invited {relativeAgo(m.invitedAt)}{m.inviteSentCount>1?` · sent ${m.inviteSentCount}×`:''}</div>}
-              {isOwner && (
-                <details style={{marginTop:4}}>
-                  <summary style={{cursor:'pointer',fontSize:'.7rem',color:'var(--color-accent)',listStyle:'none'}}>💸 {(m.venmo||m.zelle)?'Payment set':'Add Venmo/Zelle'}</summary>
-                  <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:6}}>
-                    <input className="input" style={{flex:'1 1 120px',fontSize:'.78rem',padding:'5px 8px'}} placeholder="Venmo (without @)" value={m.venmo||''} onChange={e=>setPay(m.id,'venmo',e.target.value.replace(/^@/,'').trim())}/>
-                    <input className="input" style={{flex:'1 1 120px',fontSize:'.78rem',padding:'5px 8px'}} placeholder="Zelle (email/phone)" value={m.zelle||''} onChange={e=>setPay(m.id,'zelle',e.target.value.trim())}/>
-                  </div>
-                </details>
-              )}
+              {canEditRsvp && <div style={{fontSize:'.65rem',color:'var(--color-accent)',marginTop:2}}>Tap to edit</div>}
             </div>
-            {isOwner && <button aria-label={m.invitedAt?`Resend invite to ${m.name}`:`Invite ${m.name}`} onClick={()=>inviteMember(m)} className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',padding:'4px 8px',whiteSpace:'nowrap'}}>{m.invitedAt?'↻ Resend':'✉️ Invite'}</button>}
-            <select className="input" aria-label="RSVP status" style={{width:'auto',padding:'4px 8px',fontSize:'.78rem'}} value={m.rsvp||'pending'} disabled={!canEditRsvp} onChange={e=>setRsvp(m.id, e.target.value)}>
-              <option value="going">Going</option>
-              <option value="pending">Pending</option>
-              <option value="no">Can't make it</option>
-            </select>
-            {isOwner && <button aria-label="Remove person" onClick={()=>remove(m.id)} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'2px 8px'}}>✕</button>}
+            {isOwner && (m.rsvp||'pending')!=='going' && <button aria-label={m.invitedAt?`Resend invite to ${m.name}`:`Invite ${m.name}`} onClick={()=>inviteMember(m)} className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',padding:'4px 8px',whiteSpace:'nowrap'}}>{m.invitedAt?'↻ Resend':'✉️ Invite'}</button>}
+            <span className={`pill ${(m.rsvp||'pending')==='going'?'pill-accent':(m.rsvp==='no'?'pill-flag':'pill-neutral')}`} style={{whiteSpace:'nowrap',flexShrink:0}}>{(m.rsvp||'pending')==='going'?'● Going':(m.rsvp==='no'?"✕ Can't make it":'○ Pending')}</span>
           </div>
           );
         })}
       </div>
+      {editingMemberId && (()=>{ const m=members.find(x=>x.id===editingMemberId); if(!m) return null; return (
+        <MemberEditSheet member={m} isOwner={isOwner}
+          onClose={()=>setEditingMemberId(null)}
+          onSave={(patch)=>{
+            if(isOwner){ updateMember(m.id, patch); }
+            else if(patch.rsvp!==(m.rsvp||'pending')){ setRsvp(m.id, patch.rsvp); }
+            setEditingMemberId(null); showToast('Traveler updated ✓','info',2500);
+          }}
+          onRemove={isOwner?()=>{ setEditingMemberId(null); remove(m.id); }:null}
+        />); })()}
       {isOwner ? (
         <>
           <div className="card" style={{marginBottom:12}}>
@@ -5036,7 +5133,7 @@ function CrewSection({trip, onUpdateTrip}){
               <input className="input" placeholder="Name *" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')add();}}/>
               <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                 <input className="input" style={{flex:'1 1 160px'}} type="email" autoComplete="off" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/>
-                <input className="input" style={{flex:'1 1 140px'}} type="tel" placeholder="Phone" value={phone} onChange={e=>setPhone(e.target.value)}/>
+                <input className="input" style={{flex:'1 1 140px'}} type="tel" placeholder="Mobile number" aria-label="Mobile number" value={phone} onChange={e=>setPhone(e.target.value)}/>
               </div>
               <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                 <select className="input" aria-label="Role" style={{flex:'1 1 140px'}} value={role} onChange={e=>setRole(e.target.value)}>
@@ -5087,14 +5184,15 @@ function BudgetItemRow({item, members, days, fmt, dayLabel, splitInfo, onSave, o
   const [dayId,setDayId]=React.useState(item.day||'');
   const [paidBy,setPaidBy]=React.useState(item.paidBy||'');
   const [excluded,setExcluded]=React.useState(item.excluded||[]);
+  const [settled,setSettled]=React.useState(item.settledIds||[]);
   const startEdit=()=>{
-    setLabel(item.label); setAmount(String(item.amount)); setDayId(item.day||''); setPaidBy(item.paidBy||''); setExcluded(item.excluded||[]);
+    setLabel(item.label); setAmount(String(item.amount)); setDayId(item.day||''); setPaidBy(item.paidBy||''); setExcluded(item.excluded||[]); setSettled(item.settledIds||[]);
     setEditing(true);
   };
   const save=()=>{
     const a=parseFloat(amount);
     if(!label.trim()||!(a>=0)){ showToast('Add a label and an amount.','warn'); return; }
-    onSave({label:label.trim(), amount:a, day:dayId||null, paidBy:paidBy||null, excluded:[...excluded]});
+    onSave({label:label.trim(), amount:a, day:dayId||null, paidBy:paidBy||null, excluded:[...excluded], settledIds:settled.filter(id=>id!==paidBy&&!excluded.includes(id))});
     setEditing(false);
   };
   if(editing){
@@ -5127,6 +5225,20 @@ function BudgetItemRow({item, members, days, fmt, dayLabel, splitInfo, onSave, o
                 <button key={m.id} type="button" onClick={()=>setExcluded(ex=>ex.includes(m.id)?ex.filter(x=>x!==m.id):[...ex,m.id])}
                   className={`pill ${isIn?'pill-accent':'pill-neutral'}`} style={{cursor:'pointer',border:'none',opacity:isIn?1:.55}}>
                   {isIn?'✓ ':'✕ '}{m.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {paidBy && members.length>1 && (
+          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
+            <span style={{width:'100%',fontSize:'.7rem',color:'var(--color-ink-muted)'}}>Who has paid {members.find(m=>m.id===paidBy)?.name||'the payer'} back:</span>
+            {members.filter(m=>m.id!==paidBy&&!excluded.includes(m.id)).map(m=>{
+              const isPaid=settled.includes(m.id);
+              return (
+                <button key={m.id} type="button" onClick={()=>setSettled(s=>s.includes(m.id)?s.filter(x=>x!==m.id):[...s,m.id])}
+                  className={`pill ${isPaid?'pill-accent':'pill-neutral'}`} style={{cursor:'pointer',border:'none',opacity:isPaid?1:.6}}>
+                  {isPaid?'💸 Paid — ':'⏳ Owes — '}{m.name}
                 </button>
               );
             })}
@@ -5170,7 +5282,7 @@ function BudgetSection({trip, onUpdateTrip}){
   const [label,setLabel]=React.useState('');
   const [amount,setAmount]=React.useState('');
   const [dayId,setDayId]=React.useState('');
-  const [paidBy,setPaidBy]=React.useState(members[0]?.id||'');
+  const [paidBy,setPaidBy]=React.useState(''); // no default payer — assign after the fact (see DECISIONS.md)
   const [excluded,setExcluded]=React.useState([]); // member ids excluded from this expense's split
   const [showSplit,setShowSplit]=React.useState(false);
 
@@ -5181,7 +5293,7 @@ function BudgetSection({trip, onUpdateTrip}){
     if(!label.trim() || !(a>=0)){ showToast('Add a label and an amount.','warn'); return; }
     saveItems([...items, {id:uuid(), label:label.trim(), amount:a, day:dayId||null, paidBy:paidBy||null, excluded:[...excluded]}]);
     track('budget_add', { split: excluded.length>0 });
-    setLabel(''); setAmount(''); setDayId(''); setExcluded([]); setShowSplit(false);
+    setLabel(''); setAmount(''); setDayId(''); setPaidBy(''); setExcluded([]); setShowSplit(false);
   };
   const remove = (id)=> saveItems(items.filter(i=>i.id!==id));
   const update = (id,patch)=> saveItems(items.map(i=>i.id===id?{...i,...patch}:i));
@@ -5191,19 +5303,26 @@ function BudgetSection({trip, onUpdateTrip}){
   // Per-person balances (positive = owed to them; negative = they owe)
   const bal={}; members.forEach(m=>bal[m.id]=0);
   items.forEach(it=>{
+    if(!it.paidBy || bal[it.paidBy]===undefined) return; // unassigned expenses stay out of balances until a payer is set
     const amt=Number(it.amount)||0;
     const included = members.filter(m=>!(it.excluded||[]).includes(m.id));
     const n = included.length || 1;
     const share = amt/n;
-    included.forEach(m=>{ bal[m.id]-=share; });
-    if(it.paidBy && bal[it.paidBy]!==undefined) bal[it.paidBy]+=amt;
+    included.forEach(m=>{
+      if(m.id===it.paidBy) return;                       // payer covers their own share
+      if((it.settledIds||[]).includes(m.id)) return;     // already paid the payer back — settled
+      bal[m.id]-=share; bal[it.paidBy]+=share;
+    });
   });
   payments.forEach(p=>{ if(bal[p.from]!==undefined)bal[p.from]+=Number(p.amount)||0; if(bal[p.to]!==undefined)bal[p.to]-=Number(p.amount)||0; });
   const settlements = members.length>=2 ? computeSettlements(bal) : [];
   const splitInfo=(it)=>{
     const inc=members.filter(m=>!(it.excluded||[]).includes(m.id));
     const n=inc.length||1;
-    return members.length ? `${nameOf(it.paidBy)} paid · split ${n} way${n>1?'s':''}${(it.excluded||[]).length?` · ${(it.excluded).map(nameOf).join(', ')} excluded`:''}` : null;
+    const owers=inc.filter(m=>m.id!==it.paidBy);
+    const paidCount=(it.settledIds||[]).filter(id=>owers.some(m=>m.id===id)).length;
+    const paidPart=it.paidBy&&owers.length?` · ${paidCount}/${owers.length} paid back`:'';
+    return members.length ? `${it.paidBy?nameOf(it.paidBy)+' paid':'Payer not set — tap ✎ to assign'} · split ${n} way${n>1?'s':''}${paidPart}${(it.excluded||[]).length?` · ${(it.excluded).map(nameOf).join(', ')} excluded`:''}` : null;
   };
 
   return (
@@ -5334,11 +5453,14 @@ function TripDateEditor({trip, onUpdateTrip}) {
   const [endDate, setEndDate] = React.useState(trip.endDate || '');
   const [error, setError] = React.useState('');
 
+  const [stops, setStops] = React.useState((trip.destinations||[]).map(d=>({id:d.id, city:d.city, arrivalDate:d.arrivalDate||'', departureDate:d.departureDate||''})));
+
   // Reset local state if trip prop changes
   React.useEffect(() => {
     setStartDate(trip.startDate || '');
     setEndDate(trip.endDate || '');
-  }, [trip.startDate, trip.endDate]);
+    setStops((trip.destinations||[]).map(d=>({id:d.id, city:d.city, arrivalDate:d.arrivalDate||'', departureDate:d.departureDate||''})));
+  }, [trip.startDate, trip.endDate, trip.destinations]);
 
   const nightCount = trip.startDate && trip.endDate
     ? Math.round((new Date(trip.endDate) - new Date(trip.startDate)) / 86400000)
@@ -5359,18 +5481,27 @@ function TripDateEditor({trip, onUpdateTrip}) {
       cur.setDate(cur.getDate() + 1);
     }
 
+    // Per-stop dates: each stop's range must be valid and inside the trip range
+    for(const s of stops){
+      if(s.arrivalDate && s.departureDate && s.departureDate < s.arrivalDate){ setError(`${s.city||'A stop'}: departure can't be before arrival.`); return; }
+      if((s.arrivalDate && (s.arrivalDate < startDate || s.arrivalDate > endDate)) || (s.departureDate && (s.departureDate < startDate || s.departureDate > endDate))){ setError(`${s.city||'A stop'}: dates must fall within the trip dates.`); return; }
+    }
+    const nextDestinations = (trip.destinations||[]).map(d=>{ const s=stops.find(x=>x.id===d.id); return s?{...d, arrivalDate:s.arrivalDate, departureDate:s.departureDate}:d; });
+
     const existingDays = trip.days || [];
     // Keep existing days that fall within new range (preserving their content)
     const kept = existingDays.filter(d => allDates.includes(d.date));
-    const keptDates = kept.map(d => d.date);
-    // Add blank day entries for new dates not already covered
-    const newDays = allDates.map(date => {
+    // Only reconcile stubs if the itinerary has real content; otherwise leave days
+    // empty so the AI generator stays available (UAT 2026-07-15: blank days locked out the planner)
+    const hasContent = existingDays.some(d=>(d.activities||[]).length||(d.restaurants||[]).length||(d.notes||'').trim());
+    const newDays = hasContent ? allDates.map(date => {
       const existing = kept.find(d => d.date === date);
       if (existing) return existing;
       return { id: uuid(), date, label: `Day ${allDates.indexOf(date) + 1}`, activities: [], restaurants: [], notes: '', destinationId: trip.destinations?.[0]?.id || '' };
-    });
+    }) : [];
 
-    onUpdateTrip({ ...trip, startDate, endDate, days: newDays });
+    // A dated trip is no longer "just an idea" — unlock the itinerary planner (UAT 2026-07-15)
+    onUpdateTrip({ ...trip, startDate, endDate, destinations: nextDestinations, days: newDays, planningStage: 'booked' });
     setEditing(false);
   };
 
@@ -5437,6 +5568,22 @@ function TripDateEditor({trip, onUpdateTrip}) {
             </div>
           )}
 
+          {stops.length>1 && (
+            <div style={{marginBottom:10}}>
+              <p className="section-label" style={{marginBottom:6}}>Dates per stop</p>
+              {stops.map((s,i)=>(
+                <div key={s.id} style={{display:'grid',gridTemplateColumns:'minmax(70px,1fr) 1fr 1fr',gap:8,alignItems:'center',marginBottom:6}}>
+                  <span style={{fontSize:'.82rem',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.city||('Stop '+(i+1))}</span>
+                  <input className="input" type="date" aria-label={`${s.city} arrival`} value={s.arrivalDate} min={startDate||undefined} max={endDate||undefined}
+                    onChange={e=>{const v=e.target.value; setStops(prev=>prev.map(x=>x.id===s.id?{...x,arrivalDate:v}:x));}}/>
+                  <input className="input" type="date" aria-label={`${s.city} departure`} value={s.departureDate} min={s.arrivalDate||startDate||undefined} max={endDate||undefined}
+                    onChange={e=>{const v=e.target.value; setStops(prev=>prev.map(x=>x.id===s.id?{...x,departureDate:v}:x));}}/>
+                </div>
+              ))}
+              <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)'}}>Arrival → departure for each city. The AI planner uses these to put each day in the right place.</p>
+            </div>
+          )}
+
           {error && <p style={{color:'var(--color-flag)',fontSize:'.78rem',marginBottom:8}}>{error}</p>}
 
           <div style={{display:'flex',gap:8}}>
@@ -5484,7 +5631,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
   };
 
   return (
-    <div style={{minHeight:'100vh',background:'var(--color-cream)'}}>
+    <div style={{minHeight:'100dvh',background:'var(--color-cream)'}}>
       {/* Header */}
       <div className={`trip-header ${headerGrad}`} style={{position:'relative',overflow:'hidden'}}>
         {['bachelorette','birthday','celebration'].includes(trip.occasion) && (
@@ -5675,6 +5822,12 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
                     style={{marginLeft:'auto',background:'none',border:'1px solid var(--color-border)',borderRadius:20,padding:'4px 12px',fontSize:'.75rem',color:'var(--color-ink-muted)',cursor:'pointer'}}
                   >✨ Update itinerary</button>}
                 </div>
+                {isOwner && (trip.days||[]).every(d=>!(d.activities||[]).length&&!(d.restaurants||[]).length) && (
+                  <div className="card" style={{padding:18,marginBottom:16,textAlign:'center',borderStyle:'dashed',borderColor:'var(--color-accent-warm)'}}>
+                    <p style={{fontSize:'.88rem',color:'var(--color-ink-light)',marginBottom:10}}>These days are empty so far.</p>
+                    <button className="btn btn-primary" onClick={()=>{ setActiveDay(null); onUpdateTrip({...trip, days:[]}); }}>✨ Plan these days with AI</button>
+                  </div>
+                )}
                 {activeDay && <DayView key={activeDay} trip={trip} day={(trip.days||[]).find(d=>d.id===activeDay)} onUpdateTrip={onUpdateTrip}/>}
               </>
             ) : isOwner ? (
@@ -5764,7 +5917,7 @@ function Dashboard({trips, onSelectTrip, onNewTrip, cloudUser, setCloudUser}) {
   const upcoming = sorted.filter(t=>!isPast(t));
   const past = sorted.filter(isPast).sort((a,b)=>new Date(b.endDate)-new Date(a.endDate)); // most recent first
   return (
-    <div style={{minHeight:'100vh',background:'var(--color-cream)'}}>
+    <div style={{minHeight:'100dvh',background:'var(--color-cream)'}}>
       <div className="dashboard-header">
         <div style={{maxWidth:1100,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'12px 16px'}}>
           <div>
