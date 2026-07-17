@@ -3349,6 +3349,36 @@ function DayView({trip,day,onUpdateTrip}){
             style={{minHeight:70,resize:'vertical',fontFamily:'var(--font-body)',fontSize:'.875rem',marginTop:8}}/>
         </details>
       </div>
+
+      {/* IA Phase 1: City tips live with the day they belong to (DECISIONS.md — day-level, not a tab).
+          Fallback to the first stop when a day's destinationId is stale (older/demo data). */}
+      {(()=>{ const tipsDest = dest || (trip.destinations||[])[0]; return tipsDest ? (
+        <details style={{marginTop:16}}>
+          <summary className="card" style={{cursor:'pointer',listStyle:'none',padding:'14px 16px',fontWeight:600,fontSize:'.95rem'}}>💡 {tipsDest.city} tips &amp; local know-how <span style={{float:'right',color:'var(--color-ink-muted)',fontWeight:400}}>▾</span></summary>
+          <div style={{marginTop:8}}>
+            <CityTidbits destinations={[tipsDest]} trip={trip} onUpdateTrip={onUpdateTrip}/>
+          </div>
+        </details>
+      ) : null; })()}
+    </div>
+  );
+}
+
+// ── GET READY (IA Phase 1: Pre-Trip checklist + Packing in one tab) ──────────
+// Both answer the same traveler question — "am I prepared?" — so they live
+// together behind an inner toggle instead of two top-level tabs (DECISIONS.md).
+function GetReadyView({trip, onUpdate, onUpdateTrip}){
+  const [section,setSection]=React.useState('checklist'); // 'checklist' | 'packing'
+  const done=(trip.checklist||[]).filter(c=>c.completed).length;
+  const total=(trip.checklist||[]).length;
+  const packedInfo=(()=>{ const items=Array.isArray(trip.packingList)?trip.packingList:null; if(!items||!items.length) return null; const p=items.filter(i=>i.packed||i.completed).length; return p+'/'+items.length; })();
+  return (
+    <div>
+      <div style={{display:'flex',gap:8,padding:'0 16px 14px'}}>
+        <button onClick={()=>setSection('checklist')} className={`pill ${section==='checklist'?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>✅ Checklist{total?` · ${done}/${total}`:''}</button>
+        <button onClick={()=>setSection('packing')} className={`pill ${section==='packing'?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>🧳 Packing{packedInfo?` · ${packedInfo}`:''}</button>
+      </div>
+      {section==='checklist' ? <ChecklistView trip={trip} onUpdate={onUpdate} onUpdateTrip={onUpdateTrip}/> : <PackingView trip={trip} onUpdateTrip={onUpdateTrip}/>}
     </div>
   );
 }
@@ -5634,13 +5664,14 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
   const headerGrad = trip.coverGradient || `gradient-${gradKey}`;
 
   const TABS = [
+    // IA Phase 1 (2026-07-15, per PRODUCT-ARCHITECTURE + DECISIONS): 7 tabs → 5.
+    // Pre-Trip + Packing merged into "Get Ready" (one question: am I prepared?);
+    // City Tips live inside each day's view (day-level info, not a destination).
     {id:'overview',label:'Overview',icon:''},
-    {id:'crew',label:'Crew',icon:''},
-    {id:'budget',label:'Budget',icon:''},
-    {id:'checklist',label:'Pre-Trip',icon:''},
     {id:'days',label:'Days',icon:''},
-    {id:'packing',label:'Packing',icon:''},
-    {id:'tidbits',label:'City Tips',icon:''},
+    {id:'crew',label:'Crew',icon:''},
+    {id:'getready',label:'Get Ready',icon:''},
+    {id:'budget',label:'Budget',icon:''},
   ];
   if(isOwner && ['bachelorette','birthday','anniversary','honeymoon','celebration'].includes(trip.occasion)) TABS.push({id:'celebrate',label:'Celebrate',icon:''}); // surprise logistics stay owner-only
 
@@ -5856,11 +5887,9 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
             )}
           </div>
         )}
-        {activeTab==='checklist' && <ChecklistView trip={trip} onUpdate={handleChecklistUpdate} onUpdateTrip={onUpdateTrip}/>}
+        {activeTab==='getready' && <GetReadyView trip={trip} onUpdate={handleChecklistUpdate} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='crew' && <CrewSection trip={trip} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='budget' && <div style={{padding:'0 0 8px'}}><BudgetSection trip={trip} onUpdateTrip={onUpdateTrip}/></div>}
-        {activeTab==='packing' && <PackingView trip={trip} onUpdateTrip={onUpdateTrip}/>}
-        {activeTab==='tidbits' && <CityTidbits destinations={trip.destinations} trip={trip} onUpdateTrip={onUpdateTrip}/>}
         {activeTab==='celebrate' && <CelebrationSection trip={trip} onUpdateTrip={onUpdateTrip}/>}
       </div>
 
