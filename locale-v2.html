@@ -5795,7 +5795,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
                   <React.Fragment key={cc}>
                     {vr && (
                       <div style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)'}}>
-                        <span style={{color:'#fff',fontSize:'.8rem'}}>🛂 <strong>{dn}: {vr.name}</strong>{vr.duration?` · ${vr.duration}`:''}{req.destination?.passport_validity?` · passport valid ${req.destination.passport_validity}+`:''}{vr.link&&<> · <a href={vr.link} target="_blank" rel="noopener noreferrer" style={{color:'#fff',textDecoration:'underline'}}>details</a></>}</span>
+                        <span style={{color:'#fff',fontSize:'.8rem'}}>🛂 <strong>{dn}: {vr.name}</strong>{vr.duration?` · ${vr.duration}`:''}{req.destination?.passport_validity?` · passport: ${req.destination.passport_validity}`:''}{vr.link&&<> · <a href={vr.link} target="_blank" rel="noopener noreferrer" style={{color:'#fff',textDecoration:'underline'}}>details</a></>}</span>
                       </div>
                     )}
                     {reg && !dupReg && (
