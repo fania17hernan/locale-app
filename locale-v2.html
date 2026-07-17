@@ -6103,6 +6103,56 @@ function SharedTripBanner({ trip, onAccept, onDismiss }) {
   );
 }
 
+// First-run welcome — routes creators to the wizard and invitees to their link,
+// so a shared-trip recipient never wanders a stranger's UI (Andy's role-aware onboarding).
+function WelcomeScreen({ onCreate, onOpenInvite, onDismiss }) {
+  const [mode, setMode] = React.useState('choice'); // 'choice' | 'invite'
+  const [pasted, setPasted] = React.useState('');
+  const [pasteErr, setPasteErr] = React.useState('');
+  const tryOpenPasted = () => {
+    const m = (pasted||'').match(/[#&]trip=([A-Za-z0-9+/=]+)/);
+    const t = m ? decodeTrip(m[1]) : null;
+    if(!t){ setPasteErr("That doesn't look like a Locale invite link — it should contain #trip=… Ask your organizer to re-share it."); return; }
+    onOpenInvite(t);
+  };
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" aria-label="Welcome to Locale" style={{zIndex:9998}}>
+      <div className="sheet">
+        <div className="sheet-handle"/>
+        <div style={{padding:'24px 24px 36px',textAlign:'center'}}>
+          <div style={{fontSize:'2rem',marginBottom:10}}>👋</div>
+          <h2 className="font-display" style={{fontSize:'1.4rem',fontWeight:700,marginBottom:6}}>Welcome to Locale</h2>
+          {mode==='choice' ? (
+            <>
+              <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',lineHeight:1.5,marginBottom:22}}>Your trips, beautifully kept — for you and everyone going with you.</p>
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                <button className="btn btn-primary" style={{width:'100%',padding:'14px'}} onClick={onCreate}>✈️ Plan a trip</button>
+                <button className="btn btn-secondary" style={{width:'100%',padding:'14px'}} onClick={()=>setMode('invite')}>📩 I got an invite link</button>
+                <button className="btn btn-ghost" style={{width:'100%',padding:'12px'}} onClick={onDismiss}>Just exploring — show me the demo</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',lineHeight:1.6,marginBottom:16,textAlign:'left'}}>
+                Invites open automatically — just <strong>tap the link</strong> in the text or email your trip organizer sent you, and the trip lands right here. No account or setup needed.
+              </p>
+              <p className="section-label" style={{textAlign:'left',marginBottom:6}}>Have the link somewhere else? Paste it:</p>
+              <input className="input" placeholder="https://localetrips.app/…#trip=…" value={pasted}
+                onChange={e=>{setPasted(e.target.value); setPasteErr('');}}
+                onKeyDown={e=>{if(e.key==='Enter')tryOpenPasted();}}/>
+              {pasteErr && <p style={{color:'var(--color-flag)',fontSize:'.78rem',marginTop:6,textAlign:'left'}}>{pasteErr}</p>}
+              <div style={{display:'flex',gap:8,marginTop:12}}>
+                <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setMode('choice')}>← Back</button>
+                <button className="btn btn-primary" style={{flex:2}} onClick={tryOpenPasted}>Open the trip</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [trips, setTrips] = React.useState(()=>loadTrips());
   const [view, setView] = React.useState('dashboard');
@@ -6112,6 +6162,11 @@ function App() {
   const [installPrompt, setInstallPrompt] = React.useState(null);
   const [showInstall, setShowInstall] = React.useState(false);
   const [sharedTrip, setSharedTrip] = React.useState(()=>getSharedTripFromHash());
+  // First-run welcome: only for fresh users (demo trips only), never over an invite link
+  const [showWelcome, setShowWelcome] = React.useState(()=>{
+    try { return !localStorage.getItem('locale_welcome_seen') && !getSharedTripFromHash() && loadTrips().every(t=>t.isDemo); } catch(e){ return false; }
+  });
+  const dismissWelcome = ()=>{ try{ localStorage.setItem('locale_welcome_seen','1'); }catch(e){} setShowWelcome(false); };
 
   React.useEffect(()=>{
     const goOffline = ()=>setOffline(true);
@@ -6269,6 +6324,13 @@ function App() {
           trip={sharedTrip}
           onAccept={handleAcceptSharedTrip}
           onDismiss={()=>{ setSharedTrip(null); window.location.hash=''; }}
+        />
+      )}
+      {showWelcome && !sharedTrip && (
+        <WelcomeScreen
+          onCreate={()=>{ dismissWelcome(); setShowNew(true); }}
+          onOpenInvite={(t)=>{ dismissWelcome(); setSharedTrip(t); }}
+          onDismiss={dismissWelcome}
         />
       )}
       {offline && (
