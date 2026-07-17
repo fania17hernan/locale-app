@@ -5087,49 +5087,52 @@ function CrewSection({trip, onUpdateTrip}){
   // via the send-invite Edge Function (Resend). Falls back to the Phase 1
   // manual share/copy-link flow if that fails for any reason (no Resend key
   // configured yet, offline, trip not synced, etc.) — never a dead end.
-  const inviteMember = async (m)=>{
-    const encoded = encodeTrip(trip);
-    if(!encoded){ showToast('Could not create an invite link.','error'); return; }
-    const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
-    const markSent = ()=> save(members.map(x=>x.id===m.id?{...x, invitedAt:Date.now(), inviteSentCount:(x.inviteSentCount||0)+1}:x));
-    const shareOrCopyLink = ()=>{
-      track('crew_invite',{via:'link'});
-      if(navigator.share){ navigator.share({title:trip.title, text:`Join "${trip.title||'my trip'}" on Locale`, url}).then(()=>{ markSent(); showToast(`Invite shared for ${m.name} \u2713`,'info',3500); }).catch(()=>{}); }
-      else {
-        navigator.clipboard.writeText(url)
-          .then(()=>{ markSent(); showToast(`Invite link copied for ${m.name} — paste it into a text or email.`,'info',4500); })
-          .catch(()=>{ markSent(); prompt(`Copy invite link for ${m.name}:`, url); });
-      }
-    };
-    if(m.email){
-      try{
-        const c=sb();
-        const sess = c ? (await c.auth.getSession()).data.session : null;
-        if(!c || !sess){ shareOrCopyLink(); return; }
-        const { data: inv, error } = await c.from('trip_invites')
-          .insert({trip_id:trip.id, collaborator_id:m.id, email:m.email.trim(), role: m.role==='viewer'?'viewer':'crew'})
-          .select('id').single();
-        if(error || !inv){ shareOrCopyLink(); return; }
-        const resp = await fetch(SEND_INVITE_URL, {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+sess.access_token, 'apikey': SUPABASE_ANON_KEY },
-          body: JSON.stringify({ invite_id: inv.id, invite_url: url }),
-        });
-        if(resp.ok){ markSent(); track('crew_invite',{via:'email'}); showToast(`Invite emailed to ${m.name} ✓`,'info',4000); return; }
-        let serverReason=''; try{ const ej=await resp.json(); serverReason=ej?.error?.message||''; }catch(e){}
-        showToast(serverReason || `Couldn't email ${m.name} — ${m.phone?'texting the invite instead.':'sharing a link instead.'}`,'warn',serverReason?7000:3500);
-      }catch(e){ /* fall through to text/share below */ }
+  // Invite = explicit channel choice (Stephanie's UAT 2026-07-15: no silent share-sheet fallback).
+  // Tapping Invite opens a chooser showing the member's actual email/mobile; each send confirms with a toast.
+  const [invitingMember,setInvitingMember]=React.useState(null);
+  const inviteMember = (m)=> setInvitingMember(m);
+  const buildInviteUrl = ()=>{ const encoded=encodeTrip(trip); return encoded ? window.location.origin+window.location.pathname+'#trip='+encoded : null; };
+  const markInviteSent = (m)=> save(members.map(x=>x.id===m.id?{...x, invitedAt:Date.now(), inviteSentCount:(x.inviteSentCount||0)+1}:x));
+  const shareLinkInvite = (m)=>{
+    const url=buildInviteUrl();
+    if(!url){ showToast('Could not create an invite link.','error'); return; }
+    track('crew_invite',{via:'link'});
+    if(navigator.share){ navigator.share({title:trip.title, text:`Join "${trip.title||'my trip'}" on Locale`, url}).then(()=>{ markInviteSent(m); showToast(`Invite shared for ${m.name} \u2713`,'info',3500); }).catch(()=>{}); }
+    else {
+      navigator.clipboard.writeText(url)
+        .then(()=>{ markInviteSent(m); showToast(`Invite link copied for ${m.name} \u2014 paste it into a text or email.`,'info',4500); })
+        .catch(()=>{ markInviteSent(m); prompt(`Copy invite link for ${m.name}:`, url); });
     }
-    if(m.phone){
-      // Text invite — opens the Messages app with the link prefilled; no server needed (works while Resend email is down)
-      const smsUrl = 'sms:' + m.phone.replace(/[^+\d]/g,'') + '?&body=' + encodeURIComponent(`Join "${trip.title||'my trip'}" on Locale: ${url}`);
-      track('crew_invite',{via:'sms'});
-      markSent();
-      showToast(`Opening Messages to text ${m.name}…`,'info',3500);
-      window.location.href = smsUrl;
-      return;
-    }
-    shareOrCopyLink();
+  };
+  const sendTextInvite = (m)=>{
+    const url=buildInviteUrl();
+    if(!url || !m.phone){ shareLinkInvite(m); return; }
+    const smsUrl = 'sms:' + m.phone.replace(/[^+\d]/g,'') + '?&body=' + encodeURIComponent(`Join "${trip.title||'my trip'}" on Locale: ${url}`);
+    track('crew_invite',{via:'sms'});
+    markInviteSent(m);
+    showToast(`Opening Messages to text ${m.name}\u2026`,'info',3500);
+    window.location.href = smsUrl;
+  };
+  const sendEmailInvite = async (m)=>{
+    const url=buildInviteUrl();
+    if(!url){ showToast('Could not create an invite link.','error'); return; }
+    try{
+      const c=sb();
+      const sess = c ? (await c.auth.getSession()).data.session : null;
+      if(!c || !sess){ showToast('Sign in first (\u2601 Sync on the trips screen) to send email invites \u2014 or use Text / Share link.','warn',6000); return; }
+      const { data: inv, error } = await c.from('trip_invites')
+        .insert({trip_id:trip.id, collaborator_id:m.id, email:m.email.trim(), role: m.role==='viewer'?'viewer':'crew'})
+        .select('id').single();
+      if(error || !inv){ showToast("Couldn't create the invite \u2014 try again in a moment.",'error',4000); return; }
+      const resp = await fetch(SEND_INVITE_URL, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+sess.access_token, 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ invite_id: inv.id, invite_url: url }),
+      });
+      if(resp.ok){ markInviteSent(m); track('crew_invite',{via:'email'}); showToast(`Invite emailed to ${m.name} \u2713`,'info',4000); return; }
+      let serverReason=''; try{ const ej=await resp.json(); serverReason=ej?.error?.message||''; }catch(e){}
+      showToast(serverReason || `Couldn't email ${m.name} \u2014 try Text or Share link instead.`,'warn',serverReason?7000:4500);
+    }catch(e){ showToast(`Couldn't email ${m.name} \u2014 try Text or Share link instead.`,'warn',4500); }
   };
   return (
     <div>
@@ -5174,6 +5177,24 @@ function CrewSection({trip, onUpdateTrip}){
           }}
           onRemove={isOwner?()=>{ setEditingMemberId(null); remove(m.id); }:null}
         />); })()}
+      {invitingMember && (()=>{ const m=members.find(x=>x.id===invitingMember.id)||invitingMember; return (
+        <div className="overlay" role="dialog" aria-modal="true" aria-label="Send invite" onClick={e=>e.target===e.currentTarget&&setInvitingMember(null)}>
+          <div className="sheet">
+            <div className="sheet-handle"/>
+            <div style={{padding:'16px 24px 8px',borderBottom:'1px solid var(--color-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <h2 className="font-display" style={{fontSize:'1.2rem',fontWeight:600}}>Invite {m.name}</h2>
+              <button className="btn btn-ghost" onClick={()=>setInvitingMember(null)} aria-label="Close">✕</button>
+            </div>
+            <div style={{padding:'20px 24px 32px',display:'flex',flexDirection:'column',gap:10}}>
+              <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:2}}>How should the invite go out?</p>
+              {m.email ? <button className="btn btn-primary" style={{width:'100%',padding:'14px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} onClick={()=>{ setInvitingMember(null); sendEmailInvite(m); }}>📧 Email — {m.email}</button> : null}
+              {m.phone ? <button className="btn btn-secondary" style={{width:'100%',padding:'14px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} onClick={()=>{ setInvitingMember(null); sendTextInvite(m); }}>💬 Text — {m.phone}</button> : null}
+              <button className="btn btn-ghost" style={{width:'100%',padding:'12px'}} onClick={()=>{ setInvitingMember(null); shareLinkInvite(m); }}>🔗 Share the link another way</button>
+              {!m.email && !m.phone && <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',textAlign:'center',lineHeight:1.5}}>No email or mobile saved for {m.name} — tap their name to add contact info, or share the link.</p>}
+            </div>
+          </div>
+        </div>
+      ); })()}
       {isOwner ? (
         <>
           <div className="card" style={{marginBottom:12}}>
