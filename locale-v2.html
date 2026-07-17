@@ -988,6 +988,7 @@ const SUPABASE_URL = 'https://pdbqrjqlwqjqzefmmlhd.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkYnFyanFsd3FqcXplZm1tbGhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExODQxMDEsImV4cCI6MjA5Njc2MDEwMX0.lPxZMp-Ff6RSR-R1DtHj3pJKCiXzqwm1encEB0tHuVc';
 const AI_PROXY_URL = SUPABASE_URL + '/functions/v1/ai-proxy';
 const SEND_INVITE_URL = SUPABASE_URL + '/functions/v1/send-invite';
+const ENTRY_REQ_URL = SUPABASE_URL + '/functions/v1/entry-requirements';
 const FREE_GENERATION_CAP = 10;  // PER TRIP. Mirrors server ai_config.free_itinerary_generations (server is the enforcer).
 const FREE_EXTRACTION_CAP = 10;
 
@@ -1503,6 +1504,23 @@ function getCountdownInfo(d){
   if(diff===0)return{label:"✈️ Today's the day!",cls:'countdown-today',days:0,urgent:true};
   return{label:`📸 ${new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'})}`,cls:'countdown-past',days:diff,urgent:false};
 }
+// Live visa/entry data via the entry-requirements edge function (Travel Buddy, server-cached 7d).
+// Client also caches per passport→destination pair for 7 days so trips don't re-hit the function.
+async function fetchEntryReq(passport, dest){
+  const key='locale_entryreq_'+passport+'_'+dest;
+  try{ const c=JSON.parse(localStorage.getItem(key)||'null'); if(c && Date.now()-c.t < 7*86400000) return c.v; }catch(e){}
+  try{
+    const session = await ensureAnonSession();
+    if(!session) return null;
+    const res = await fetch(ENTRY_REQ_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':SUPABASE_ANON_KEY},body:JSON.stringify({passport, destination:dest})});
+    if(!res.ok) return null;
+    const data = await res.json();
+    const v = data?.requirements || null;
+    try{ localStorage.setItem(key, JSON.stringify({t:Date.now(), v})); }catch(e){}
+    return v;
+  }catch(e){ return null; }
+}
+
 function getIntlFlags(trip){
   const flags=[];
   const seen=new Set();
@@ -5679,6 +5697,18 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
   const [regenUploading, setRegenUploading] = React.useState(false);
   const [regenUploadMsg, setRegenUploadMsg] = React.useState('');
   const flags = getIntlFlags(trip);
+  // Live visa/entry data (Travel Buddy) — augments the rules-based flags above, works for viewers with no key
+  const [liveReqs,setLiveReqs] = React.useState([]);
+  React.useEffect(()=>{
+    let on=true;
+    const passport = trip.travelerPassportCountry || 'US';
+    const codes = [...new Set((trip.destinations||[])
+      .filter(d=>d.isInternational||(d.countryCode&&d.countryCode!=='US'))
+      .map(d=>d.countryCode).filter(Boolean))].filter(cc=>cc!==passport).slice(0,6);
+    if(!codes.length){ setLiveReqs([]); return; }
+    Promise.all(codes.map(cc=>fetchEntryReq(passport,cc).then(req=>({cc,req})))).then(rs=>{ if(on) setLiveReqs(rs.filter(r=>r.req&&(r.req.visa_rules||r.req.mandatory_registration))); });
+    return ()=>{ on=false; };
+  },[trip.id]);
   const {label:countdown} = getCountdownInfo(trip.startDate);
   const firstDest = trip.destinations?.[0];
   const gradKey = firstDest?.countryCode==='GB'?'london':firstDest?.countryCode==='FR'?'paris':firstDest?.city?.toLowerCase().includes('miami')?'miami':'generic';
@@ -5749,13 +5779,33 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
             <AvatarStack collaborators={trip.collaborators}/>
             <span className="occasion-pill">{getOccasionEmoji(trip.occasion)} {getOccasionLabel(trip.occasion)}</span>
           </div>
-          {flags.length>0&&(
+          {(flags.length>0||liveReqs.length>0)&&(
             <div style={{marginTop:16,display:'flex',gap:8,flexWrap:'wrap'}}>
               {flags.map((f,i)=>(
                 <div key={i} style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)'}}>
                   <span style={{color:'#fff',fontSize:'.8rem'}}>{f.emoji} <strong>{f.label}</strong> · {f.desc}</span>
                 </div>
               ))}
+              {liveReqs.map(({cc,req})=>{
+                const dn = req.destination?.name || cc;
+                const vr = req.visa_rules?.primary_rule;
+                const reg = req.mandatory_registration;
+                const dupReg = reg && flags.some(f=>(f.label||'').toLowerCase().includes((reg.name||'').toLowerCase()));
+                return (
+                  <React.Fragment key={cc}>
+                    {vr && (
+                      <div style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)'}}>
+                        <span style={{color:'#fff',fontSize:'.8rem'}}>🛂 <strong>{dn}: {vr.name}</strong>{vr.duration?` · ${vr.duration}`:''}{req.destination?.passport_validity?` · passport: ${req.destination.passport_validity}`:''}{vr.link&&<> · <a href={vr.link} target="_blank" rel="noopener noreferrer" style={{color:'#fff',textDecoration:'underline'}}>details</a></>}</span>
+                      </div>
+                    )}
+                    {reg && !dupReg && (
+                      <div style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)'}}>
+                        <span style={{color:'#fff',fontSize:'.8rem'}}>🚨 <strong>{dn}: {reg.name} required</strong>{reg.link&&<> · <a href={reg.link} target="_blank" rel="noopener noreferrer" style={{color:'#fff',textDecoration:'underline'}}>register</a></>}</span>
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </div>
           )}
           {/* Flights strip — tappable pills → in-app flight detail (PRD 2.5) */}
