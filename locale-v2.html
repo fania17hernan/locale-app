@@ -3350,15 +3350,16 @@ function DayView({trip,day,onUpdateTrip}){
         </details>
       </div>
 
-      {/* IA Phase 1: City tips live with the day they belong to (DECISIONS.md — day-level, not a tab) */}
-      {dest && (
+      {/* IA Phase 1: City tips live with the day they belong to (DECISIONS.md — day-level, not a tab).
+          Fallback to the first stop when a day's destinationId is stale (older/demo data). */}
+      {(()=>{ const tipsDest = dest || (trip.destinations||[])[0]; return tipsDest ? (
         <details style={{marginTop:16}}>
-          <summary className="card" style={{cursor:'pointer',listStyle:'none',padding:'14px 16px',fontWeight:600,fontSize:'.95rem'}}>💡 {dest.city} tips &amp; local know-how <span style={{float:'right',color:'var(--color-ink-muted)',fontWeight:400}}>▾</span></summary>
+          <summary className="card" style={{cursor:'pointer',listStyle:'none',padding:'14px 16px',fontWeight:600,fontSize:'.95rem'}}>💡 {tipsDest.city} tips &amp; local know-how <span style={{float:'right',color:'var(--color-ink-muted)',fontWeight:400}}>▾</span></summary>
           <div style={{marginTop:8}}>
-            <CityTidbits destinations={[dest]} trip={trip} onUpdateTrip={onUpdateTrip}/>
+            <CityTidbits destinations={[tipsDest]} trip={trip} onUpdateTrip={onUpdateTrip}/>
           </div>
         </details>
-      )}
+      ) : null; })()}
     </div>
   );
 }
