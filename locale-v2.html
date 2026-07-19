@@ -270,6 +270,23 @@ select.input { background-image: var(--select-arrow); background-repeat: no-repe
 
 /* ── FAB ── */
 .fab { position: fixed; bottom: 28px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: var(--grad-btn); color: #fff; font-size: 1.6rem; border: none; display: flex; align-items: center; justify-content: center; z-index: 100; transition: transform .2s ease; box-shadow: 0 8px 24px rgba(255,90,77,.4); }
+/* ── IA Phase 2a: bottom tab bar (mobile) + trips drawer ─────────────────── */
+.bottom-nav { display: none; }
+.bottomnav-spacer { display: none; }
+@media (max-width: 760px) {
+  .top-tabbar { display: none !important; }
+  .bottom-nav { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; justify-content: space-around; align-items: flex-start; background: var(--color-surface); border-top: 1px solid var(--color-border); padding: 8px 4px calc(10px + env(safe-area-inset-bottom)); }
+  .bottomnav-spacer { display: block; height: calc(84px + env(safe-area-inset-bottom)); }
+}
+.bn-item { display: flex; flex-direction: column; align-items: center; gap: 2px; border: none; background: none; color: var(--color-ink-muted); font-size: .6rem; font-weight: 500; cursor: pointer; min-width: 56px; padding: 2px 4px; font-family: inherit; }
+.bn-item .bn-ico { font-size: 1.3rem; line-height: 1.15; }
+.bn-item.active { color: var(--color-accent); font-weight: 700; }
+.drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1200; }
+.trips-drawer { position: absolute; top: 0; bottom: 0; left: 0; width: min(320px, 84vw); background: var(--color-surface); border-right: 1px solid var(--color-border); padding: 18px 12px calc(18px + env(safe-area-inset-bottom)); overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.drawer-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; background: none; color: var(--color-ink); border-radius: 10px; padding: 10px; cursor: pointer; font-size: .9rem; font-family: inherit; }
+.drawer-item:hover { background: var(--color-cream-dark); }
+.drawer-item.active { background: var(--color-accent-soft); color: var(--color-accent); font-weight: 600; }
+.drawer-item .di-meta { margin-left: auto; font-size: .64rem; color: var(--color-ink-muted); font-family: var(--font-mono); flex-shrink: 0; }
 .fab:hover { transform: scale(1.08); }
 
 /* ── Banners ── */
@@ -3414,10 +3431,21 @@ function AtAGlance({trip, onStartPlanning}){
           <button onClick={()=>onStartPlanning&&onStartPlanning()} className="btn btn-primary" style={{fontSize:'.92rem',padding:'12px 26px'}}>✨ Generate my itinerary</button>
         </div>
       ):(
-        <div className="card" style={{padding:16,marginBottom:16}}>
+        <React.Fragment>
+        <div className="card" style={{padding:16,marginBottom:10}}>
           <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:4}}>{trip.days.length} days · {allCount} stops planned</p>
           <p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {formatDateShort(trip.startDate)} – {formatDateShort(trip.endDate)}</p>
         </div>
+        {/* IA Phase 2a: calendar export stays impossible to miss (also in the header 📅) */}
+        <div className="card" style={{padding:'13px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:12}}>
+          <span style={{fontSize:'1.25rem'}} aria-hidden="true">📅</span>
+          <div style={{flex:1,minWidth:0}}>
+            <p style={{fontWeight:600,fontSize:'.86rem'}}>Add itinerary to your phone calendar</p>
+            <p style={{fontSize:'.74rem',color:'var(--color-ink-light)',lineHeight:1.45}}>Every day and event — Apple, Google, Outlook. Re-export any time the plan changes.</p>
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={()=>downloadTripICS(trip)} style={{whiteSpace:'nowrap'}}>Export</button>
+        </div>
+        </React.Fragment>
       )}
       {trip.days.filter(d=>(d.activities||[]).length+(d.restaurants||[]).length>0).map(day=>{
         const items=[...(day.activities||[]).map(a=>({...a,_t:'activity'})),...(day.restaurants||[]).map(r=>({...r,_t:'restaurant'}))];
@@ -5684,7 +5712,7 @@ function TripDateEditor({trip, onUpdateTrip}) {
   );
 }
 
-function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
+function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
   const [activeTab, setActiveTab] = React.useState('overview');
   // Shared trips: everything below that writes the trip document is owner-only
   // (RLS enforces it server-side; this gates the UI so members don't see
@@ -5757,7 +5785,10 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
             };
             return (
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:14}}>
-            <button onClick={onBack} aria-label="Back to all trips" style={{display:'flex',alignItems:'center',gap:6,height:44,background:'rgba(255,255,255,.18)',border:'none',borderRadius:12,padding:'0 16px',color:'#fff',fontSize:'.9rem',fontWeight:500,cursor:'pointer',backdropFilter:'blur(4px)'}}>← Back</button>
+            <div style={{display:'flex',gap:8}}>
+              {onOpenDrawer && <button onClick={onOpenDrawer} aria-label="Your trips" title="Your trips" style={{display:'flex',alignItems:'center',justifyContent:'center',height:44,width:44,background:'rgba(255,255,255,.18)',border:'none',borderRadius:12,color:'#fff',fontSize:'1.05rem',cursor:'pointer',backdropFilter:'blur(4px)'}}>☰</button>}
+              <button onClick={onBack} aria-label="Back to all trips" style={{display:'flex',alignItems:'center',gap:6,height:44,background:'rgba(255,255,255,.18)',border:'none',borderRadius:12,padding:'0 16px',color:'#fff',fontSize:'.9rem',fontWeight:500,cursor:'pointer',backdropFilter:'blur(4px)'}}>← Back</button>
+            </div>
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
               <button onClick={doShare} aria-label="Share trip" title="Share trip" style={iconBtn(false)}>🔗</button>
               <button onClick={()=>downloadTripICS(trip)} aria-label="Add itinerary to calendar" title="Add to calendar (.ics)" style={iconBtn(false)}>📅</button>
@@ -5813,8 +5844,8 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
         </div>
       </div>
 
-      {/* Sticky Pill Nav */}
-      <div style={{position:'sticky',top:0,zIndex:100,background:'var(--color-surface)',padding:'10px 16px',overflowX:'auto',whiteSpace:'nowrap',borderBottom:'1px solid var(--color-border)',boxShadow:'none'}}>
+      {/* Sticky Pill Nav — desktop/tablet only; mobile uses the bottom tab bar (IA Phase 2a) */}
+      <div className="top-tabbar" style={{position:'sticky',top:0,zIndex:100,background:'var(--color-surface)',padding:'10px 16px',overflowX:'auto',whiteSpace:'nowrap',borderBottom:'1px solid var(--color-border)',boxShadow:'none'}}>
         <div style={{display:'inline-flex',gap:8,maxWidth:720,margin:'0 auto'}}>
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>{setActiveTab(t.id);track('tab_view',{tab:t.id});}} className={`pill ${activeTab===t.id?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>
@@ -5964,7 +5995,56 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete}) {
         {activeTab==='celebrate' && <CelebrationSection trip={trip} onUpdateTrip={onUpdateTrip}/>}
       </div>
 
+      {/* IA Phase 2a: Instagram-style bottom tab bar on phones */}
+      <div className="bottomnav-spacer" aria-hidden="true"></div>
+      <nav className="bottom-nav" aria-label="Trip sections">
+        {TABS.map(t=>{
+          const ico={overview:'🏠',days:'📆',crew:'👥',getready:'✅',budget:'💰',celebrate:'🎉'}[t.id]||'✨';
+          const short={overview:'Overview',days:'Days',crew:'Crew',getready:'Ready',budget:'Budget',celebrate:'Party'}[t.id]||t.label;
+          return (
+            <button key={t.id} className={`bn-item${activeTab===t.id?' active':''}`} onClick={()=>{setActiveTab(t.id);track('tab_view',{tab:t.id});window.scrollTo({top:0});}} aria-label={t.label}>
+              <span className="bn-ico" aria-hidden="true">{ico}</span>{short}
+            </button>
+          );
+        })}
+      </nav>
       {showShare && <ShareSheet trip={trip} onClose={()=>setShowShare(false)}/>}
+    </div>
+  );
+}
+
+// ── IA Phase 2a: trips drawer — Planned → Ideas → Past (global level) ─────────
+function TripsDrawer({trips, activeId, onClose, onSelect, onNew, onAll}){
+  const today=new Date().toISOString().slice(0,10);
+  const ideas=(trips||[]).filter(t=>t.planningStage==='idea');
+  const past=(trips||[]).filter(t=>t.planningStage!=='idea' && t.endDate && t.endDate<today);
+  const planned=(trips||[]).filter(t=>!ideas.includes(t)&&!past.includes(t));
+  const meta=(t)=> t.planningStage==='idea' ? 'idea' : (t.endDate&&t.endDate<today ? formatDateShort(t.endDate) : (t.startDate?formatDateShort(t.startDate):'new'));
+  const Item=({t})=>(
+    <button className={`drawer-item${t.id===activeId?' active':''}`} onClick={()=>onSelect(t.id)}>
+      <span aria-hidden="true">{t.emoji||'✈️'}</span>
+      <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{(t.title||'Untitled trip').replace(/^\p{Extended_Pictographic}\s*/u,'')}</span>
+      <span className="di-meta">{meta(t)}</span>
+    </button>
+  );
+  return (
+    <div className="drawer-overlay" role="dialog" aria-modal="true" aria-label="Your trips" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="trips-drawer">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'2px 8px 12px'}}>
+          <span className="font-display" style={{fontWeight:700,fontSize:'1.15rem'}}>Loc<span style={{color:'var(--color-accent)'}}>a</span>le</span>
+          <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        {planned.length>0 && <p className="section-label" style={{margin:'8px 8px 4px'}}>Planned</p>}
+        {planned.map(t=><Item key={t.id} t={t}/>)}
+        {ideas.length>0 && <p className="section-label" style={{margin:'14px 8px 4px'}}>Ideas</p>}
+        {ideas.map(t=><Item key={t.id} t={t}/>)}
+        {past.length>0 && <p className="section-label" style={{margin:'14px 8px 4px'}}>Past</p>}
+        {past.map(t=><Item key={t.id} t={t}/>)}
+        <button className="drawer-item" onClick={onNew} style={{marginTop:6}}><span aria-hidden="true">＋</span><span>New trip</span></button>
+        <div style={{flex:1}}></div>
+        <div style={{borderTop:'1px solid var(--color-border)',margin:'10px 4px'}}></div>
+        <button className="drawer-item" onClick={onAll}><span aria-hidden="true">🏠</span><span>All trips</span></button>
+      </div>
     </div>
   );
 }
@@ -6022,7 +6102,7 @@ function SyncButton({user, onChange}){
   );
 }
 
-function Dashboard({trips, onSelectTrip, onNewTrip, cloudUser, setCloudUser}) {
+function Dashboard({trips, onSelectTrip, onNewTrip, cloudUser, setCloudUser, onOpenDrawer}) {
   const [sort, setSort] = React.useState('date');
   const [showPast, setShowPast] = React.useState(false);
   const sorted = [...trips].sort((a,b)=>{
@@ -6039,9 +6119,12 @@ function Dashboard({trips, onSelectTrip, onNewTrip, cloudUser, setCloudUser}) {
     <div style={{minHeight:'100dvh',background:'var(--color-cream)'}}>
       <div className="dashboard-header">
         <div style={{maxWidth:1100,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'12px 16px'}}>
-          <div>
-            <h1 className="dashboard-wordmark">Loc<span>a</span>le</h1>
-            <p style={{fontSize:'.78rem',color:'var(--color-ink-muted)',marginTop:3,fontStyle:'italic',fontFamily:'var(--font-display)'}}>Your trips, beautifully kept.</p>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            {onOpenDrawer && <button className="btn btn-ghost" onClick={onOpenDrawer} aria-label="Your trips" title="Your trips" style={{fontSize:'1.1rem',padding:'8px 12px'}}>☰</button>}
+            <div>
+              <h1 className="dashboard-wordmark">Loc<span>a</span>le</h1>
+              <p style={{fontSize:'.78rem',color:'var(--color-ink-muted)',marginTop:3,fontStyle:'italic',fontFamily:'var(--font-display)'}}>Your trips, beautifully kept.</p>
+            </div>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',justifyContent:'flex-end'}}>
             <SyncButton user={cloudUser} onChange={setCloudUser}/>
@@ -6262,6 +6345,7 @@ function App() {
   const [installPrompt, setInstallPrompt] = React.useState(null);
   const [showInstall, setShowInstall] = React.useState(false);
   const [sharedTrip, setSharedTrip] = React.useState(()=>getSharedTripFromHash());
+  const [showDrawer, setShowDrawer] = React.useState(false); // IA Phase 2a: trips drawer
   // First-run welcome: only for fresh users (demo trips only), never over an invite link
   const [showWelcome, setShowWelcome] = React.useState(()=>{
     try { return !localStorage.getItem('locale_welcome_seen') && !getSharedTripFromHash() && loadTrips().every(t=>t.isDemo); } catch(e){ return false; }
@@ -6433,6 +6517,16 @@ function App() {
           onDismiss={dismissWelcome}
         />
       )}
+      {showDrawer && (
+        <TripsDrawer
+          trips={trips}
+          activeId={view==='detail'?activeTripId:null}
+          onClose={()=>setShowDrawer(false)}
+          onSelect={(id)=>{ setActiveTripId(id); setView('detail'); setShowDrawer(false); window.scrollTo({top:0}); }}
+          onNew={()=>{ setShowDrawer(false); setShowNew(true); }}
+          onAll={()=>{ setView('dashboard'); setShowDrawer(false); }}
+        />
+      )}
       {offline && (
         <div className="offline-banner">📡 Offline — your trips are saved and fully accessible</div>
       )}
@@ -6447,10 +6541,10 @@ function App() {
       )}
       <main id="main-content">
       {view==='dashboard' && (
-        <Dashboard trips={trips} cloudUser={cloudUser} setCloudUser={setCloudUser} onSelectTrip={(id)=>{setActiveTripId(id);setView('detail');}} onNewTrip={()=>setShowNew(true)}/>
+        <Dashboard trips={trips} cloudUser={cloudUser} setCloudUser={setCloudUser} onSelectTrip={(id)=>{setActiveTripId(id);setView('detail');}} onNewTrip={()=>setShowNew(true)} onOpenDrawer={()=>setShowDrawer(true)}/>
       )}
       {view==='detail' && activeTrip && (
-        <TripDetail trip={activeTrip} onBack={()=>setView('dashboard')} onUpdateTrip={handleUpdateTrip} onDelete={handleDeleteTrip}/>
+        <TripDetail trip={activeTrip} onBack={()=>setView('dashboard')} onUpdateTrip={handleUpdateTrip} onDelete={handleDeleteTrip} onOpenDrawer={()=>setShowDrawer(true)}/>
       )}
       </main>
       {showNew && <NewTripSheet onClose={()=>setShowNew(false)} onSave={handleNewTrip}/>}
