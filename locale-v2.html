@@ -1710,8 +1710,8 @@ const RAW_MOCK_TRIPS=[
    {id:'l3',name:'Hôtel du Petit Moulin',address:'29/31 Rue de Poitou, 75003 Paris',checkIn:'2026-09-21',checkOut:'2026-09-26'},
   ],
   collaborators:[
-   {id:'c4',name:'Stephanie',email:'s.borboa9@gmail.com',role:'owner',avatarColor:AVATAR_COLORS[3]},
-   {id:'c5',name:'Alex M.',email:'alex@example.com',role:'editor',avatarColor:AVATAR_COLORS[4]},
+   {id:'c4',name:'Stephanie',email:'s.borboa9@gmail.com',role:'owner',avatarColor:AVATAR_COLORS[3],rsvp:'going'},
+   {id:'c5',name:'Alex M.',email:'alex@example.com',phone:'512-555-0134',role:'editor',avatarColor:AVATAR_COLORS[4]},
   ],
   days:[
    {id:'lp-1',date:'2026-09-17',label:'Day 1 — London Arrival',destinationId:'d2',
@@ -1890,7 +1890,31 @@ function normalizeTrip(t){
     pinnedIdeas, mustEvents,
   };
 }
-const MOCK_TRIPS=RAW_MOCK_TRIPS.map(t=>normalizeTrip(t));
+// Persona demo: the Dreamer/First-timer — an idea trip with recommendations + pins, no dates.
+const RAW_MOCK_LISBON={
+  id:'mock-lisbon', name:'Lisbon…? 🇵🇹', isDemo:true, occasion:'leisure', honoree:null,
+  planningStage:'idea', travelPeriod:{depart:'',return:''}, travelerPassportCountry:'US',
+  destinations:[{id:'lz1',city:'Lisbon',country:'Portugal',countryCode:'PT',isInternational:true,arrivalDate:'',departureDate:''}],
+  collaborators:[{id:'lc1',name:'You',email:'',role:'owner',avatarColor:AVATAR_COLORS[0],rsvp:'going'}],
+  days:[], checklist:[], flights:[], lodging:[],
+  pinnedIdeas:[
+    {id:'lp1', text:'Stay in Príncipe Real — leafy, walkable, great food, less touristy than Baixa'},
+    {id:'lp2', text:'Go late May — jacaranda season, warm but before the summer crowds'},
+    {id:'lp3', text:'Day trip to Sintra — Pena Palace early, before the tour buses'}
+  ],
+  ideation:{
+    destination_summary:'Lisbon rewards wanderers: tiled streets, miradouro sunset views, and a food scene that punches way above its price point. Great first European city — walkable, friendly, easy transit.',
+    best_time:{when:'Late May to mid June', why:'Jacaranda blooms, 75° days, and shoulder-season prices before the July crowds arrive.'},
+    neighborhoods:[
+      {name:'Príncipe Real', why:'Leafy squares, indie shops, standout restaurants', stay_here_if:'You want charm and calm within a 10-minute walk of everything.'},
+      {name:'Alfama', why:'The postcard Lisbon — fado, alleys, castle views', stay_here_if:'Atmosphere beats convenience and you don\'t mind hills.'},
+      {name:'Baixa/Chiado', why:'Dead center, flat, transit-rich', stay_here_if:'First visit and you want zero-friction logistics.'}
+    ],
+    day_trips:[{name:'Sintra', why:'Fairy-tale palaces 40 minutes away — the one everyone regrets skipping'},{name:'Cascais', why:'Beach afternoon on the train line'}],
+    tips:['Book Pena Palace tickets online before you go','Wear real shoes — the calçada cobbles are slippery','Dinner starts late; 8pm is early']
+  }
+};
+const MOCK_TRIPS=[...RAW_MOCK_TRIPS, RAW_MOCK_LISBON].map(t=>normalizeTrip(t));
 
 // ── STORAGE ────────────────────────────────────────────────────────────────────
 const SK='locale_v4';
@@ -1899,7 +1923,13 @@ function loadTrips(){
     const r=localStorage.getItem(SK);
     if(r){
       const parsed=JSON.parse(r);
-      return parsed.map(normalizeTrip);
+      const trips=parsed.map(normalizeTrip);
+      // Demo refresh: users seeded before the persona demos existed get the Lisbon idea demo too
+      if(trips.some(t=>t.isDemo) && !trips.some(t=>t.id==='mock-lisbon') && trips.every(t=>t.isDemo)){
+        trips.push(normalizeTrip(RAW_MOCK_LISBON));
+        try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
+      }
+      return trips;
     }
   }catch(e){}
   localStorage.setItem(SK,JSON.stringify(MOCK_TRIPS));
@@ -3418,6 +3448,94 @@ function GetReadyView({trip, onUpdate, onUpdateTrip}){
   );
 }
 
+// ── IA Phase 2b: NEXT 3 THINGS — the Overview lead, per approved wireframes ────
+// Three states: planned (phase-aware priorities) · just-created empty (3 quick wins) · idea (pins + recs + make-it-real)
+function CalendarExportCard({trip}){
+  return (
+    <div className="card" style={{padding:'13px 16px',marginBottom:12,display:'flex',alignItems:'center',gap:12}}>
+      <span style={{fontSize:'1.25rem'}} aria-hidden="true">📅</span>
+      <div style={{flex:1,minWidth:0}}>
+        <p style={{fontWeight:600,fontSize:'.86rem'}}>Add itinerary to your phone calendar</p>
+        <p style={{fontSize:'.74rem',color:'var(--color-ink-light)',lineHeight:1.45}}>Every day and event — Apple, Google, Outlook. Re-export any time the plan changes.</p>
+      </div>
+      <button className="btn btn-secondary btn-sm" onClick={()=>downloadTripICS(trip)} style={{whiteSpace:'nowrap'}}>Export</button>
+    </div>
+  );
+}
+function NextThreeThings({trip, isOwner, onGoTab, onShare}){
+  const K = ({children}) => <p className="section-label" style={{marginBottom:10}}>{children}</p>;
+  const Row = ({emoji,title,sub,onClick,cta}) => (
+    <div className="card" role={onClick?'button':undefined} tabIndex={onClick?0:undefined} onClick={onClick}
+      onKeyDown={e=>{if(onClick&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onClick();}}}
+      style={{display:'flex',alignItems:'center',gap:12,cursor:onClick?'pointer':'default'}}>
+      <span style={{fontSize:'1.2rem',flexShrink:0}} aria-hidden="true">{emoji}</span>
+      <div style={{flex:1,minWidth:0}}>
+        <p style={{fontWeight:600,fontSize:'.88rem'}}>{title}</p>
+        {sub && <p style={{fontSize:'.75rem',color:'var(--color-ink-light)',lineHeight:1.45}}>{sub}</p>}
+      </div>
+      {cta && <span className="btn btn-secondary btn-sm" style={{whiteSpace:'nowrap'}}>{cta}</span>}
+    </div>
+  );
+
+  if(trip.planningStage==='idea'){
+    const pins = trip.pinnedIdeas||[];
+    return (
+      <div style={{marginBottom:16}}>
+        <K>Just an idea · no dates yet — and that's fine</K>
+        <Row emoji="🧠" title="Get recommendations" sub="Best time to go, where to stay, day trips — tuned to your taste" onClick={()=>onGoTab('days')} cta="Ask AI"/>
+        {pins.length>0 && <K>📌 Pinned so far · share these for crew buy-in</K>}
+        {pins.slice(0,3).map(p=><Row key={p.id} emoji="📌" title={p.text}/>)}
+        <Row emoji="🔗" title="Share the idea with your crew" sub="They can browse everything — no account needed" onClick={onShare} cta="Share"/>
+        <div className="card" style={{display:'flex',alignItems:'center',gap:12,borderColor:'var(--color-accent)',borderStyle:'dashed'}}>
+          <span style={{fontSize:'1.2rem'}} aria-hidden="true">🚀</span>
+          <div style={{flex:1,minWidth:0}}>
+            <p style={{fontWeight:600,fontSize:'.88rem'}}>Ready to make it real?</p>
+            <p style={{fontSize:'.75rem',color:'var(--color-ink-light)'}}>Add dates below — the full planner unlocks and your pins feed the itinerary.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const stops=(trip.days||[]).reduce((n,d)=>n+(d.activities||[]).length+(d.restaurants||[]).length,0);
+  if(stops===0){
+    return (
+      <div style={{marginBottom:16}}>
+        <K>Let's set this trip up · 3 quick wins</K>
+        <div className="card" role="button" tabIndex={0} onClick={()=>onGoTab('days')}
+          onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onGoTab('days');}}}
+          style={{display:'flex',alignItems:'center',gap:12,cursor:'pointer',borderColor:'var(--color-accent)',borderStyle:'dashed'}}>
+          <span style={{fontSize:'1.2rem'}} aria-hidden="true">✨</span>
+          <div style={{flex:1,minWidth:0}}>
+            <p style={{fontWeight:600,fontSize:'.88rem'}}>Draft your days with AI</p>
+            <p style={{fontSize:'.75rem',color:'var(--color-ink-light)'}}>Free, ~20 seconds, fully editable after.</p>
+          </div>
+          <span className="btn btn-primary btn-sm" style={{whiteSpace:'nowrap'}}>Generate</span>
+        </div>
+        <Row emoji="📄" title="Upload hotel or flight confirmations" sub="Locale reads the PDF or screenshot and adds them for you" onClick={()=>onGoTab('days')}/>
+        <Row emoji="👥" title="Invite your crew" sub="Email or text — they see everything, no account needed" onClick={()=>onGoTab('crew')}/>
+      </div>
+    );
+  }
+
+  const items=[];
+  const daysToGo=Math.max(0, Math.ceil((new Date(trip.startDate+'T12:00:00')-new Date())/86400000));
+  const due=(trip.checklist||[]).filter(i=>!i.completed && typeof i.daysBeforeTrip==='number' && daysToGo<=i.daysBeforeTrip)
+    .sort((a,b)=>b.daysBeforeTrip-a.daysBeforeTrip);
+  due.slice(0,2).forEach(i=>items.push({emoji:'✅',title:i.label,sub:`Due ~${i.daysBeforeTrip} days out · ${daysToGo} to go`,tab:'getready'}));
+  const pending=(trip.collaborators||[]).filter(m=>(m.rsvp||'pending')==='pending');
+  if(pending.length) items.push({emoji:'👥',title:`${pending.length} crew still pending RSVP`,sub:pending.map(m=>m.name).slice(0,3).join(', ')+' · tap to invite',tab:'crew'});
+  if(!(trip.flights||[]).length) items.push({emoji:'✈️',title:'Add your flights',sub:'Upload a confirmation — Locale reads it for you',tab:'days'});
+  if(!(trip.lodging||[]).length) items.push({emoji:'🏨',title:"Add where you're staying",sub:'Upload the booking confirmation',tab:'days'});
+  if(items.length===0) items.push({emoji:'🎉',title:"You're in great shape",sub:'Nothing urgent — browse your days or fine-tune the plan',tab:'days'});
+  return (
+    <div style={{marginBottom:16}}>
+      <K>Next {Math.min(3,items.length)===1?'thing':Math.min(3,items.length)+' things'} · {daysToGo>0?daysToGo+' days to go':'trip time'}</K>
+      {items.slice(0,3).map((it,i)=><Row key={i} emoji={it.emoji} title={it.title} sub={it.sub} onClick={()=>onGoTab(it.tab)}/>)}
+    </div>
+  );
+}
+
 // ── AT A GLANCE ────────────────────────────────────────────────────────────────
 function AtAGlance({trip, onStartPlanning}){
   const allCount=trip.days.reduce((n,d)=>n+(d.activities||[]).length+(d.restaurants||[]).length,0);
@@ -3431,21 +3549,10 @@ function AtAGlance({trip, onStartPlanning}){
           <button onClick={()=>onStartPlanning&&onStartPlanning()} className="btn btn-primary" style={{fontSize:'.92rem',padding:'12px 26px'}}>✨ Generate my itinerary</button>
         </div>
       ):(
-        <React.Fragment>
-        <div className="card" style={{padding:16,marginBottom:10}}>
+        <div className="card" style={{padding:16,marginBottom:16}}>
           <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:4}}>{trip.days.length} days · {allCount} stops planned</p>
           <p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {formatDateShort(trip.startDate)} – {formatDateShort(trip.endDate)}</p>
         </div>
-        {/* IA Phase 2a: calendar export stays impossible to miss (also in the header 📅) */}
-        <div className="card" style={{padding:'13px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:12}}>
-          <span style={{fontSize:'1.25rem'}} aria-hidden="true">📅</span>
-          <div style={{flex:1,minWidth:0}}>
-            <p style={{fontWeight:600,fontSize:'.86rem'}}>Add itinerary to your phone calendar</p>
-            <p style={{fontSize:'.74rem',color:'var(--color-ink-light)',lineHeight:1.45}}>Every day and event — Apple, Google, Outlook. Re-export any time the plan changes.</p>
-          </div>
-          <button className="btn btn-secondary btn-sm" onClick={()=>downloadTripICS(trip)} style={{whiteSpace:'nowrap'}}>Export</button>
-        </div>
-        </React.Fragment>
       )}
       {trip.days.filter(d=>(d.activities||[]).length+(d.restaurants||[]).length>0).map(day=>{
         const items=[...(day.activities||[]).map(a=>({...a,_t:'activity'})),...(day.restaurants||[]).map(r=>({...r,_t:'restaurant'}))];
@@ -5880,7 +5987,10 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
       <div style={{maxWidth:720,margin:'0 auto',padding:'20px 16px 80px'}}>
         {activeTab==='overview' && (
           <div>
-            {/* ── Edit Trip Dates (owner-only) ── */}
+            {/* IA Phase 2b — Overview per approved wireframes: Next 3 → calendar → stops → glance → owner tools */}
+            <NextThreeThings trip={trip} isOwner={isOwner} onGoTab={(t)=>{setActiveTab(t);track('tab_view',{tab:t,via:'next3'});window.scrollTo({top:0});}} onShare={()=>setShowShare(true)}/>
+            {(trip.days||[]).some(d=>(d.activities||[]).length||(d.restaurants||[]).length) && trip.planningStage!=='idea' && <CalendarExportCard trip={trip}/>}
+            {/* ── Edit Trip Dates (owner-only) — sits right under Next-3; for idea trips it IS the unlock ── */}
             {isOwner && <TripDateEditor trip={trip} onUpdateTrip={onUpdateTrip}/>}
             {/* Trip Color Picker — collapsed by default (owner-only) */}
             {isOwner && <details style={{background:'var(--color-surface)',borderRadius:12,border:'1px solid var(--color-border)',marginBottom:12}}>
@@ -5916,7 +6026,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
                 </div>
               ))}
             </div>
-            <AtAGlance trip={trip} onStartPlanning={()=>setActiveTab('days')}/>
+            {(trip.days||[]).some(d=>(d.activities||[]).length||(d.restaurants||[]).length) && <AtAGlance trip={trip} onStartPlanning={()=>setActiveTab('days')}/>}
             <CurrencyConverter destinations={trip.destinations}/>
           </div>
         )}
