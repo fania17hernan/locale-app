@@ -1528,11 +1528,11 @@ function getCountdownInfo(d){
   const dep=new Date(d+'T00:00:00');
   const diff=Math.round((dep-today)/86400000);
   if(diff>30)return{label:`✈️ ${diff} days to go`,cls:'countdown-far',days:diff,urgent:false};
-  if(diff>7)return{label:`🗓️ ${diff} days · start packing!`,cls:'countdown-mid',days:diff,urgent:false};
+  if(diff>7)return{label:`${diff} days · start packing`,cls:'countdown-mid',days:diff,urgent:false};
   if(diff>1)return{label:`🎉 Almost time! ${diff} days`,cls:'countdown-soon',days:diff,urgent:true};
   if(diff===1)return{label:'🌅 Tomorrow! Final check!',cls:'countdown-soon',days:1,urgent:true};
   if(diff===0)return{label:"✈️ Today's the day!",cls:'countdown-today',days:0,urgent:true};
-  return{label:`📸 ${new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'})}`,cls:'countdown-past',days:diff,urgent:false};
+  return{label:new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'}),cls:'countdown-past',days:diff,urgent:false};
 }
 // Live visa/entry data via the entry-requirements edge function (Travel Buddy, server-cached 7d).
 // Client also caches per passport→destination pair for 7 days so trips don't re-hit the function.
@@ -2124,8 +2124,8 @@ function CurrencyConverter({destinations}){
   useEffect(()=>{fromUSD('100');},[]);
   if(!dests.length)return null;
   return(
-    <div className="card" style={{padding:'16px',marginBottom:'12px'}}>
-      <p className="section-label">💱 Currency Converter</p>
+    <div style={{padding:'18px 4px 8px',borderTop:'1px solid var(--color-border)',marginBottom:12}}>
+      <p className="section-label">Currency</p>
       <div className="currency-row">
         <span style={{fontSize:'1.1rem',flexShrink:0}}>🇺🇸</span>
         <span style={{width:36,fontSize:'.8rem',fontWeight:600,color:'var(--color-ink-light)',flexShrink:0}}>USD</span>
@@ -2352,7 +2352,7 @@ function ChecklistView({trip,onUpdate,onUpdateTrip}){
     }catch(err){ showToast('Upload failed: '+err.message,'error',5000); }
     finally{ setUploadingId(null); }
   };
-  const catLabels={documents:'📄 Documents',bookings:'✈️ Bookings',finance:'💰 Finance',tech:'📱 Tech',health:'🏥 Health',packing:'🧳 Packing',custom:'⭐ Custom'};
+  const catLabels={documents:'Documents',bookings:'Bookings',finance:'Finance',tech:'Tech',health:'Health',packing:'Packing',custom:'Custom'};
   const catOrder=['documents','bookings','finance','tech','health','packing','custom'];
   const done=checklist.filter(i=>i.completed).length,total=checklist.length;
   const pct=total>0?Math.round((done/total)*100):0;
@@ -2402,7 +2402,7 @@ function ChecklistView({trip,onUpdate,onUpdateTrip}){
                           <a href={burl} target="_blank" rel="noopener noreferrer"
                             className="btn btn-primary btn-sm"
                             style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:'.75rem',padding:'4px 10px',borderRadius:20,textDecoration:'none'}}>
-                            {item.category==='bookings'&&(item.label||'').toLowerCase().includes('reservation')?'🍽️ Book reservation →':'🎟️ Book tickets →'}
+                            {item.category==='bookings'&&(item.label||'').toLowerCase().includes('reservation')?'Book reservation →':'Book tickets →'}
                           </a>
                         </div>
                       ):null;
@@ -3078,30 +3078,32 @@ function ArrivalsBoard({trip, date, mode}){
   const last=flights[flights.length-1];
   let callout=null, warn=false;
   if(flights.length>1){
-    if(ports.length>1){ callout='Different '+(arrivalsMode?'arrival':'departure')+' points ('+ports.join(' / ')+') · plan transfers separately.'; warn=true; }
+    if(ports.length>1){ callout='DIFFERENT '+(arrivalsMode?'ARRIVAL':'DEPARTURE')+' POINTS ('+ports.join(' / ')+') · PLAN TRANSFERS SEPARATELY'; warn=true; }
     else if(times.length>1){
       const span=Math.max(...times)-Math.min(...times);
       callout = arrivalsMode
-        ? ("Everyone's in by "+fmtFlightTimeISO(last[key])+(span>=90?(' · arrivals span '+gapLabel(span)+', early landers can drop bags first'):' · good time to meet up'))
-        : ('Last one out at '+fmtFlightTimeISO(last[key]));
+        ? ("EVERYONE IN BY "+((last[key].match(/T(\d{2}:\d{2})/)||[])[1]||'')+(span>=90?(' · SPAN '+gapLabel(span).toUpperCase()+' · EARLY LANDERS DROP BAGS'):' · MEET AT THE HOTEL'))
+        : ('LAST ONE OUT AT '+((last[key].match(/T(\d{2}:\d{2})/)||[])[1]||''));
     }
   }
+  // Airport-board treatment (design brief): dark surface, 24h tabular times in
+  // warm amber, one line per flight. 50 years of airport signage solved this layout.
+  const t24=(iso)=>((iso||'').match(/T(\d{2}:\d{2})/)||[])[1]||'—';
   return (
-    <div className="card" style={{marginBottom:16}}>
-      <p className="section-label" style={{marginBottom:8}}>{arrivalsMode?'Arrivals':'Departures'} · {formatDateShort(date)}</p>
+    <div style={{background:'#16130F',borderRadius:'var(--radius-card)',padding:'18px 20px',marginBottom:16,boxShadow:'var(--shadow-card)'}}>
+      <p style={{fontFamily:'var(--font-mono)',fontSize:'.62rem',fontWeight:500,letterSpacing:'.18em',textTransform:'uppercase',color:'#8C857A',marginBottom:12}}>{arrivalsMode?'Arrivals':'Departures'} · {(trip.destinations||[])[0]?.city||''} · {formatDateShort(date)}</p>
       {rows.map(({f,who})=>(
-        <div key={f.id} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 0',borderBottom:'1px solid var(--color-border)'}}>
-          <span style={{fontFamily:'var(--font-mono)',fontWeight:700,fontSize:'.85rem',minWidth:72,flexShrink:0}}>{fmtFlightTimeISO(f[key])||'—'}</span>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:'.85rem',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{f.flightNumber||f.airline||'Flight'} · {(f.departureAirport||'?')} → {(f.arrivalAirport||'?')}</div>
-            <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{(f.travelerIds||[]).length? who.map(m=>m.name).join(', ') : 'Whole group'}</div>
+        <div key={f.id} style={{display:'grid',gridTemplateColumns:'64px 1fr auto',gap:12,alignItems:'baseline',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
+          <span style={{fontFamily:'var(--font-mono)',fontWeight:600,fontSize:'.95rem',color:'#FFD9A8',fontVariantNumeric:'tabular-nums'}}>{t24(f[key])}</span>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:'.85rem',fontWeight:500,color:'#F5F1E9',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{f.flightNumber||f.airline||'Flight'} · {(arrivalsMode?(f.departureAirport||'?'):(f.arrivalAirport||'?'))}<span style={{color:'#8C857A'}}>{(f.travelerIds||[]).length? ' · '+who.map(m=>m.name).join(', ') : ' · Whole group'}</span></div>
           </div>
-          <span style={{display:'flex',flexShrink:0,paddingLeft:6}}>{who.slice(0,4).map(m=>(
-            <span key={m.id} title={m.name} style={{width:22,height:22,borderRadius:'50%',background:m.avatarColor,color:'#0E1117',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'.6rem',marginLeft:-6,boxShadow:'0 0 0 2px var(--color-surface)'}}>{(m.name||'?').charAt(0).toUpperCase()}</span>
+          <span style={{display:'flex',flexShrink:0}}>{who.slice(0,4).map(m=>(
+            <span key={m.id} title={m.name} style={{width:20,height:20,borderRadius:'50%',background:m.avatarColor,color:'#0E1117',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'.58rem',marginLeft:-6,boxShadow:'0 0 0 2px #16130F'}}>{(m.name||'?').charAt(0).toUpperCase()}</span>
           ))}</span>
         </div>
       ))}
-      {callout && <p style={{fontSize:'.78rem',marginTop:10,fontWeight:600,color:warn?'var(--color-flag)':'var(--color-success)'}}>{warn?'⚠️ ':'✅ '}{callout}</p>}
+      {callout && <p style={{fontFamily:'var(--font-mono)',fontSize:'.68rem',letterSpacing:'.04em',marginTop:12,color:warn?'#FF9D8F':'#5ED0B8'}}>{callout}</p>}
     </div>
   );
 }
@@ -3598,8 +3600,8 @@ function GetReadyView({trip, onUpdate, onUpdateTrip}){
   return (
     <div>
       <div style={{display:'flex',gap:8,padding:'0 16px 14px'}}>
-        <button onClick={()=>setSection('checklist')} className={`pill ${section==='checklist'?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>✅ Checklist{total?` · ${done}/${total}`:''}</button>
-        <button onClick={()=>setSection('packing')} className={`pill ${section==='packing'?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>🧳 Packing{packedInfo?` · ${packedInfo}`:''}</button>
+        <button onClick={()=>setSection('checklist')} className={`pill ${section==='checklist'?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>Checklist{total?` · ${done}/${total}`:''}</button>
+        <button onClick={()=>setSection('packing')} className={`pill ${section==='packing'?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.85rem'}}>Packing{packedInfo?` · ${packedInfo}`:''}</button>
       </div>
       {section==='checklist' ? <ChecklistView trip={trip} onUpdate={onUpdate} onUpdateTrip={onUpdateTrip}/> : <PackingView trip={trip} onUpdateTrip={onUpdateTrip}/>}
     </div>
@@ -4603,7 +4605,7 @@ Rules:
           </Card>
           {result.best_time?.when && (
             <Card>
-              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:6}}>🗓 Best time to go</p>
+              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:6}}>Best time to go</p>
               <div style={{display:'flex',alignItems:'flex-start',gap:6}}>
                 <p style={{fontWeight:600,fontSize:'.95rem',marginBottom:4,flex:1}}>{result.best_time.when}</p>
                 <PinBtn text={`Go ${result.best_time.when} · ${result.best_time.why}`} tag="Timing" title={result.best_time.when} detail={result.best_time.why}/>
@@ -4613,7 +4615,7 @@ Rules:
           )}
           {result.neighborhoods?.length>0 && (
             <Card>
-              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:10}}>📍 Where to stay</p>
+              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:10}}>Where to stay</p>
               {result.neighborhoods.map((n,i)=>(
                 <div key={i} style={{paddingBottom:10,marginBottom:10,borderBottom:i<result.neighborhoods.length-1?'1px solid var(--color-border)':'none'}}>
                   <div style={{display:'flex',alignItems:'flex-start',gap:6}}>
@@ -4628,7 +4630,7 @@ Rules:
           )}
           {result.day_trips?.length>0 && (
             <Card>
-              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:8}}>🚆 Worth a day trip</p>
+              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:8}}>Worth a day trip</p>
               {result.day_trips.map((d,i)=>(
                 <div key={i} style={{display:'flex',alignItems:'flex-start',gap:6,marginBottom:4}}>
                   <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6,flex:1}}><strong>{d.name}</strong> · {d.why}</p>
@@ -4639,13 +4641,13 @@ Rules:
           )}
           {result.tips?.length>0 && (
             <Card>
-              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:8}}>💡 For you specifically</p>
+              <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:8}}>For you specifically</p>
               {result.tips.map((t,i)=><p key={i} style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6,marginBottom:5}}>· {t}</p>)}
             </Card>
           )}
           <div style={{display:'flex',gap:8,marginTop:14}}>
-            <button className="btn btn-secondary" style={{flex:1}} onClick={()=>{onUpdateTrip({...trip,ideation:null});}}>↺ Start over</button>
-            <button className="btn btn-primary" style={{flex:2}} onClick={()=>{onUpdateTrip({...trip,planningStage:'booked'});}}>🎟️ I've booked it · plan my days</button>
+            <button className="btn btn-secondary" style={{flex:1}} onClick={()=>{onUpdateTrip({...trip,ideation:null});}}>Start over</button>
+            <button className="btn btn-primary" style={{flex:2}} onClick={()=>{onUpdateTrip({...trip,planningStage:'booked'});}}>I've booked it · plan my days</button>
           </div>
           <p style={{textAlign:'center',fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:10}}>Booking switches this trip to itinerary mode · upload your confirmations there.</p>
         </div>
@@ -5106,8 +5108,8 @@ Only include fields you can actually read from the document. Use null for anythi
               <p style={{color:'rgba(255,255,255,.75)',fontSize:'.83rem'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {nightCount} nights</p>
             </div>
             <div style={{display:'flex',gap:6}}>
-              <button onClick={()=>setShowQuiz(true)} title="Edit your taste profile" style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 10px',color:'rgba(255,255,255,.8)',fontSize:'.72rem',cursor:'pointer'}}>🧭 Taste</button>
-              <button onClick={()=>setShowKeyInput(true)} title="Optional: use your own Anthropic API key for unlimited generations" style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 10px',color:'rgba(255,255,255,.8)',fontSize:'.72rem',cursor:'pointer'}}>{apiKey ? '🔑 Your key' : '⚙︎'}</button>
+              <button onClick={()=>setShowQuiz(true)} title="Edit your taste profile" style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 10px',color:'rgba(255,255,255,.8)',fontSize:'.72rem',cursor:'pointer'}}>Taste</button>
+              <button onClick={()=>setShowKeyInput(true)} title="Optional: use your own Anthropic API key for unlimited generations" style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 10px',color:'rgba(255,255,255,.8)',fontSize:'.72rem',cursor:'pointer'}}>{apiKey ? 'Your key' : '⚙︎'}</button>
             </div>
           </div>
           {!apiKey && ownerOn && (
@@ -6244,8 +6246,8 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
             {/* ── Edit Trip Dates (owner-only) · sits right under Next-3; for idea trips it IS the unlock ── */}
             {isOwner && <TripDateEditor trip={trip} onUpdateTrip={onUpdateTrip}/>}
             {/* Trip Color Picker · collapsed by default (owner-only) */}
-            {isOwner && <details style={{background:'var(--color-surface)',borderRadius:12,border:'1px solid var(--color-border)',marginBottom:12}}>
-              <summary style={{listStyle:'none',cursor:'pointer',padding:'14px 18px',fontSize:'.75rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',fontWeight:600}}>🎨 Trip color</summary>
+            {isOwner && <details style={{marginBottom:12,borderTop:'1px solid var(--color-border)'}}>
+              <summary style={{listStyle:'none',cursor:'pointer',padding:'14px 4px',fontFamily:'var(--font-mono)',fontSize:'.66rem',color:'var(--color-ink-muted)',letterSpacing:'.14em',textTransform:'uppercase',fontWeight:500}}>Trip color</summary>
               <div style={{display:'flex',gap:8,flexWrap:'wrap',padding:'0 18px 16px'}}>
                 {[
                   {key:'generic',label:'Ocean',color:'#2B5F6E'},
@@ -6545,7 +6547,7 @@ function Dashboard({trips, onSelectTrip, onNewTrip, cloudUser, setCloudUser, onO
               <div style={{marginTop:28}}>
                 <button onClick={()=>setShowPast(s=>!s)}
                   style={{width:'100%',background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:10,padding:'4px 0',marginBottom:showPast?14:0}}>
-                  <span style={{fontFamily:'var(--font-display)',fontSize:'1.1rem',fontWeight:600,color:'var(--color-ink-light)'}}>📸 Past trips</span>
+                  <span style={{fontFamily:'var(--font-display)',fontSize:'1.1rem',fontWeight:600,color:'var(--color-ink-light)'}}>Past trips</span>
                   <span className="pill pill-neutral" style={{fontSize:'.7rem'}}>{past.length}</span>
                   <span style={{flex:1,height:1,background:'var(--color-border)'}}/>
                   <span style={{fontSize:'.75rem',color:'var(--color-ink-muted)'}}>{showPast?'▲ Hide':'▼ Show'}</span>
