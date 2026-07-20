@@ -3731,7 +3731,8 @@ function PinReactions({pin, myMemberId, onReact}){
             onClick={()=>canReact&&onReact(pin.id, r.key)}
             aria-pressed={on} aria-label={`${r.label}${n?` · ${n}`:''}`}
             title={canReact?(on?'Tap to undo':r.label):'Join the trip to react'}
-            style={{display:'inline-flex',alignItems:'center',gap:6,padding:'4px 10px',
+            style={{display:'inline-flex',alignItems:'center',justifyContent:'center',gap:6,
+              padding:'0 14px',minHeight:44,minWidth:44,
               borderRadius:'var(--radius-ctl)',fontSize:'.74rem',fontWeight:600,lineHeight:1.4,
               cursor:canReact?'pointer':'default',
               border:'1px solid '+(on?'var(--color-accent)':'var(--color-border)'),
@@ -7648,7 +7649,8 @@ class ErrorBoundary extends React.Component {
 
   // ── NEW v1.1 (2.5): carrierInfo flight/train links ─
   assert('carrierInfo: Delta code → check-in', (()=>{const c=carrierInfo({airline:'Delta',flightNumber:'DL83'});return c.label==='Check in'&&/delta\.com/.test(c.url)&&!c.train;})());
-  assert('carrierInfo: Eurostar by name → manage booking (train)', (()=>{const c=carrierInfo({airline:'Eurostar',flightNumber:'ES9108'});return c.train&&/eurostar/.test(c.url)&&c.label==='Manage booking'&&c.track===null;})());
+  // Round 7 renamed this label to the universal-link wording · test was left stale until Round 12.
+  assert('carrierInfo: Eurostar by name → manage booking (train)', (()=>{const c=carrierInfo({airline:'Eurostar',flightNumber:'ES9108'});return c.train&&/eurostar/.test(c.url)&&c.label==='Open Eurostar'&&c.track===null;})());
   assert('carrierInfo: British Airways code → check-in', /britishairways/.test(carrierInfo({airline:'British Airways',flightNumber:'BA286'}).url));
   assert('carrierInfo: unknown airline → track flight', (()=>{const c=carrierInfo({airline:'Mystery Air',flightNumber:'ZZ100'});return c.label==='Track flight'&&/flightaware/.test(c.url);})());
   assert('carrierInfo: name fallback when code unknown', /united\.com/.test(carrierInfo({airline:'United Airlines',flightNumber:'X1'}).url));
