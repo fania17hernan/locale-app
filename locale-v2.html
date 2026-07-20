@@ -1933,6 +1933,12 @@ function loadTrips(){
         trips.push(normalizeTrip(RAW_MOCK_LISBON));
         try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
       }
+      // Round 9 demo refresh: pre-sweep seeds still carry em dashes in the Lisbon pins
+      const lb=trips.findIndex(t=>t.id==='mock-lisbon' && t.isDemo && JSON.stringify(t.pinnedIdeas||[]).includes('\u2014'));
+      if(lb>=0 && trips.every(t=>t.isDemo)){
+        trips[lb]=normalizeTrip(RAW_MOCK_LISBON);
+        try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
+      }
       // Phase 2c demo refresh: older seeds lack per-traveler flights · refresh the organizer demo so the arrivals board shows
       const lpIdx=trips.findIndex(t=>t.id==='mock-lp' && t.isDemo && !(t.flights||[]).some(f=>(f.travelerIds||[]).length));
       if(lpIdx>=0 && trips.every(t=>t.isDemo)){
