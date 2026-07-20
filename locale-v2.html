@@ -1388,7 +1388,7 @@ function buildTripICS(trip){
     push({uid:f.id, allDay:false, start, end,
       summary:`✈️ ${f.airline||'Flight'} ${f.flightNumber||''}`.trim(),
       location:[f.departureAirport,f.arrivalAirport].filter(Boolean).join(' → '),
-      desc:[f.confirmationNumber&&('Confirmation: '+f.confirmationNumber), f.seatNumber&&('Seat '+f.seatNumber), f.notes].filter(Boolean).join('\n')});
+      desc:[(f.travelerIds||[]).length?('Travelers: '+flightTravelers(trip,f).map(m=>m.name).join(', ')):null, f.confirmationNumber&&('Confirmation: '+f.confirmationNumber), f.seatNumber&&('Seat '+f.seatNumber), f.notes].filter(Boolean).join('\n')});
   });
   // Day stops
   (trip.days||[]).forEach(day=>{
@@ -1701,7 +1701,8 @@ const RAW_MOCK_TRIPS=[
    {id:'d3',city:'Paris',country:'France',countryCode:'FR',isInternational:true,arrivalDate:'2026-09-21',departureDate:'2026-09-26'},
   ],
   flights:[
-   {id:'f1',direction:'outbound',airline:'Delta',flightNumber:'DL5996',departureAirport:'JFK',arrivalAirport:'LHR',departureTime:'2026-09-17T08:15:00',arrivalTime:'2026-09-17T20:10:00',confirmationNumber:null,notes:''},
+   {id:'f1',direction:'outbound',airline:'Delta',flightNumber:'DL5996',departureAirport:'JFK',arrivalAirport:'LHR',departureTime:'2026-09-17T08:15:00',arrivalTime:'2026-09-17T20:10:00',confirmationNumber:null,notes:'',travelerIds:['c4'],addedBy:'c4'},
+   {id:'f4',direction:'outbound',airline:'American',flightNumber:'AA6001',departureAirport:'PHX',arrivalAirport:'LHR',departureTime:'2026-09-17T09:05:00',arrivalTime:'2026-09-17T18:25:00',confirmationNumber:null,notes:'Lands first — will wait at arrivals',travelerIds:['c5'],addedBy:'c5'},
    {id:'f2',direction:'connecting',airline:'Eurostar',flightNumber:'ES9108',departureAirport:'London St Pancras',arrivalAirport:'Paris Gare du Nord',departureTime:'2026-09-21T09:24:00',arrivalTime:'2026-09-21T13:02:00',confirmationNumber:null,notes:'Book in advance — fills up fast'},
    {id:'f3',direction:'return',airline:'Delta',flightNumber:'DL83',departureAirport:'CDG',arrivalAirport:'JFK',departureTime:'2026-09-26T09:25:00',arrivalTime:'2026-09-26T12:30:00',confirmationNumber:null,notes:'Leave hotel 6:30am'},
   ],
@@ -1865,7 +1866,8 @@ function normalizeTrip(t){
   // Only treat as initialised if it actually has items
   const packingList = (Array.isArray(t.packingList) && t.packingList.length > 0) ? t.packingList : null;
   const lodging = t.lodging || [];
-  const flights = t.flights || [];
+  // Phase 2c (additive): per-flight travelers. Empty travelerIds = whole-group flight (legacy).
+  const flights = (t.flights||[]).map(f=>({...f, travelerIds: Array.isArray(f.travelerIds)?f.travelerIds:[], addedBy: f.addedBy||null}));
   // v3→v4 (additive, v0.9): planningStage ('idea'|'booked') + ideation results
   const planningStage = t.planningStage === 'idea' ? 'idea' : 'booked';
   const ideation = t.ideation ?? null;
@@ -1928,6 +1930,12 @@ function loadTrips(){
       if(trips.some(t=>t.isDemo) && !trips.some(t=>t.id==='mock-lisbon') && trips.every(t=>t.isDemo)){
         trips.push(normalizeTrip(RAW_MOCK_LISBON));
         try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
+      }
+      // Phase 2c demo refresh: older seeds lack per-traveler flights — refresh the organizer demo so the arrivals board shows
+      const lpIdx=trips.findIndex(t=>t.id==='mock-lp' && t.isDemo && !(t.flights||[]).some(f=>(f.travelerIds||[]).length));
+      if(lpIdx>=0 && trips.every(t=>t.isDemo)){
+        const fresh=RAW_MOCK_TRIPS.find(r=>r.id==='mock-lp');
+        if(fresh){ trips[lpIdx]=normalizeTrip(fresh); try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){} }
       }
       return trips;
     }
@@ -3024,6 +3032,136 @@ function Avatar22({initial,color}){
 }
 
 // ── FLIGHTS STRIP — tappable pills that open an in-app flight detail (PRD 2.5) ────
+// ── CREW ARRIVALS (Phase 2c) ───────────────────────────────────────────
+// Crew members traveling from different cities each add their own flight; the app
+// consolidates them into arrivals/departures boards. travelerIds on a flight = who's
+// on it; empty = whole-group flight (legacy behavior, applies to everyone).
+function flightTravelers(trip, f){
+  const members=(trip.collaborators||[]);
+  if(!((f&&f.travelerIds)||[]).length) return members;
+  return members.filter(m=>f.travelerIds.includes(m.id));
+}
+function fmtFlightTimeISO(iso){ if(!iso) return ''; const m=/T(\d{2}):(\d{2})/.exec(iso); return m?fmt12h(m[1]+':'+m[2]):''; }
+function minutesOfISO(iso){ const m=/T(\d{2}):(\d{2})/.exec(iso||''); return m?(+m[1])*60+(+m[2]):null; }
+function gapLabel(mins){ if(mins==null||mins<=0) return ''; const h=Math.floor(mins/60), mm=mins%60; return (h?h+'h ':'')+(mm?mm+'m':(h?'':'0m')); }
+
+function ArrivalsBoard({trip, date, mode}){
+  if(!date) return null;
+  const arrivalsMode = mode!=='departures';
+  const key = arrivalsMode?'arrivalTime':'departureTime';
+  const portKey = arrivalsMode?'arrivalAirport':'departureAirport';
+  const flights=(trip.flights||[]).filter(f=>((f[key]||'').slice(0,10))===date)
+    .sort((a,b)=>(a[key]||'')<(b[key]||'')?-1:1);
+  if(!flights.length) return null;
+  const rows=flights.map(f=>({f, who:flightTravelers(trip,f)}));
+  const times=flights.map(f=>minutesOfISO(f[key])).filter(t=>t!=null);
+  const ports=[...new Set(flights.map(f=>String(f[portKey]||'').trim().toUpperCase()).filter(Boolean))];
+  const last=flights[flights.length-1];
+  let callout=null, warn=false;
+  if(flights.length>1){
+    if(ports.length>1){ callout='Different '+(arrivalsMode?'arrival':'departure')+' points ('+ports.join(' / ')+') \u2014 plan transfers separately.'; warn=true; }
+    else if(times.length>1){
+      const span=Math.max(...times)-Math.min(...times);
+      callout = arrivalsMode
+        ? ("Everyone's in by "+fmtFlightTimeISO(last[key])+(span>=90?(' \u2014 arrivals span '+gapLabel(span)+', early landers can drop bags first'):' \u2014 good time to meet up'))
+        : ('Last one out at '+fmtFlightTimeISO(last[key]));
+    }
+  }
+  return (
+    <div className="card" style={{marginBottom:16}}>
+      <p className="section-label" style={{marginBottom:8}}>{arrivalsMode?'\ud83d\udeec Arrivals':'\ud83d\udeeb Departures'} \u00b7 {formatDateShort(date)}</p>
+      {rows.map(({f,who})=>(
+        <div key={f.id} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 0',borderBottom:'1px solid var(--color-border)'}}>
+          <span style={{fontFamily:'var(--font-mono)',fontWeight:700,fontSize:'.85rem',minWidth:72,flexShrink:0}}>{fmtFlightTimeISO(f[key])||'\u2014'}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:'.85rem',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{f.flightNumber||f.airline||'Flight'} \u00b7 {(f.departureAirport||'?')} \u2192 {(f.arrivalAirport||'?')}</div>
+            <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{(f.travelerIds||[]).length? who.map(m=>m.name).join(', ') : 'Whole group'}</div>
+          </div>
+          <span style={{display:'flex',flexShrink:0,paddingLeft:6}}>{who.slice(0,4).map(m=>(
+            <span key={m.id} title={m.name} style={{width:22,height:22,borderRadius:'50%',background:m.avatarColor,color:'#0E1117',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'.6rem',marginLeft:-6,boxShadow:'0 0 0 2px var(--color-surface)'}}>{(m.name||'?').charAt(0).toUpperCase()}</span>
+          ))}</span>
+        </div>
+      ))}
+      {callout && <p style={{fontSize:'.78rem',marginTop:10,fontWeight:600,color:warn?'var(--color-flag)':'var(--color-success)'}}>{warn?'\u26a0\ufe0f ':'\u2705 '}{callout}</p>}
+    </div>
+  );
+}
+
+// Add/edit one flight for one (or more) travelers. Owner can tag anyone; a crew/viewer
+// member is locked to themselves \u2014 their save goes through the guarded set_my_flight RPC.
+function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDelete}){
+  const members=trip.collaborators||[];
+  const [airline,setAirline]=React.useState(flight?.airline||'');
+  const [flightNumber,setFlightNumber]=React.useState(flight?.flightNumber||'');
+  const [fromAp,setFromAp]=React.useState(flight?.departureAirport||'');
+  const [toAp,setToAp]=React.useState(flight?.arrivalAirport||'');
+  const [dep,setDep]=React.useState((flight?.departureTime||'').slice(0,16));
+  const [arr,setArr]=React.useState((flight?.arrivalTime||'').slice(0,16));
+  const [notes,setNotes]=React.useState(flight?.notes||'');
+  const [travelerIds,setTravelerIds]=React.useState(flight?(flight.travelerIds||[]):(member?[member.id]:[]));
+  const dlgRef=React.useRef(null);
+  useModalA11y(dlgRef, onClose, true);
+  const toggleTraveler=(id)=>setTravelerIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);
+  const save=()=>{
+    if(!fromAp.trim()||!toAp.trim()||!dep){ showToast('Add at least from, to, and a departure time.','warn'); return; }
+    onSave({
+      id: flight?.id||uuid(),
+      direction: flight?.direction||'outbound',
+      airline: airline.trim(), flightNumber: flightNumber.trim().toUpperCase(),
+      departureAirport: fromAp.trim(), arrivalAirport: toAp.trim(),
+      departureTime: dep.length===16?dep+':00':dep,
+      arrivalTime: arr?(arr.length===16?arr+':00':arr):'',
+      confirmationNumber: flight?.confirmationNumber||null,
+      notes: notes.trim(),
+      travelerIds: isOwner?travelerIds:(member?[member.id]:[]),
+      addedBy: flight?.addedBy || member?.id || null,
+    });
+  };
+  return (
+    <div className="overlay" ref={dlgRef} role="dialog" aria-modal="true" aria-label="Flight details" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet">
+        <div className="sheet-handle"/>
+        <div style={{padding:'16px 24px 8px',borderBottom:'1px solid var(--color-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <h2 className="font-display" style={{fontSize:'1.2rem',fontWeight:600}}>{flight?'Edit flight':(member?member.name+"'s flight":'Add a flight')}</h2>
+          <button className="btn btn-ghost" onClick={onClose} aria-label="Close">\u2715</button>
+        </div>
+        <div style={{padding:'20px 24px 32px',display:'flex',flexDirection:'column',gap:6}}>
+          <div style={{display:'flex',gap:8}}>
+            <input className="input" style={{flex:1,minWidth:0}} placeholder="Airline" value={airline} onChange={e=>setAirline(e.target.value)}/>
+            <input className="input" style={{flex:1,minWidth:0}} placeholder="Flight # (AA123)" value={flightNumber} onChange={e=>setFlightNumber(e.target.value)}/>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <input className="input" style={{flex:1,minWidth:0}} placeholder="From (AUS)" value={fromAp} onChange={e=>setFromAp(e.target.value)}/>
+            <input className="input" style={{flex:1,minWidth:0}} placeholder="To (LHR)" value={toAp} onChange={e=>setToAp(e.target.value)}/>
+          </div>
+          <label className="section-label" style={{marginTop:8}}>Departs (local time)</label>
+          <input className="input" type="datetime-local" value={dep} onChange={e=>setDep(e.target.value)}/>
+          <label className="section-label" style={{marginTop:8}}>Lands (local time)</label>
+          <input className="input" type="datetime-local" value={arr} onChange={e=>setArr(e.target.value)}/>
+          <input className="input" style={{marginTop:8}} placeholder="Notes (terminal, bags\u2026)" value={notes} onChange={e=>setNotes(e.target.value)}/>
+          {isOwner && members.length>1 && (<>
+            <label className="section-label" style={{marginTop:8}}>Who's on this flight?</label>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {members.map(m=>(
+                <button key={m.id} type="button" onClick={()=>toggleTraveler(m.id)}
+                  className={'pill '+(travelerIds.includes(m.id)?'pill-accent':'pill-muted')}
+                  style={{cursor:'pointer',border:'1px solid var(--color-border)',fontWeight:600}}>
+                  {travelerIds.includes(m.id)?'\u2713 ':''}{m.name}
+                </button>
+              ))}
+            </div>
+            <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)'}}>No one selected = whole-group flight.</p>
+          </>)}
+          <div style={{display:'flex',gap:8,marginTop:14}}>
+            <button className="btn btn-primary" style={{flex:1}} onClick={save}>Save flight</button>
+            {flight&&onDelete&&<button className="btn btn-ghost" style={{color:'var(--color-flag)'}} onClick={()=>onDelete(flight)}>Remove</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FlightsStrip({flights}){
   const [sel,setSel]=React.useState(null);
   const dlgRef=React.useRef(null);
@@ -3305,6 +3443,8 @@ function DayView({trip,day,onUpdateTrip}){
         </div>
         <span className="pill" style={{flexShrink:0,background:'var(--color-success-soft, rgba(43,182,163,.14))',color:'var(--color-success)',fontWeight:600,fontSize:'.72rem',whiteSpace:'nowrap'}}>● On track</span>
       </div>
+      {day.date===trip.startDate && <ArrivalsBoard trip={trip} date={day.date} mode="arrivals"/>}
+      {day.date===trip.endDate && day.date!==trip.startDate && <ArrivalsBoard trip={trip} date={day.date} mode="departures"/>}
       {(() => {
         const dayItems = (trip.budget?.items||[]).filter(i=>i.day===day.id);
         if(!dayItems.length) return null;
@@ -3525,7 +3665,12 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
   due.slice(0,2).forEach(i=>items.push({emoji:'✅',title:i.label,sub:`Due ~${i.daysBeforeTrip} days out · ${daysToGo} to go`,tab:'getready'}));
   const pending=(trip.collaborators||[]).filter(m=>(m.rsvp||'pending')==='pending');
   if(pending.length) items.push({emoji:'👥',title:`${pending.length} crew still pending RSVP`,sub:pending.map(m=>m.name).slice(0,3).join(', ')+' · tap to invite',tab:'crew'});
-  if(!(trip.flights||[]).length) items.push({emoji:'✈️',title:'Add your flights',sub:'Upload a confirmation — Locale reads it for you',tab:'days'});
+  if(!(trip.flights||[]).length) items.push({emoji:'\u2708\ufe0f',title:'Add your flights',sub:'Upload a confirmation \u2014 Locale reads it for you',tab:'days'});
+  else {
+    const covered=(m)=>(trip.flights||[]).some(f=>(f.travelerIds||[]).length ? f.travelerIds.includes(m.id) : true);
+    const noTravel=(trip.collaborators||[]).filter(m=>(m.rsvp||'pending')!=='no' && !covered(m));
+    if(noTravel.length) items.push({emoji:'\ud83d\udeec',title:noTravel.length===1?(noTravel[0].name+" hasn't added travel yet"):(noTravel.length+" crew haven't added travel yet"),sub:'Everyone adds their own flight \u2014 arrivals line up on Day 1',tab:'crew'});
+  }
   if(!(trip.lodging||[]).length) items.push({emoji:'🏨',title:"Add where you're staying",sub:'Upload the booking confirmation',tab:'days'});
   if(items.length===0) items.push({emoji:'🎉',title:"You're in great shape",sub:'Nothing urgent — browse your days or fine-tune the plan',tab:'days'});
   return (
@@ -5244,6 +5389,30 @@ function CrewSection({trip, onUpdateTrip}){
   // Tapping Invite opens a chooser showing the member's actual email/mobile; each send confirms with a toast.
   const [invitingMember,setInvitingMember]=React.useState(null);
   const inviteMember = (m)=> setInvitingMember(m);
+  // Phase 2c: crew self-serve flights. Owner writes directly; a member's write goes
+  // through the guarded set_my_flight/delete_my_flight RPCs (owner-write-only trips),
+  // with a local echo so the UI responds immediately \u2014 next sync reconciles.
+  const [flightSheet,setFlightSheet]=React.useState(null); // {member, flight}
+  const saveFlight=(entry)=>{
+    const flights=[...(trip.flights||[])];
+    const i=flights.findIndex(f=>f.id===entry.id);
+    if(i>=0) flights[i]=entry; else flights.push(entry);
+    onUpdateTrip({...trip, flights});
+    track('crew_flight_save',{self:!isOwner});
+    if(!isOwner){
+      const c=sb();
+      if(c) (async()=>{ try{ const {error}=await c.rpc('set_my_flight',{p_trip_id:trip.id,p_flight:entry}); if(error) throw error; }catch(e){ showToast("Couldn't sync your flight \u2014 try again.",'error'); } })();
+    }
+    setFlightSheet(null); showToast('Flight saved \u2713','info',2500);
+  };
+  const deleteFlight=(f)=>{
+    onUpdateTrip({...trip, flights:(trip.flights||[]).filter(x=>x.id!==f.id)});
+    if(!isOwner){
+      const c=sb();
+      if(c) (async()=>{ try{ const {error}=await c.rpc('delete_my_flight',{p_trip_id:trip.id,p_flight_id:String(f.id)}); if(error) throw error; }catch(e){ showToast("Couldn't remove the flight \u2014 try again.",'error'); } })();
+    }
+    setFlightSheet(null);
+  };
   const buildInviteUrl = ()=>{ const encoded=encodeTrip(trip); return encoded ? window.location.origin+window.location.pathname+'#trip='+encoded : null; };
   const markInviteSent = (m)=> save(members.map(x=>x.id===m.id?{...x, invitedAt:Date.now(), inviteSentCount:(x.inviteSentCount||0)+1}:x));
   const shareLinkInvite = (m)=>{
@@ -5294,6 +5463,7 @@ function CrewSection({trip, onUpdateTrip}){
         <span className="pill pill-muted" style={{fontWeight:600}}>● {counts.pending||0} pending</span>
         {counts.no ? <span className="pill pill-muted" style={{fontWeight:600}}>● {counts.no} can't</span> : null}
       </div>
+      <ArrivalsBoard trip={trip} date={trip.startDate} mode="arrivals"/>
       <div className="card" style={{marginBottom:12,padding:0}}>
         {members.length===0 && <div style={{padding:16,color:'var(--color-ink-light)',fontSize:'.9rem'}}>No one added yet. Add travelers below, then share the invite link.</div>}
         {members.map(m=>{
@@ -5348,6 +5518,40 @@ function CrewSection({trip, onUpdateTrip}){
           </div>
         </div>
       ); })()}
+      {members.length>0 && (
+        <div className="card" style={{marginBottom:12}}>
+          <p className="section-label">\u2708\ufe0f Crew travel</p>
+          <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',marginBottom:6}}>Traveling from different cities? Everyone adds their own flight and the arrivals line up above{isOwner?'':' \u2014 add yours below'}.</p>
+          {members.filter(m=>(m.rsvp||'pending')!=='no').map(m=>{
+            const mine=(trip.flights||[]).filter(f=>(f.travelerIds||[]).includes(m.id));
+            const canRow = isOwner || m.id===trip._myCollaboratorId;
+            return (
+              <div key={m.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'9px 0',borderBottom:'1px solid var(--color-border)'}}>
+                <span style={{width:26,height:26,borderRadius:'50%',background:m.avatarColor,color:'#0E1117',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'.7rem',flexShrink:0,marginTop:2}}>{(m.name||'?').charAt(0).toUpperCase()}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:600,fontSize:'.85rem'}}>{m.name}</div>
+                  {mine.length===0 && <div style={{fontSize:'.75rem',color:'var(--color-ink-muted)'}}>No flight yet</div>}
+                  {mine.map(f=>(
+                    <div key={f.id} role={canRow?'button':undefined} tabIndex={canRow?0:undefined}
+                      onClick={()=>{ if(canRow) setFlightSheet({member:m, flight:f}); }}
+                      onKeyDown={e=>{ if(canRow&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); setFlightSheet({member:m, flight:f}); } }}
+                      style={{fontSize:'.75rem',color:'var(--color-ink-light)',cursor:canRow?'pointer':'default',padding:'2px 0'}}>
+                      \u2708 {f.flightNumber||f.airline||'Flight'} \u00b7 {(f.departureAirport||'?')} \u2192 {(f.arrivalAirport||'?')} \u00b7 {formatDateShort((f.departureTime||'').slice(0,10))} {fmtFlightTimeISO(f.arrivalTime)&&('\u00b7 lands '+fmtFlightTimeISO(f.arrivalTime))}{canRow?' \u270e':''}
+                    </div>
+                  ))}
+                </div>
+                {canRow && <button className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',whiteSpace:'nowrap',flexShrink:0}} onClick={()=>setFlightSheet({member:m, flight:null})}>\uff0b {(!isOwner&&m.id===trip._myCollaboratorId)?'Add my flight':'Add flight'}</button>}
+              </div>
+            );
+          })}
+          {(trip.flights||[]).some(f=>!(f.travelerIds||[]).length) && <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:8}}>\ud83e\uddf3 Whole-group flights (no travelers tagged) apply to everyone \u2014 see the trip header.</p>}
+        </div>
+      )}
+      {flightSheet && (
+        <FlightFormSheet trip={trip} member={flightSheet.member} flight={flightSheet.flight} isOwner={isOwner}
+          onClose={()=>setFlightSheet(null)} onSave={saveFlight}
+          onDelete={(isOwner || (flightSheet.flight&&flightSheet.flight.addedBy===trip._myCollaboratorId))?deleteFlight:null}/>
+      )}
       {isOwner ? (
         <>
           <div className="card" style={{marginBottom:12}}>
@@ -7146,6 +7350,9 @@ class ErrorBoundary extends React.Component {
   assert('fmtStopTime empty passthrough', fmtStopTime('')==='');
   assert('resolveStopAuthor matches collaborator', resolveStopAuthor({collaborators:[{id:'c1',name:'Maya',avatarColor:'#2BB6A3'}]},{addedBy:'c1'})?.name==='Maya');
   assert('resolveStopAuthor null when unknown', resolveStopAuthor({collaborators:[]},{addedBy:null})===null);
+  assert('flightTravelers legacy = whole group', flightTravelers({collaborators:[{id:'a'},{id:'b'}]},{}).length===2);
+  assert('flightTravelers tagged filters', flightTravelers({collaborators:[{id:'a'},{id:'b'}]},{travelerIds:['b']}).map(m=>m.id).join('')==='b');
+  assert('gapLabel formats', gapLabel(105)==='1h 45m');
 
   // ── NEW v1.0 (2.4): .ics export ─
   assert('icsEsc escapes commas/semis/newlines', icsEsc('a, b; c\nd')==='a\\, b\\; c\\nd');
