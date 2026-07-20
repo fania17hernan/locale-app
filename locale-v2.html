@@ -1933,6 +1933,12 @@ function loadTrips(){
         trips.push(normalizeTrip(RAW_MOCK_LISBON));
         try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
       }
+      // Round 9 demo refresh: pre-sweep seeds still carry em dashes in the Lisbon pins
+      const lb=trips.findIndex(t=>t.id==='mock-lisbon' && t.isDemo && JSON.stringify(t.pinnedIdeas||[]).includes('\u2014'));
+      if(lb>=0 && trips.every(t=>t.isDemo)){
+        trips[lb]=normalizeTrip(RAW_MOCK_LISBON);
+        try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
+      }
       // Phase 2c demo refresh: older seeds lack per-traveler flights · refresh the organizer demo so the arrivals board shows
       const lpIdx=trips.findIndex(t=>t.id==='mock-lp' && t.isDemo && !(t.flights||[]).some(f=>(f.travelerIds||[]).length));
       if(lpIdx>=0 && trips.every(t=>t.isDemo)){
@@ -3603,15 +3609,15 @@ function CalendarExportCard({trip}){
   );
 }
 function NextThreeThings({trip, isOwner, onGoTab, onShare}){
-  const K = ({children}) => <p className="section-label" style={{marginBottom:10}}>{children}</p>;
+  const K = ({children}) => <p className="section-label" style={{margin:'8px 0 0'}}>{children}</p>;
   const Row = ({emoji,title,sub,onClick,cta}) => (
     <div className="card" role={onClick?'button':undefined} tabIndex={onClick?0:undefined} onClick={onClick}
       onKeyDown={e=>{if(onClick&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onClick();}}}
       style={{display:'flex',alignItems:'center',gap:12,cursor:onClick?'pointer':'default'}}>
       {emoji ? <span style={{fontSize:'1.2rem',flexShrink:0}} aria-hidden="true">{emoji}</span> : null}
       <div style={{flex:1,minWidth:0}}>
-        <p style={{fontWeight:600,fontSize:'.88rem'}}>{title}</p>
-        {sub && <p style={{fontSize:'.75rem',color:'var(--color-ink-light)',lineHeight:1.45}}>{sub}</p>}
+        <p style={{fontWeight:600,fontSize:'.88rem',lineHeight:1.5}}>{title}</p>
+        {sub && <p style={{fontSize:'.75rem',color:'var(--color-ink-light)',lineHeight:1.5,marginTop:2}}>{sub}</p>}
       </div>
       {cta && <span className="btn btn-secondary btn-sm" style={{whiteSpace:'nowrap'}}>{cta}</span>}
     </div>
@@ -3620,7 +3626,7 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
   if(trip.planningStage==='idea'){
     const pins = trip.pinnedIdeas||[];
     return (
-      <div style={{marginBottom:16}}>
+      <div style={{margin:'0 0 24px',display:'flex',flexDirection:'column',gap:12}}>
         <K>Just an idea · no dates yet, and that's fine</K>
         <Row emoji="" title="Get recommendations" sub="Best time to go, where to stay, day trips, tuned to your taste" onClick={()=>onGoTab('days')} cta="Ask AI"/>
         {pins.length>0 && <K>Pinned so far · share these for crew buy-in</K>}
@@ -3639,7 +3645,7 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
   const stops=(trip.days||[]).reduce((n,d)=>n+(d.activities||[]).length+(d.restaurants||[]).length,0);
   if(stops===0){
     return (
-      <div style={{marginBottom:16}}>
+      <div style={{margin:'0 0 24px',display:'flex',flexDirection:'column',gap:12}}>
         <K>Let's set this trip up · 3 quick wins</K>
         <div className="card" role="button" tabIndex={0} onClick={()=>onGoTab('days')}
           onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onGoTab('days');}}}
@@ -3672,7 +3678,7 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
   if(!(trip.lodging||[]).length) items.push({emoji:'',title:"Add where you're staying",sub:'Upload the booking confirmation',tab:'days'});
   if(items.length===0) items.push({emoji:'',title:"You're in great shape",sub:'Nothing urgent. Browse your days or fine-tune the plan',tab:'days'});
   return (
-    <div style={{marginBottom:16}}>
+    <div style={{margin:'0 0 24px',display:'flex',flexDirection:'column',gap:12}}>
       <K>Next {Math.min(3,items.length)===1?'thing':Math.min(3,items.length)+' things'} · {daysToGo>0?daysToGo+' days to go':'trip time'}</K>
       {items.slice(0,3).map((it,i)=><Row key={i} emoji={it.emoji} title={it.title} sub={it.sub} onClick={()=>onGoTab(it.tab)}/>)}
     </div>
@@ -3787,7 +3793,7 @@ function TripCard({trip, onClick, animDelay=0}) {
   const firstDest = destinations[0];
   const gradKey = firstDest?.countryCode === 'GB' ? 'london' : firstDest?.countryCode === 'FR' ? 'paris' : firstDest?.city?.toLowerCase().includes('miami') ? 'miami' : 'generic';
   const gradClass = trip.coverGradient || `gradient-${gradKey}`;
-  const flags = getIntlFlags(trip);
+  const flags = getIntlFlags(trip).filter(f=>!(trip.dismissedEntryReqs||[]).includes(f.label));
   const checklist = trip.checklist || [];
   const done = checklist.filter(i => i.checked).length;
   const total = checklist.length;
@@ -6012,7 +6018,10 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
   const [showRegenModal, setShowRegenModal] = React.useState(false);
   const [regenUploading, setRegenUploading] = React.useState(false);
   const [regenUploadMsg, setRegenUploadMsg] = React.useState('');
-  const flags = getIntlFlags(trip);
+  // Dismissible entry banners: cleared per trip, owner only; auto-collapse (checklist) still applies
+  const dismissedReqs = trip.dismissedEntryReqs || [];
+  const dismissReq = (key)=> onUpdateTrip({...trip, dismissedEntryReqs:[...dismissedReqs, key]});
+  const flags = getIntlFlags(trip).filter(f=>!dismissedReqs.includes(f.label));
   // Live visa/entry data (Travel Buddy) · augments the rules-based flags above, works for viewers with no key
   const [liveReqs,setLiveReqs] = React.useState([]);
   React.useEffect(()=>{
@@ -6103,8 +6112,9 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
           ) : (flags.length>0||liveReqs.length>0)&&(
             <div style={{marginTop:16,display:'flex',gap:8,flexWrap:'wrap'}}>
               {flags.map((f,i)=>(
-                <div key={i} style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)'}}>
+                <div key={i} style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)',display:'flex',alignItems:'flex-start',gap:8}}>
                   <span style={{color:'#fff',fontSize:'.8rem'}}>{f.emoji} <strong>{f.label}</strong> · {f.desc}</span>
+                  {isOwner && <button onClick={()=>dismissReq(f.label)} aria-label={`Dismiss ${f.label}`} title="Dismiss" style={{background:'none',border:'none',color:'rgba(255,255,255,.55)',cursor:'pointer',fontSize:'.8rem',padding:'0 2px',flexShrink:0,lineHeight:1.4}}>✕</button>}
                 </div>
               ))}
               {liveReqs.map(({cc,req})=>{
@@ -6114,14 +6124,16 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
                 const dupReg = reg && flags.some(f=>(f.label||'').toLowerCase().includes((reg.name||'').toLowerCase()));
                 return (
                   <React.Fragment key={cc}>
-                    {vr && (
-                      <div style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)'}}>
+                    {vr && !dismissedReqs.includes(cc+':visa') && (
+                      <div style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)',display:'flex',alignItems:'flex-start',gap:8}}>
                         <span style={{color:'#fff',fontSize:'.8rem'}}>🛂 <strong>{dn}: {vr.name}</strong>{vr.duration?` · ${vr.duration}`:''}{req.destination?.passport_validity?` · passport: ${req.destination.passport_validity}`:''}{vr.link&&<> · <a href={vr.link} target="_blank" rel="noopener noreferrer" style={{color:'#fff',textDecoration:'underline'}}>details</a></>}</span>
+                        {isOwner && <button onClick={()=>dismissReq(cc+':visa')} aria-label={`Dismiss ${dn} entry info`} title="Dismiss" style={{background:'none',border:'none',color:'rgba(255,255,255,.55)',cursor:'pointer',fontSize:'.8rem',padding:'0 2px',flexShrink:0,lineHeight:1.4}}>✕</button>}
                       </div>
                     )}
-                    {reg && !dupReg && (
-                      <div style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)'}}>
+                    {reg && !dupReg && !dismissedReqs.includes(cc+':reg') && (
+                      <div style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)',display:'flex',alignItems:'flex-start',gap:8}}>
                         <span style={{color:'#fff',fontSize:'.8rem'}}>🚨 <strong>{dn}: {reg.name} required</strong>{reg.link&&<> · <a href={reg.link} target="_blank" rel="noopener noreferrer" style={{color:'#fff',textDecoration:'underline'}}>register</a></>}</span>
+                        {isOwner && <button onClick={()=>dismissReq(cc+':reg')} aria-label={`Dismiss ${dn} registration`} title="Dismiss" style={{background:'none',border:'none',color:'rgba(255,255,255,.55)',cursor:'pointer',fontSize:'.8rem',padding:'0 2px',flexShrink:0,lineHeight:1.4}}>✕</button>}
                       </div>
                     )}
                   </React.Fragment>
