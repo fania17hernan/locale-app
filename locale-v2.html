@@ -993,6 +993,15 @@ const CITY_TRANSIT_APPS={
 const APP_VERSION = '0.9';
 const SCHEMA_VERSION = 4; // increment when trip data shape changes (v4: planningStage + ideation)
 
+// P1 Dreamer · pin reactions. Three signals, one tap. The server RPC react_to_pin
+// whitelists exactly these keys, so this list and the SQL allowlist must stay in sync.
+const PIN_REACTIONS = [
+  { key:'love',  label:'Love'  },
+  { key:'maybe', label:'Maybe' },
+  { key:'pass',  label:'Pass'  },
+];
+const PIN_REACTION_KEYS = PIN_REACTIONS.map(r=>r.key);
+
 // Feature flags · set to false to disable a feature for all users without a deploy
 const FLAGS = {
   aiGenerator:  true,   // Claude itinerary generator (free tier via proxy, or BYO key)
@@ -1885,7 +1894,11 @@ function normalizeTrip(t){
   const planningStage = t.planningStage === 'idea' ? 'idea' : 'booked';
   const ideation = t.ideation ?? null;
   // v4.1 (2.3): pinned ideation suggestions reused when generating the itinerary
-  const pinnedIdeas = Array.isArray(t.pinnedIdeas) ? t.pinnedIdeas : [];
+  // P1 (additive): pin.reactions = [{memberId, reaction:'love'|'maybe'|'pass', ts}].
+  // text stays the dedup key and the AI planner input · reactions never touch it.
+  const pinnedIdeas = (Array.isArray(t.pinnedIdeas) ? t.pinnedIdeas : []).map(p=>({
+    ...p, reactions: Array.isArray(p.reactions) ? p.reactions.filter(r=>r && r.memberId && PIN_REACTION_KEYS.includes(r.reaction)) : []
+  }));
   // v4.1 (2.2): structured must-happen events injected verbatim into the prompt
   const mustEvents = Array.isArray(t.mustEvents) ? t.mustEvents : [];
   const budget = (t.budget && Array.isArray(t.budget.items))
@@ -1910,12 +1923,19 @@ const RAW_MOCK_LISBON={
   id:'mock-lisbon', name:'Lisbon…? 🇵🇹', isDemo:true, occasion:'leisure', honoree:null,
   planningStage:'idea', travelPeriod:{depart:'',return:''}, travelerPassportCountry:'US',
   destinations:[{id:'lz1',city:'Lisbon',country:'Portugal',countryCode:'PT',isInternational:true,arrivalDate:'',departureDate:''}],
-  collaborators:[{id:'lc1',name:'You',email:'',role:'owner',avatarColor:AVATAR_COLORS[0],rsvp:'going'}],
+  collaborators:[
+    {id:'lc1',name:'You',email:'',role:'owner',avatarColor:AVATAR_COLORS[0],rsvp:'going'},
+    {id:'lc2',name:'Maya',email:'',role:'crew',avatarColor:AVATAR_COLORS[1],rsvp:'pending'},
+    {id:'lc3',name:'Theo',email:'',role:'crew',avatarColor:AVATAR_COLORS[2],rsvp:'pending'},
+  ],
   days:[], checklist:[], flights:[], lodging:[],
   pinnedIdeas:[
-    {id:'lp1', text:'Stay in Príncipe Real · leafy, walkable, great food, less touristy than Baixa', tag:'Stay', title:'Príncipe Real', detail:'Leafy and walkable with great food. Less touristy than Baixa.'},
-    {id:'lp2', text:'Go late May · jacaranda season, warm but before the summer crowds', tag:'Timing', title:'Late May', detail:'Jacaranda season. Warm, but before the summer crowds.'},
-    {id:'lp3', text:'Day trip to Sintra · Pena Palace early, before the tour buses', tag:'Day trip', title:'Sintra', detail:'Pena Palace early, before the tour buses arrive.'}
+    {id:'lp1', text:'Stay in Príncipe Real · leafy, walkable, great food, less touristy than Baixa', tag:'Stay', title:'Príncipe Real', detail:'Leafy and walkable with great food. Less touristy than Baixa.',
+      reactions:[{memberId:'lc2',reaction:'love',ts:1},{memberId:'lc3',reaction:'love',ts:2}]},
+    {id:'lp2', text:'Go late May · jacaranda season, warm but before the summer crowds', tag:'Timing', title:'Late May', detail:'Jacaranda season. Warm, but before the summer crowds.',
+      reactions:[{memberId:'lc2',reaction:'maybe',ts:3}]},
+    {id:'lp3', text:'Day trip to Sintra · Pena Palace early, before the tour buses', tag:'Day trip', title:'Sintra', detail:'Pena Palace early, before the tour buses arrive.',
+      reactions:[{memberId:'lc3',reaction:'love',ts:4}]}
   ],
   ideation:{
     destination_summary:'Lisbon rewards wanderers: tiled streets, miradouro sunset views, and a food scene that punches way above its price point. Great first European city · walkable, friendly, easy transit.',
@@ -1944,8 +1964,9 @@ function loadTrips(){
         trips.push(normalizeTrip(RAW_MOCK_LISBON));
         try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
       }
-      // Round 9 demo refresh: pre-sweep seeds still carry em dashes in the Lisbon pins
-      const lb=trips.findIndex(t=>t.id==='mock-lisbon' && t.isDemo && (JSON.stringify(t.pinnedIdeas||[]).includes('\u2014') || !(t.pinnedIdeas||[]).some(p=>p.title)));
+      // Round 9 demo refresh: pre-sweep seeds still carry em dashes in the Lisbon pins.
+      // Round 12: also refresh seeds that predate pin reactions, so the Dreamer demo shows buy-in.
+      const lb=trips.findIndex(t=>t.id==='mock-lisbon' && t.isDemo && (JSON.stringify(t.pinnedIdeas||[]).includes('\u2014') || !(t.pinnedIdeas||[]).some(p=>p.title) || !(t.pinnedIdeas||[]).some(p=>(p.reactions||[]).length)));
       if(lb>=0 && trips.every(t=>t.isDemo)){
         trips[lb]=normalizeTrip(RAW_MOCK_LISBON);
         try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
@@ -3638,7 +3659,96 @@ function pinDisplay(p, city){
   return { tag: tag||'Idea', title, detail: detail||'', link: 'https://www.google.com/maps/search/?api=1&query='+q };
 }
 
-function PinCard({pin, city}){
+// ── PIN REACTIONS (P1 Dreamer) ────────────────────────────────────────────────
+// Who am I on this trip? A synced member carries _myCollaboratorId; the owner is
+// the collaborator row flagged role 'owner' (falling back to the first row, which
+// is always the creator). No identity = read-only counts.
+function myMemberIdFor(trip){
+  if(!trip) return null;
+  if(trip._myCollaboratorId) return trip._myCollaboratorId;
+  const isOwner = trip._myRole==='owner' || !trip._myRole;
+  if(!isOwner) return null;
+  const cols = trip.collaborators||[];
+  const owner = cols.find(c=>c.role==='owner') || cols[0];
+  return owner ? owner.id : null;
+}
+function pinReactionCounts(pin){
+  const out={}; PIN_REACTION_KEYS.forEach(k=>out[k]=0);
+  (pin.reactions||[]).forEach(r=>{ if(out[r.reaction]!==undefined) out[r.reaction]++; });
+  return out;
+}
+// Toggle my reaction on a pin. Owner writes land in the trip directly; a member's
+// write goes through the guarded react_to_pin RPC (trips are owner-write-only),
+// with a local echo so the chip responds instantly · next sync reconciles.
+function makePinReactor(trip, onUpdateTrip){
+  const me = myMemberIdFor(trip);
+  const isOwner = trip._myRole==='owner' || !trip._myRole;
+  if(!me || !onUpdateTrip) return { myMemberId: me, react: null };
+  const react = (pinId, key)=>{
+    let cleared=false;
+    const pins=(trip.pinnedIdeas||[]).map(p=>{
+      if(p.id!==pinId) return p;
+      const mine=(p.reactions||[]).find(r=>r.memberId===me);
+      const rest=(p.reactions||[]).filter(r=>r.memberId!==me);
+      if(mine && mine.reaction===key){ cleared=true; return {...p, reactions:rest}; }
+      return {...p, reactions:[...rest, {memberId:me, reaction:key, ts:Date.now()}]};
+    });
+    onUpdateTrip({...trip, pinnedIdeas:pins});
+    track('pin_reaction',{reaction:cleared?'clear':key, self:!isOwner});
+    if(!isOwner){
+      const c=sb();
+      if(c) (async()=>{ try{ const {error}=await c.rpc('react_to_pin',{p_trip_id:trip.id,p_pin_id:String(pinId),p_reaction:cleared?null:key}); if(error) throw error; }catch(e){ showToast("Couldn't save your reaction · try again.",'error'); } })();
+    }
+  };
+  return { myMemberId: me, react };
+}
+// Reactions carry over to RSVP when an idea trip becomes real. Anyone who loved a
+// pin and is still Pending gets SUGGESTED as Going · never forced. The suggestion
+// shows as a one-tap confirm on their Crew row and clears the moment they answer.
+function applyPinReactionCarryover(trip){
+  const loved=new Set();
+  (trip.pinnedIdeas||[]).forEach(p=>(p.reactions||[]).forEach(r=>{ if(r.reaction==='love') loved.add(r.memberId); }));
+  if(!loved.size) return { collaborators: trip.collaborators||[], suggested: 0 };
+  let suggested=0;
+  const collaborators=(trip.collaborators||[]).map(c=>{
+    if(!loved.has(c.id) || (c.rsvp||'pending')!=='pending' || c.rsvpSuggested) return c;
+    suggested++; return {...c, rsvpSuggested:'going'};
+  });
+  return { collaborators, suggested };
+}
+function PinReactions({pin, myMemberId, onReact}){
+  const counts=pinReactionCounts(pin);
+  const mine=(pin.reactions||[]).find(r=>r.memberId===myMemberId);
+  const total=(pin.reactions||[]).length;
+  const canReact=!!onReact;
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:6,marginTop:12,flexWrap:'wrap'}} onClick={e=>e.stopPropagation()}>
+      {PIN_REACTIONS.map(r=>{
+        const on = mine && mine.reaction===r.key;
+        const n = counts[r.key];
+        return (
+          <button key={r.key} type="button" disabled={!canReact}
+            onClick={()=>canReact&&onReact(pin.id, r.key)}
+            aria-pressed={on} aria-label={`${r.label}${n?` · ${n}`:''}`}
+            title={canReact?(on?'Tap to undo':r.label):'Join the trip to react'}
+            style={{display:'inline-flex',alignItems:'center',gap:6,padding:'4px 10px',
+              borderRadius:'var(--radius-ctl)',fontSize:'.74rem',fontWeight:600,lineHeight:1.4,
+              cursor:canReact?'pointer':'default',
+              border:'1px solid '+(on?'var(--color-accent)':'var(--color-border)'),
+              background:on?'var(--color-accent-soft)':'transparent',
+              color:on?'var(--color-accent-deep)':'var(--color-ink-light)',
+              opacity:canReact?1:.75,transition:'background .12s, border-color .12s'}}>
+            <span>{r.label}</span>
+            {n>0 && <span style={{fontFamily:'var(--font-mono)',fontVariantNumeric:'tabular-nums',fontSize:'.7rem',opacity:.85}}>{n}</span>}
+          </button>
+        );
+      })}
+      {!canReact && total>0 && <span style={{fontSize:'.7rem',color:'var(--color-ink-muted)'}}>Join the trip to react</span>}
+    </div>
+  );
+}
+
+function PinCard({pin, city, myMemberId, onReact, showReactions}){
   const [open,setOpen]=React.useState(false);
   const d=pinDisplay(pin, city);
   const expandable=!!d.detail;
@@ -3656,11 +3766,13 @@ function PinCard({pin, city}){
       {open && d.detail && <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',lineHeight:1.6,marginTop:6}}>{d.detail}</p>}
       {open && <a href={d.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
         style={{display:'inline-block',marginTop:10,fontSize:'.78rem',fontWeight:600,color:'var(--color-accent-deep)'}}>Explore on Maps ↗</a>}
+      {showReactions && <PinReactions pin={pin} myMemberId={myMemberId} onReact={onReact}/>}
     </div>
   );
 }
 
-function NextThreeThings({trip, isOwner, onGoTab, onShare}){
+function NextThreeThings({trip, isOwner, onGoTab, onShare, onUpdateTrip}){
+  const {myMemberId, react} = makePinReactor(trip, onUpdateTrip);
   const K = ({children}) => <p className="section-label" style={{margin:'8px 0 0'}}>{children}</p>;
   const Row = ({emoji,title,sub,onClick,cta}) => (
     <div className="card" role={onClick?'button':undefined} tabIndex={onClick?0:undefined} onClick={onClick}
@@ -3681,8 +3793,9 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
       <div style={{margin:'0 0 24px',display:'flex',flexDirection:'column',gap:12}}>
         <K>Just an idea · no dates yet, and that's fine</K>
         <Row emoji="" title="Get recommendations" sub="Best time to go, where to stay, day trips, tuned to your taste" onClick={()=>onGoTab('days')} cta="Ask AI"/>
-        {pins.length>0 && <K>Pinned so far · share these for crew buy-in</K>}
-        {pins.slice(0,4).map(p=><PinCard key={p.id} pin={p} city={(trip.destinations||[])[0]?.city||''}/>)}
+        {pins.length>0 && <K>Pinned so far · tap a reaction, or share these for crew buy-in</K>}
+        {pins.slice(0,4).map(p=><PinCard key={p.id} pin={p} city={(trip.destinations||[])[0]?.city||''}
+          showReactions myMemberId={myMemberId} onReact={react}/>)}
         <Row emoji="" title="Share the idea with your crew" sub="They can browse everything, no account needed" onClick={onShare} cta="Share"/>
         <div className="card" style={{display:'flex',alignItems:'center',gap:12,borderColor:'var(--color-accent)',borderStyle:'dashed'}}>
           <div style={{flex:1,minWidth:0}}>
@@ -4647,7 +4760,11 @@ Rules:
           )}
           <div style={{display:'flex',gap:8,marginTop:14}}>
             <button className="btn btn-secondary" style={{flex:1}} onClick={()=>{onUpdateTrip({...trip,ideation:null});}}>Start over</button>
-            <button className="btn btn-primary" style={{flex:2}} onClick={()=>{onUpdateTrip({...trip,planningStage:'booked'});}}>I've booked it · plan my days</button>
+            <button className="btn btn-primary" style={{flex:2}} onClick={()=>{
+              const carry=applyPinReactionCarryover(trip);
+              onUpdateTrip({...trip,planningStage:'booked',collaborators:carry.collaborators});
+              if(carry.suggested>0) showToast(`${carry.suggested} ${carry.suggested===1?'person':'people'} loved your pins · suggested as Going in Crew.`,'info',5000);
+            }}>I've booked it · plan my days</button>
           </div>
           <p style={{textAlign:'center',fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:10}}>Booking switches this trip to itinerary mode · upload your confirmations there.</p>
         </div>
@@ -5396,7 +5513,8 @@ function CrewSection({trip, onUpdateTrip}){
       if(c) (async()=>{ try{ const {error}=await c.rpc('set_my_rsvp',{p_trip_id:trip.id,p_rsvp:rsvp}); if(error) throw error; }catch(e){ showToast("Couldn't update RSVP · try again.",'error'); } })();
       return;
     }
-    save(members.map(m=>m.id===id?{...m, rsvp}:m));
+    // An explicit answer retires the carryover suggestion for good.
+    save(members.map(m=>m.id===id?{...m, rsvp, rsvpSuggested:null}:m));
   };
   const setPay = (id, field, val)=> save(members.map(m=>m.id===id?{...m, [field]:val}:m));
   const updateMember = (id, patch)=> save(members.map(m=>m.id===id?{...m, ...patch}:m));
@@ -5533,6 +5651,12 @@ function CrewSection({trip, onUpdateTrip}){
               {m.invitedAt && <div style={{fontSize:'.68rem',color:'var(--color-ink-muted)',marginTop:2}}>Invited {relativeAgo(m.invitedAt)}{m.inviteSentCount>1?` · sent ${m.inviteSentCount}×`:''}</div>}
               {canEditRsvp && <div style={{fontSize:'.65rem',color:'var(--color-accent)',marginTop:2}}>Tap to edit</div>}
             </div>
+            {/* P1 carryover: loved a pin, still Pending · one tap to confirm, never auto-set */}
+            {isOwner && m.rsvpSuggested==='going' && (m.rsvp||'pending')==='pending' && (
+              <button className="btn btn-secondary btn-sm" style={{fontSize:'.7rem',whiteSpace:'nowrap',flexShrink:0}}
+                title="Loved the pins while this was still an idea"
+                onClick={(e)=>{ e.stopPropagation(); setRsvp(m.id,'going'); }}>Loved it · mark Going</button>
+            )}
             {isOwner && (m.rsvp||'pending')!=='going' && <button aria-label={m.invitedAt?`Resend invite to ${m.name}`:`Invite ${m.name}`} onClick={()=>inviteMember(m)} className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',padding:'4px 8px',whiteSpace:'nowrap'}}>{m.invitedAt?'Resend':'Invite'}</button>}
             <span className={`pill ${(m.rsvp||'pending')==='going'?'pill-accent':(m.rsvp==='no'?'pill-flag':'pill-neutral')}`} style={{whiteSpace:'nowrap',flexShrink:0}}>{(m.rsvp||'pending')==='going'?'● Going':(m.rsvp==='no'?"✕ Can't make it":'○ Pending')}</span>
           </div>
@@ -5969,7 +6093,12 @@ function TripDateEditor({trip, onUpdateTrip}) {
     }) : [];
 
     // A dated trip is no longer "just an idea" · unlock the itinerary planner (UAT 2026-07-15)
-    onUpdateTrip({ ...trip, startDate, endDate, destinations: nextDestinations, days: newDays, planningStage: 'booked' });
+    // P1: crew who loved a pin get suggested as Going on their row (never forced).
+    const wasIdea = trip.planningStage==='idea';
+    const carry = wasIdea ? applyPinReactionCarryover(trip) : null;
+    onUpdateTrip({ ...trip, startDate, endDate, destinations: nextDestinations, days: newDays, planningStage: 'booked',
+      ...(carry ? { collaborators: carry.collaborators } : {}) });
+    if(carry && carry.suggested>0) showToast(`${carry.suggested} ${carry.suggested===1?'person':'people'} loved your pins · suggested as Going in Crew.`,'info',5000);
     setEditing(false);
   };
 
@@ -6241,7 +6370,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
         {activeTab==='overview' && (
           <div>
             {/* IA Phase 2b · Overview per approved wireframes: Next 3 → calendar → stops → glance → owner tools */}
-            <NextThreeThings trip={trip} isOwner={isOwner} onGoTab={(t)=>{setActiveTab(t);track('tab_view',{tab:t,via:'next3'});window.scrollTo({top:0});}} onShare={()=>setShowShare(true)}/>
+            <NextThreeThings trip={trip} isOwner={isOwner} onUpdateTrip={onUpdateTrip} onGoTab={(t)=>{setActiveTab(t);track('tab_view',{tab:t,via:'next3'});window.scrollTo({top:0});}} onShare={()=>setShowShare(true)}/>
             {(trip.days||[]).some(d=>(d.activities||[]).length||(d.restaurants||[]).length) && trip.planningStage!=='idea' && <CalendarExportCard trip={trip}/>}
             {/* ── Edit Trip Dates (owner-only) · sits right under Next-3; for idea trips it IS the unlock ── */}
             {isOwner && <TripDateEditor trip={trip} onUpdateTrip={onUpdateTrip}/>}
@@ -7360,6 +7489,40 @@ class ErrorBoundary extends React.Component {
   assert('normalizeTrip defaults legacy trips to booked', legacyTrip.planningStage === 'booked');
   assert('normalizeTrip defaults ideation to null', legacyTrip.ideation === null);
   assert('normalizeTrip rejects bogus stage values', normalizeTrip({title:'x', planningStage:'whatever'}).planningStage === 'booked');
+
+  // ── NEW P1 (Round 12): pin reactions ─
+  assert('normalizeTrip defaults pin reactions to []', (()=>{
+    const t=normalizeTrip({title:'x', pinnedIdeas:[{id:'p1', text:'a'}]});
+    return Array.isArray(t.pinnedIdeas[0].reactions) && t.pinnedIdeas[0].reactions.length===0;
+  })());
+  assert('normalizeTrip drops bogus reaction values', (()=>{
+    const t=normalizeTrip({title:'x', pinnedIdeas:[{id:'p1', text:'a', reactions:[{memberId:'m1',reaction:'love'},{memberId:'m2',reaction:'confetti'},{reaction:'love'}]}]});
+    return t.pinnedIdeas[0].reactions.length===1 && t.pinnedIdeas[0].reactions[0].memberId==='m1';
+  })());
+  assert('normalizeTrip preserves pin text as the dedup key', (()=>{
+    const t=normalizeTrip({title:'x', pinnedIdeas:[{id:'p1', text:'Stay in Alfama', reactions:[{memberId:'m1',reaction:'pass'}]}]});
+    return t.pinnedIdeas[0].text==='Stay in Alfama';
+  })());
+  assert('pinReactionCounts tallies each key', (()=>{
+    const c=pinReactionCounts({reactions:[{memberId:'a',reaction:'love'},{memberId:'b',reaction:'love'},{memberId:'c',reaction:'pass'}]});
+    return c.love===2 && c.pass===1 && c.maybe===0;
+  })());
+  assert('PIN_REACTION_KEYS matches the server allowlist', PIN_REACTION_KEYS.join(',')==='love,maybe,pass');
+  assert('myMemberIdFor prefers my collaborator id when shared', myMemberIdFor({_myRole:'crew', _myCollaboratorId:'cc9', collaborators:[{id:'o1',role:'owner'}]})==='cc9');
+  assert('myMemberIdFor resolves the owner row on my own trip', myMemberIdFor({collaborators:[{id:'o1',role:'owner'},{id:'c2',role:'crew'}]})==='o1');
+  assert('myMemberIdFor is null for a member with no linked row', myMemberIdFor({_myRole:'viewer', collaborators:[{id:'o1',role:'owner'}]})===null);
+  assert('carryover suggests going for pending lovers only', (()=>{
+    const r=applyPinReactionCarryover({
+      collaborators:[{id:'a',rsvp:'pending'},{id:'b',rsvp:'no'},{id:'c',rsvp:'pending'},{id:'d',rsvp:'going'}],
+      pinnedIdeas:[{id:'p1',reactions:[{memberId:'a',reaction:'love'},{memberId:'b',reaction:'love'},{memberId:'c',reaction:'maybe'},{memberId:'d',reaction:'love'}]}]});
+    const by=Object.fromEntries(r.collaborators.map(c=>[c.id,c.rsvpSuggested||null]));
+    return r.suggested===1 && by.a==='going' && by.b===null && by.c===null && by.d===null;
+  })());
+  assert('carryover never changes an existing rsvp', (()=>{
+    const r=applyPinReactionCarryover({collaborators:[{id:'a',rsvp:'pending'}],pinnedIdeas:[{id:'p1',reactions:[{memberId:'a',reaction:'love'}]}]});
+    return r.collaborators[0].rsvp==='pending';
+  })());
+  assert('carryover is a no-op with no reactions', applyPinReactionCarryover({collaborators:[{id:'a',rsvp:'pending'}],pinnedIdeas:[{id:'p1'}]}).suggested===0);
 
   // ── NEW v0.9: ideation validation ─
   const ide = validateIdeation({destination_summary:'Great fit.', best_time:{when:'Sept',why:'fewer crowds'},
