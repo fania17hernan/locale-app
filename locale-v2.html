@@ -6048,15 +6048,14 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
           {/* Top bar: Back + action buttons */}
           {(()=>{
             const iconBtn=(danger)=>({width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',background:danger?'rgba(255,80,80,.28)':'rgba(255,255,255,.18)',border:'none',borderRadius:12,color:'#fff',fontSize:'1.15rem',cursor:'pointer',backdropFilter:'blur(4px)',flexShrink:0});
-            const doShare=()=>{
+            const doShare=async ()=>{
               track('share_link');
-              const encoded = encodeTrip(trip); // dashboard quick-share keeps sync path
-              if(!encoded){alert('Could not encode trip.');return;}
-              const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
+              const url = await makeTripShareUrl(trip);
+              if(!url){alert('Could not encode trip.');return;}
               if(navigator.share){
-                navigator.share({title: trip.title, text: `Check out my trip to ${(trip.destinations||[]).map(d=>d.city).join(' & ')||trip.title} on Locale! (Read-only snapshot)`, url}).then(()=>showToast('Trip link shared ✓','info',3000)).catch(()=>{});
+                navigator.share({title: trip.title, text: `${trip.title} · planned with Locale`, url}).then(()=>showToast('Trip link shared ✓','info',3000)).catch(()=>{});
               } else {
-                navigator.clipboard.writeText(url).then(()=>showToast('Link copied — recipients can view but not edit.','info',4000)).catch(()=>{ prompt('Copy this read-only snapshot link:', url); });
+                navigator.clipboard.writeText(url).then(()=>showToast('Link copied. Recipients can view but not edit.','info',4000)).catch(()=>{ prompt('Copy this read-only snapshot link:', url); });
               }
             };
             return (
