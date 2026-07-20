@@ -65,7 +65,13 @@
   --font-display:      'Bricolage Grotesque', 'Inter', system-ui, sans-serif;
   --font-body:         'Inter', system-ui, sans-serif;
   --font-mono:         'JetBrains Mono', ui-monospace, monospace;
-  --radius:            20px;
+  /* Design elevation (brief 2026-07-20): tiered radii + one elevation tier */
+  --radius:            20px;   /* sheets, covers, hero surfaces only */
+  --radius-card:       14px;
+  --radius-ctl:        10px;
+  --color-accent-deep: #D9352B; /* solid button coral · white text meets AA (4.67:1) */
+  --shadow-card:       0 1px 2px rgba(26,23,20,.04), 0 8px 28px rgba(26,23,20,.05);
+  --shadow-card-hover: 0 2px 4px rgba(26,23,20,.05), 0 12px 32px rgba(26,23,20,.08);
 }
 
 html { background: var(--color-cream); color: var(--color-ink); font-family: var(--font-body); font-size: 16px; }
@@ -84,13 +90,15 @@ img { max-width: 100%; }
 /* ── Buttons ── */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 10px 20px; border-radius: 12px; font-size: .875rem; font-weight: 600;
-  border: 1px solid transparent; transition: all .2s ease; white-space: nowrap;
+  padding: 10px 20px; border-radius: var(--radius-ctl); font-size: .875rem; font-weight: 600;
+  border: 1px solid transparent; transition: background .15s ease, border-color .15s ease, transform .12s ease, box-shadow .15s ease; white-space: nowrap;
 }
-.btn-primary { background: var(--grad-btn); color: var(--btn-primary-text); border-color: transparent; box-shadow: 0 6px 18px rgba(255,90,77,.28); }
-.btn-primary:hover { filter: brightness(1.06); }
-.btn-secondary { background: transparent; color: var(--color-accent); border-color: var(--color-accent); }
-.btn-secondary:hover { background: var(--color-accent-soft); }
+.btn:active { transform: scale(.98); }
+.btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.btn-primary { background: var(--color-accent-deep); color: var(--btn-primary-text); border-color: transparent; box-shadow: 0 2px 10px rgba(217,53,43,.22); }
+.btn-primary:hover { background: #C93A2E; }
+.btn-secondary { background: transparent; color: var(--color-accent-deep); border-color: #F3C5BF; }
+.btn-secondary:hover { background: var(--color-accent-soft); border-color: var(--color-accent-deep); }
 .btn-ghost { background: transparent; color: var(--color-ink-light); border-color: var(--color-border); }
 .btn-ghost:hover { background: var(--color-cream-dark); }
 .btn-sm { padding: 6px 12px; font-size: .8rem; }
@@ -114,22 +122,26 @@ button.pill:focus-visible { outline: 2px solid var(--color-accent); outline-offs
 /* ── Cards ── */
 .card {
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border: 1px solid transparent; /* hairline reserved for inline accent/dashed overrides */
+  border-radius: var(--radius-card);
   padding: 20px;
+  box-shadow: var(--shadow-card);
 }
+.card[role=button] { transition: transform .15s ease, box-shadow .15s ease; }
+.card[role=button]:hover { transform: translateY(-1px); box-shadow: var(--shadow-card-hover); }
+.card[role=button]:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
 /* ── Inputs ── */
 /* iOS Safari zoom fix: all inputs must be at least 16px */
 input, select, textarea { font-size: 16px !important; }
 .input, .input-field {
-  width: 100%; padding: 9px 12px; border-radius: 8px;
+  width: 100%; padding: 10px 13px; border-radius: var(--radius-ctl);
   border: 1px solid var(--color-border); background: var(--color-surface);
   font-size: 16px; color: var(--color-ink);
   transition: border-color .2s;
   -webkit-appearance: none;
 }
-.input:focus, .input-field:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(43,95,110,.12); }
+.input:focus, .input-field:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(255,90,77,.14); }
 .input-error { border-color: var(--color-flag); }
 
 /* ── Polish layer (v0.8) · press states, focus rings, motion discipline ── */
@@ -139,7 +151,6 @@ input, select, textarea { font-size: 16px !important; }
 .btn-primary { box-shadow: 0 6px 18px rgba(255,90,77,.28); }
 .btn-primary:active { box-shadow: none; }
 .btn:disabled { cursor: default; }
-.card { box-shadow: 0 4px 24px rgba(20,20,30,.06); }
 .pill, .badge-must, .badge-nice { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
@@ -147,7 +158,7 @@ input, select, textarea { font-size: 16px !important; }
 select.input { background-image: var(--select-arrow); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
 
 /* ── Labels ── */
-.section-label { display: block; font-family: var(--font-mono); font-size: .68rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--color-ink-muted); margin-bottom: 6px; }
+.section-label { display: block; font-family: var(--font-mono); font-size: .66rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--color-ink-muted); margin-bottom: 6px; }
 
 /* ── Overlay & Sheet ── */
 .overlay { position: fixed; inset: 0; background: rgba(26,23,20,.55); z-index: 2000; display: flex; align-items: flex-end; justify-content: center; padding: 0; }
@@ -1902,9 +1913,9 @@ const RAW_MOCK_LISBON={
   collaborators:[{id:'lc1',name:'You',email:'',role:'owner',avatarColor:AVATAR_COLORS[0],rsvp:'going'}],
   days:[], checklist:[], flights:[], lodging:[],
   pinnedIdeas:[
-    {id:'lp1', text:'Stay in Príncipe Real · leafy, walkable, great food, less touristy than Baixa'},
-    {id:'lp2', text:'Go late May · jacaranda season, warm but before the summer crowds'},
-    {id:'lp3', text:'Day trip to Sintra · Pena Palace early, before the tour buses'}
+    {id:'lp1', text:'Stay in Príncipe Real · leafy, walkable, great food, less touristy than Baixa', tag:'Stay', title:'Príncipe Real', detail:'Leafy and walkable with great food. Less touristy than Baixa.'},
+    {id:'lp2', text:'Go late May · jacaranda season, warm but before the summer crowds', tag:'Timing', title:'Late May', detail:'Jacaranda season. Warm, but before the summer crowds.'},
+    {id:'lp3', text:'Day trip to Sintra · Pena Palace early, before the tour buses', tag:'Day trip', title:'Sintra', detail:'Pena Palace early, before the tour buses arrive.'}
   ],
   ideation:{
     destination_summary:'Lisbon rewards wanderers: tiled streets, miradouro sunset views, and a food scene that punches way above its price point. Great first European city · walkable, friendly, easy transit.',
@@ -1934,7 +1945,7 @@ function loadTrips(){
         try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
       }
       // Round 9 demo refresh: pre-sweep seeds still carry em dashes in the Lisbon pins
-      const lb=trips.findIndex(t=>t.id==='mock-lisbon' && t.isDemo && JSON.stringify(t.pinnedIdeas||[]).includes('\u2014'));
+      const lb=trips.findIndex(t=>t.id==='mock-lisbon' && t.isDemo && (JSON.stringify(t.pinnedIdeas||[]).includes('\u2014') || !(t.pinnedIdeas||[]).some(p=>p.title)));
       if(lb>=0 && trips.every(t=>t.isDemo)){
         trips[lb]=normalizeTrip(RAW_MOCK_LISBON);
         try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
@@ -3608,6 +3619,45 @@ function CalendarExportCard({trip}){
     </div>
   );
 }
+// Display shape for a pin: structured pins pass through; legacy text pins split
+// at the first separator so old data still gets a title + detail.
+function pinDisplay(p, city){
+  let tag=p.tag, title=p.title, detail=p.detail;
+  if(!title){
+    let t=p.text||'';
+    if(/^stay in /i.test(t)){ tag=tag||'Stay'; t=t.replace(/^stay in /i,''); }
+    else if(/^day trip:?\s*/i.test(t)){ tag=tag||'Day trip'; t=t.replace(/^day trip:?\s*/i,''); }
+    else if(/^go /i.test(t)){ tag=tag||'Timing'; t=t.replace(/^go /i,''); }
+    const m=t.split(/ · |: |; /);
+    title=(m[0]||t).trim(); detail=m.slice(1).join(' · ').trim();
+    if(title.length>64){ detail=(title+(detail?' · '+detail:'')); title=title.slice(0,61).trim()+'…'; }
+  }
+  const q=encodeURIComponent(title+(city?(' '+city):''));
+  return { tag: tag||'Idea', title, detail: detail||'', link: 'https://www.google.com/maps/search/?api=1&query='+q };
+}
+
+function PinCard({pin, city}){
+  const [open,setOpen]=React.useState(false);
+  const d=pinDisplay(pin, city);
+  const expandable=!!d.detail;
+  return (
+    <div className="card" role={expandable?'button':undefined} tabIndex={expandable?0:undefined}
+      onClick={()=>expandable&&setOpen(o=>!o)}
+      onKeyDown={e=>{if(expandable&&(e.key==='Enter'||e.key===' ')){e.preventDefault();setOpen(o=>!o);}}}
+      aria-expanded={expandable?open:undefined}
+      style={{cursor:expandable?'pointer':'default',padding:'16px 20px'}}>
+      <p style={{fontFamily:'var(--font-mono)',fontSize:'.62rem',fontWeight:500,letterSpacing:'.16em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:5}}>{d.tag}</p>
+      <div style={{display:'flex',alignItems:'baseline',gap:10}}>
+        <p style={{fontFamily:'var(--font-display)',fontWeight:600,fontSize:'1.02rem',lineHeight:1.35,flex:1,minWidth:0}}>{d.title}</p>
+        {expandable && <span aria-hidden="true" style={{color:'var(--color-ink-muted)',fontSize:'.72rem',flexShrink:0,transform:open?'rotate(180deg)':'none',transition:'transform .15s'}}>▾</span>}
+      </div>
+      {open && d.detail && <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',lineHeight:1.6,marginTop:6}}>{d.detail}</p>}
+      {open && <a href={d.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
+        style={{display:'inline-block',marginTop:10,fontSize:'.78rem',fontWeight:600,color:'var(--color-accent-deep)'}}>Explore on Maps ↗</a>}
+    </div>
+  );
+}
+
 function NextThreeThings({trip, isOwner, onGoTab, onShare}){
   const K = ({children}) => <p className="section-label" style={{margin:'8px 0 0'}}>{children}</p>;
   const Row = ({emoji,title,sub,onClick,cta}) => (
@@ -3630,7 +3680,7 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
         <K>Just an idea · no dates yet, and that's fine</K>
         <Row emoji="" title="Get recommendations" sub="Best time to go, where to stay, day trips, tuned to your taste" onClick={()=>onGoTab('days')} cta="Ask AI"/>
         {pins.length>0 && <K>Pinned so far · share these for crew buy-in</K>}
-        {pins.slice(0,3).map(p=><Row key={p.id} emoji="" title={p.text}/>)}
+        {pins.slice(0,4).map(p=><PinCard key={p.id} pin={p} city={(trip.destinations||[])[0]?.city||''}/>)}
         <Row emoji="" title="Share the idea with your crew" sub="They can browse everything, no account needed" onClick={onShare} cta="Share"/>
         <div className="card" style={{display:'flex',alignItems:'center',gap:12,borderColor:'var(--color-accent)',borderStyle:'dashed'}}>
           <div style={{flex:1,minWidth:0}}>
@@ -4478,13 +4528,16 @@ Rules:
   // Pin a suggestion so it flows into the itinerary prompt once booked (PRD 2.3)
   const pinned = trip.pinnedIdeas || [];
   const isPinned = (text) => pinned.some(p=>p.text===text);
-  const togglePin = (text) => {
-    const next = isPinned(text) ? pinned.filter(p=>p.text!==text) : [...pinned, {id:uuid(), text}];
+  // Structured pins (design brief Phase B): tag + title + detail render as elevated
+  // cards on the Overview; text stays the canonical dedup key AND what the AI
+  // planner ingests, so old plain-text pins keep working everywhere.
+  const togglePin = (text, meta) => {
+    const next = isPinned(text) ? pinned.filter(p=>p.text!==text) : [...pinned, {id:uuid(), text, ...(meta||{})}];
     onUpdateTrip({...trip, pinnedIdeas: next});
-    showToast(isPinned(text)?'Unpinned':'📌 Pinned · we\'ll use this when you plan your days','info',3000);
+    showToast(isPinned(text)?'Unpinned':'Pinned. We use this when you plan your days.','info',3000);
   };
-  const PinBtn = ({text}) => (
-    <button onClick={()=>togglePin(text)} aria-label={isPinned(text)?'Unpin':'Pin this idea'}
+  const PinBtn = ({text, tag, title, detail}) => (
+    <button onClick={()=>togglePin(text,{tag,title,detail})} aria-label={isPinned(text)?'Unpin':'Pin this idea'}
       style={{background:'none',border:'none',cursor:'pointer',fontSize:'.9rem',padding:'2px 4px',opacity:isPinned(text)?1:.4,flexShrink:0}}
       title={isPinned(text)?'Pinned · tap to remove':'Pin this idea'}>📌</button>
   );
@@ -4551,7 +4604,10 @@ Rules:
           {result.best_time?.when && (
             <Card>
               <p style={{fontSize:'.72rem',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-accent)',marginBottom:6}}>🗓 Best time to go</p>
-              <p style={{fontWeight:600,fontSize:'.95rem',marginBottom:4}}>{result.best_time.when}</p>
+              <div style={{display:'flex',alignItems:'flex-start',gap:6}}>
+                <p style={{fontWeight:600,fontSize:'.95rem',marginBottom:4,flex:1}}>{result.best_time.when}</p>
+                <PinBtn text={`Go ${result.best_time.when} · ${result.best_time.why}`} tag="Timing" title={result.best_time.when} detail={result.best_time.why}/>
+              </div>
               <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6}}>{result.best_time.why}</p>
             </Card>
           )}
@@ -4562,7 +4618,7 @@ Rules:
                 <div key={i} style={{paddingBottom:10,marginBottom:10,borderBottom:i<result.neighborhoods.length-1?'1px solid var(--color-border)':'none'}}>
                   <div style={{display:'flex',alignItems:'flex-start',gap:6}}>
                     <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:3,flex:1}}>{i+1}. {n.name}</p>
-                    <PinBtn text={`Stay in ${n.name} · ${n.why}`}/>
+                    <PinBtn text={`Stay in ${n.name} · ${n.why}`} tag="Stay" title={n.name} detail={n.why}/>
                   </div>
                   <p style={{fontSize:'.81rem',color:'var(--color-ink-light)',lineHeight:1.55,marginBottom:3}}>{n.why}</p>
                   {n.stay_here_if&&<p style={{fontSize:'.78rem',color:'var(--color-ink-muted)',fontStyle:'italic'}}>Stay here if: {n.stay_here_if}</p>}
@@ -4576,7 +4632,7 @@ Rules:
               {result.day_trips.map((d,i)=>(
                 <div key={i} style={{display:'flex',alignItems:'flex-start',gap:6,marginBottom:4}}>
                   <p style={{fontSize:'.83rem',color:'var(--color-ink-light)',lineHeight:1.6,flex:1}}><strong>{d.name}</strong> · {d.why}</p>
-                  <PinBtn text={`Day trip: ${d.name} · ${d.why}`}/>
+                  <PinBtn text={`Day trip: ${d.name} · ${d.why}`} tag="Day trip" title={d.name} detail={d.why}/>
                 </div>
               ))}
             </Card>
