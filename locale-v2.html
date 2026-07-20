@@ -3059,22 +3059,22 @@ function ArrivalsBoard({trip, date, mode}){
   const last=flights[flights.length-1];
   let callout=null, warn=false;
   if(flights.length>1){
-    if(ports.length>1){ callout='Different '+(arrivalsMode?'arrival':'departure')+' points ('+ports.join(' / ')+') \u2014 plan transfers separately.'; warn=true; }
+    if(ports.length>1){ callout='Different '+(arrivalsMode?'arrival':'departure')+' points ('+ports.join(' / ')+') — plan transfers separately.'; warn=true; }
     else if(times.length>1){
       const span=Math.max(...times)-Math.min(...times);
       callout = arrivalsMode
-        ? ("Everyone's in by "+fmtFlightTimeISO(last[key])+(span>=90?(' \u2014 arrivals span '+gapLabel(span)+', early landers can drop bags first'):' \u2014 good time to meet up'))
+        ? ("Everyone's in by "+fmtFlightTimeISO(last[key])+(span>=90?(' — arrivals span '+gapLabel(span)+', early landers can drop bags first'):' — good time to meet up'))
         : ('Last one out at '+fmtFlightTimeISO(last[key]));
     }
   }
   return (
     <div className="card" style={{marginBottom:16}}>
-      <p className="section-label" style={{marginBottom:8}}>{arrivalsMode?'\ud83d\udeec Arrivals':'\ud83d\udeeb Departures'} \u00b7 {formatDateShort(date)}</p>
+      <p className="section-label" style={{marginBottom:8}}>{arrivalsMode?'🛬 Arrivals':'🛫 Departures'} · {formatDateShort(date)}</p>
       {rows.map(({f,who})=>(
         <div key={f.id} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 0',borderBottom:'1px solid var(--color-border)'}}>
-          <span style={{fontFamily:'var(--font-mono)',fontWeight:700,fontSize:'.85rem',minWidth:72,flexShrink:0}}>{fmtFlightTimeISO(f[key])||'\u2014'}</span>
+          <span style={{fontFamily:'var(--font-mono)',fontWeight:700,fontSize:'.85rem',minWidth:72,flexShrink:0}}>{fmtFlightTimeISO(f[key])||'—'}</span>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:'.85rem',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{f.flightNumber||f.airline||'Flight'} \u00b7 {(f.departureAirport||'?')} \u2192 {(f.arrivalAirport||'?')}</div>
+            <div style={{fontSize:'.85rem',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{f.flightNumber||f.airline||'Flight'} · {(f.departureAirport||'?')} → {(f.arrivalAirport||'?')}</div>
             <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{(f.travelerIds||[]).length? who.map(m=>m.name).join(', ') : 'Whole group'}</div>
           </div>
           <span style={{display:'flex',flexShrink:0,paddingLeft:6}}>{who.slice(0,4).map(m=>(
@@ -3082,13 +3082,13 @@ function ArrivalsBoard({trip, date, mode}){
           ))}</span>
         </div>
       ))}
-      {callout && <p style={{fontSize:'.78rem',marginTop:10,fontWeight:600,color:warn?'var(--color-flag)':'var(--color-success)'}}>{warn?'\u26a0\ufe0f ':'\u2705 '}{callout}</p>}
+      {callout && <p style={{fontSize:'.78rem',marginTop:10,fontWeight:600,color:warn?'var(--color-flag)':'var(--color-success)'}}>{warn?'⚠️ ':'✅ '}{callout}</p>}
     </div>
   );
 }
 
 // Add/edit one flight for one (or more) travelers. Owner can tag anyone; a crew/viewer
-// member is locked to themselves \u2014 their save goes through the guarded set_my_flight RPC.
+// member is locked to themselves — their save goes through the guarded set_my_flight RPC.
 function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDelete}){
   const members=trip.collaborators||[];
   const [airline,setAirline]=React.useState(flight?.airline||'');
@@ -3123,7 +3123,7 @@ function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDele
         <div className="sheet-handle"/>
         <div style={{padding:'16px 24px 8px',borderBottom:'1px solid var(--color-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <h2 className="font-display" style={{fontSize:'1.2rem',fontWeight:600}}>{flight?'Edit flight':(member?member.name+"'s flight":'Add a flight')}</h2>
-          <button className="btn btn-ghost" onClick={onClose} aria-label="Close">\u2715</button>
+          <button className="btn btn-ghost" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div style={{padding:'20px 24px 32px',display:'flex',flexDirection:'column',gap:6}}>
           <div style={{display:'flex',gap:8}}>
@@ -3138,7 +3138,7 @@ function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDele
           <input className="input" type="datetime-local" value={dep} onChange={e=>setDep(e.target.value)}/>
           <label className="section-label" style={{marginTop:8}}>Lands (local time)</label>
           <input className="input" type="datetime-local" value={arr} onChange={e=>setArr(e.target.value)}/>
-          <input className="input" style={{marginTop:8}} placeholder="Notes (terminal, bags\u2026)" value={notes} onChange={e=>setNotes(e.target.value)}/>
+          <input className="input" style={{marginTop:8}} placeholder="Notes (terminal, bags…)" value={notes} onChange={e=>setNotes(e.target.value)}/>
           {isOwner && members.length>1 && (<>
             <label className="section-label" style={{marginTop:8}}>Who's on this flight?</label>
             <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
@@ -3146,7 +3146,7 @@ function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDele
                 <button key={m.id} type="button" onClick={()=>toggleTraveler(m.id)}
                   className={'pill '+(travelerIds.includes(m.id)?'pill-accent':'pill-muted')}
                   style={{cursor:'pointer',border:'1px solid var(--color-border)',fontWeight:600}}>
-                  {travelerIds.includes(m.id)?'\u2713 ':''}{m.name}
+                  {travelerIds.includes(m.id)?'✓ ':''}{m.name}
                 </button>
               ))}
             </div>
@@ -3665,11 +3665,11 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
   due.slice(0,2).forEach(i=>items.push({emoji:'✅',title:i.label,sub:`Due ~${i.daysBeforeTrip} days out · ${daysToGo} to go`,tab:'getready'}));
   const pending=(trip.collaborators||[]).filter(m=>(m.rsvp||'pending')==='pending');
   if(pending.length) items.push({emoji:'👥',title:`${pending.length} crew still pending RSVP`,sub:pending.map(m=>m.name).slice(0,3).join(', ')+' · tap to invite',tab:'crew'});
-  if(!(trip.flights||[]).length) items.push({emoji:'\u2708\ufe0f',title:'Add your flights',sub:'Upload a confirmation \u2014 Locale reads it for you',tab:'days'});
+  if(!(trip.flights||[]).length) items.push({emoji:'✈️',title:'Add your flights',sub:'Upload a confirmation — Locale reads it for you',tab:'days'});
   else {
     const covered=(m)=>(trip.flights||[]).some(f=>(f.travelerIds||[]).length ? f.travelerIds.includes(m.id) : true);
     const noTravel=(trip.collaborators||[]).filter(m=>(m.rsvp||'pending')!=='no' && !covered(m));
-    if(noTravel.length) items.push({emoji:'\ud83d\udeec',title:noTravel.length===1?(noTravel[0].name+" hasn't added travel yet"):(noTravel.length+" crew haven't added travel yet"),sub:'Everyone adds their own flight \u2014 arrivals line up on Day 1',tab:'crew'});
+    if(noTravel.length) items.push({emoji:'🛬',title:noTravel.length===1?(noTravel[0].name+" hasn't added travel yet"):(noTravel.length+" crew haven't added travel yet"),sub:'Everyone adds their own flight — arrivals line up on Day 1',tab:'crew'});
   }
   if(!(trip.lodging||[]).length) items.push({emoji:'🏨',title:"Add where you're staying",sub:'Upload the booking confirmation',tab:'days'});
   if(items.length===0) items.push({emoji:'🎉',title:"You're in great shape",sub:'Nothing urgent — browse your days or fine-tune the plan',tab:'days'});
@@ -5378,7 +5378,7 @@ function CrewSection({trip, onUpdateTrip}){
     const encoded = encodeTrip(trip);
     if(!encoded){ showToast('Could not create an invite link.','error'); return; }
     const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
-    if(navigator.share){ navigator.share({title:trip.title, text:'Join my trip on Locale', url}).then(()=>showToast('Invite link shared \u2713','info',3000)).catch(()=>{ navigator.clipboard?.writeText(url).then(()=>showToast('Invite link copied \u2014 recipients can view this trip.','info',4000)).catch(()=>{}); }); }
+    if(navigator.share){ navigator.share({title:trip.title, text:'Join my trip on Locale', url}).then(()=>showToast('Invite link shared ✓','info',3000)).catch(()=>{ navigator.clipboard?.writeText(url).then(()=>showToast('Invite link copied — recipients can view this trip.','info',4000)).catch(()=>{}); }); }
     else { navigator.clipboard.writeText(url).then(()=>showToast('Invite link copied — recipients can view this trip.','info',4000)).catch(()=>prompt('Copy invite link:', url)); }
   };
   // Phase 2: if this person has an email, try to actually send them an invite
@@ -5391,7 +5391,7 @@ function CrewSection({trip, onUpdateTrip}){
   const inviteMember = (m)=> setInvitingMember(m);
   // Phase 2c: crew self-serve flights. Owner writes directly; a member's write goes
   // through the guarded set_my_flight/delete_my_flight RPCs (owner-write-only trips),
-  // with a local echo so the UI responds immediately \u2014 next sync reconciles.
+  // with a local echo so the UI responds immediately — next sync reconciles.
   const [flightSheet,setFlightSheet]=React.useState(null); // {member, flight}
   const saveFlight=(entry)=>{
     const flights=[...(trip.flights||[])];
@@ -5401,15 +5401,15 @@ function CrewSection({trip, onUpdateTrip}){
     track('crew_flight_save',{self:!isOwner});
     if(!isOwner){
       const c=sb();
-      if(c) (async()=>{ try{ const {error}=await c.rpc('set_my_flight',{p_trip_id:trip.id,p_flight:entry}); if(error) throw error; }catch(e){ showToast("Couldn't sync your flight \u2014 try again.",'error'); } })();
+      if(c) (async()=>{ try{ const {error}=await c.rpc('set_my_flight',{p_trip_id:trip.id,p_flight:entry}); if(error) throw error; }catch(e){ showToast("Couldn't sync your flight — try again.",'error'); } })();
     }
-    setFlightSheet(null); showToast('Flight saved \u2713','info',2500);
+    setFlightSheet(null); showToast('Flight saved ✓','info',2500);
   };
   const deleteFlight=(f)=>{
     onUpdateTrip({...trip, flights:(trip.flights||[]).filter(x=>x.id!==f.id)});
     if(!isOwner){
       const c=sb();
-      if(c) (async()=>{ try{ const {error}=await c.rpc('delete_my_flight',{p_trip_id:trip.id,p_flight_id:String(f.id)}); if(error) throw error; }catch(e){ showToast("Couldn't remove the flight \u2014 try again.",'error'); } })();
+      if(c) (async()=>{ try{ const {error}=await c.rpc('delete_my_flight',{p_trip_id:trip.id,p_flight_id:String(f.id)}); if(error) throw error; }catch(e){ showToast("Couldn't remove the flight — try again.",'error'); } })();
     }
     setFlightSheet(null);
   };
@@ -5419,10 +5419,10 @@ function CrewSection({trip, onUpdateTrip}){
     const url=buildInviteUrl();
     if(!url){ showToast('Could not create an invite link.','error'); return; }
     track('crew_invite',{via:'link'});
-    if(navigator.share){ navigator.share({title:trip.title, text:`Join "${trip.title||'my trip'}" on Locale`, url}).then(()=>{ markInviteSent(m); showToast(`Invite shared for ${m.name} \u2713`,'info',3500); }).catch(()=>{}); }
+    if(navigator.share){ navigator.share({title:trip.title, text:`Join "${trip.title||'my trip'}" on Locale`, url}).then(()=>{ markInviteSent(m); showToast(`Invite shared for ${m.name} ✓`,'info',3500); }).catch(()=>{}); }
     else {
       navigator.clipboard.writeText(url)
-        .then(()=>{ markInviteSent(m); showToast(`Invite link copied for ${m.name} \u2014 paste it into a text or email.`,'info',4500); })
+        .then(()=>{ markInviteSent(m); showToast(`Invite link copied for ${m.name} — paste it into a text or email.`,'info',4500); })
         .catch(()=>{ markInviteSent(m); prompt(`Copy invite link for ${m.name}:`, url); });
     }
   };
@@ -5432,7 +5432,7 @@ function CrewSection({trip, onUpdateTrip}){
     const smsUrl = 'sms:' + m.phone.replace(/[^+\d]/g,'') + '?&body=' + encodeURIComponent(`Join "${trip.title||'my trip'}" on Locale: ${url}`);
     track('crew_invite',{via:'sms'});
     markInviteSent(m);
-    showToast(`Opening Messages to text ${m.name}\u2026`,'info',3500);
+    showToast(`Opening Messages to text ${m.name}…`,'info',3500);
     window.location.href = smsUrl;
   };
   const sendEmailInvite = async (m)=>{
@@ -5441,20 +5441,20 @@ function CrewSection({trip, onUpdateTrip}){
     try{
       const c=sb();
       const sess = c ? (await c.auth.getSession()).data.session : null;
-      if(!c || !sess){ showToast('Sign in first (\u2601 Sync on the trips screen) to send email invites \u2014 or use Text / Share link.','warn',6000); return; }
+      if(!c || !sess){ showToast('Sign in first (☁ Sync on the trips screen) to send email invites — or use Text / Share link.','warn',6000); return; }
       const { data: inv, error } = await c.from('trip_invites')
         .insert({trip_id:trip.id, collaborator_id:m.id, email:m.email.trim(), role: m.role==='viewer'?'viewer':'crew'})
         .select('id').single();
-      if(error || !inv){ showToast("Couldn't create the invite \u2014 try again in a moment.",'error',4000); return; }
+      if(error || !inv){ showToast("Couldn't create the invite — try again in a moment.",'error',4000); return; }
       const resp = await fetch(SEND_INVITE_URL, {
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+sess.access_token, 'apikey': SUPABASE_ANON_KEY },
         body: JSON.stringify({ invite_id: inv.id, invite_url: url }),
       });
-      if(resp.ok){ markInviteSent(m); track('crew_invite',{via:'email'}); showToast(`Invite emailed to ${m.name} \u2713`,'info',4000); return; }
+      if(resp.ok){ markInviteSent(m); track('crew_invite',{via:'email'}); showToast(`Invite emailed to ${m.name} ✓`,'info',4000); return; }
       let serverReason=''; try{ const ej=await resp.json(); serverReason=ej?.error?.message||''; }catch(e){}
-      showToast(serverReason || `Couldn't email ${m.name} \u2014 try Text or Share link instead.`,'warn',serverReason?7000:4500);
-    }catch(e){ showToast(`Couldn't email ${m.name} \u2014 try Text or Share link instead.`,'warn',4500); }
+      showToast(serverReason || `Couldn't email ${m.name} — try Text or Share link instead.`,'warn',serverReason?7000:4500);
+    }catch(e){ showToast(`Couldn't email ${m.name} — try Text or Share link instead.`,'warn',4500); }
   };
   return (
     <div>
@@ -5520,8 +5520,8 @@ function CrewSection({trip, onUpdateTrip}){
       ); })()}
       {members.length>0 && (
         <div className="card" style={{marginBottom:12}}>
-          <p className="section-label">\u2708\ufe0f Crew travel</p>
-          <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',marginBottom:6}}>Traveling from different cities? Everyone adds their own flight and the arrivals line up above{isOwner?'':' \u2014 add yours below'}.</p>
+          <p className="section-label">✈️ Crew travel</p>
+          <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',marginBottom:6}}>Traveling from different cities? Everyone adds their own flight and the arrivals line up above{isOwner?'':' — add yours below'}.</p>
           {members.filter(m=>(m.rsvp||'pending')!=='no').map(m=>{
             const mine=(trip.flights||[]).filter(f=>(f.travelerIds||[]).includes(m.id));
             const canRow = isOwner || m.id===trip._myCollaboratorId;
@@ -5536,15 +5536,15 @@ function CrewSection({trip, onUpdateTrip}){
                       onClick={()=>{ if(canRow) setFlightSheet({member:m, flight:f}); }}
                       onKeyDown={e=>{ if(canRow&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); setFlightSheet({member:m, flight:f}); } }}
                       style={{fontSize:'.75rem',color:'var(--color-ink-light)',cursor:canRow?'pointer':'default',padding:'2px 0'}}>
-                      \u2708 {f.flightNumber||f.airline||'Flight'} \u00b7 {(f.departureAirport||'?')} \u2192 {(f.arrivalAirport||'?')} \u00b7 {formatDateShort((f.departureTime||'').slice(0,10))} {fmtFlightTimeISO(f.arrivalTime)&&('\u00b7 lands '+fmtFlightTimeISO(f.arrivalTime))}{canRow?' \u270e':''}
+                      ✈ {f.flightNumber||f.airline||'Flight'} · {(f.departureAirport||'?')} → {(f.arrivalAirport||'?')} · {formatDateShort((f.departureTime||'').slice(0,10))} {fmtFlightTimeISO(f.arrivalTime)&&('· lands '+fmtFlightTimeISO(f.arrivalTime))}{canRow?' ✎':''}
                     </div>
                   ))}
                 </div>
-                {canRow && <button className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',whiteSpace:'nowrap',flexShrink:0}} onClick={()=>setFlightSheet({member:m, flight:null})}>\uff0b {(!isOwner&&m.id===trip._myCollaboratorId)?'Add my flight':'Add flight'}</button>}
+                {canRow && <button className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',whiteSpace:'nowrap',flexShrink:0}} onClick={()=>setFlightSheet({member:m, flight:null})}>＋ {(!isOwner&&m.id===trip._myCollaboratorId)?'Add my flight':'Add flight'}</button>}
               </div>
             );
           })}
-          {(trip.flights||[]).some(f=>!(f.travelerIds||[]).length) && <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:8}}>\ud83e\uddf3 Whole-group flights (no travelers tagged) apply to everyone \u2014 see the trip header.</p>}
+          {(trip.flights||[]).some(f=>!(f.travelerIds||[]).length) && <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:8}}>🧳 Whole-group flights (no travelers tagged) apply to everyone — see the trip header.</p>}
         </div>
       )}
       {flightSheet && (
@@ -6089,7 +6089,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
               if(!encoded){alert('Could not encode trip.');return;}
               const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
               if(navigator.share){
-                navigator.share({title: trip.title, text: `Check out my trip to ${(trip.destinations||[]).map(d=>d.city).join(' & ')||trip.title} on Locale! (Read-only snapshot)`, url}).then(()=>showToast('Trip link shared \u2713','info',3000)).catch(()=>{});
+                navigator.share({title: trip.title, text: `Check out my trip to ${(trip.destinations||[]).map(d=>d.city).join(' & ')||trip.title} on Locale! (Read-only snapshot)`, url}).then(()=>showToast('Trip link shared ✓','info',3000)).catch(()=>{});
               } else {
                 navigator.clipboard.writeText(url).then(()=>showToast('Link copied — recipients can view but not edit.','info',4000)).catch(()=>{ prompt('Copy this read-only snapshot link:', url); });
               }
