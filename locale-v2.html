@@ -274,12 +274,13 @@ select.input { background-image: var(--select-arrow); background-repeat: no-repe
 .bottom-nav { display: none; }
 .bottomnav-spacer { display: none; }
 @media (max-width: 760px) {
+  .feedback-fab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important; }
   .top-tabbar { display: none !important; }
   .bottom-nav { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; justify-content: space-around; align-items: flex-start; background: var(--color-surface); border-top: 1px solid var(--color-border); padding: 8px 4px calc(10px + env(safe-area-inset-bottom)); }
   .bottomnav-spacer { display: block; height: calc(84px + env(safe-area-inset-bottom)); }
 }
 .bn-item { display: flex; flex-direction: column; align-items: center; gap: 2px; border: none; background: none; color: var(--color-ink-muted); font-size: .6rem; font-weight: 500; cursor: pointer; min-width: 56px; padding: 2px 4px; font-family: inherit; }
-.bn-item .bn-ico { font-size: 1.3rem; line-height: 1.15; }
+.bn-item .bn-ico { line-height: 1; margin-bottom: 3px; opacity: .9; }
 .bn-item.active { color: var(--color-accent); font-weight: 700; }
 .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1200; }
 .trips-drawer { position: absolute; top: 0; bottom: 0; left: 0; width: min(320px, 84vw); background: var(--color-surface); border-right: 1px solid var(--color-border); padding: 18px 12px calc(18px + env(safe-area-inset-bottom)); overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
@@ -1470,7 +1471,7 @@ function carrierInfo(flight){
   const track = fn ? `https://www.flightaware.com/live/flight/${fn}` : null;
   // Rail / non-airline carriers, matched by name (no IATA code)
   const rail=[
-    {re:/eurostar/,        url:'https://managemybooking.eurostar.com/',                 label:'Manage booking'},
+    {re:/eurostar/,        url:'https://www.eurostar.com/uk-en/manage-booking',         label:'Open Eurostar'},
     {re:/amtrak/,          url:'https://www.amtrak.com/manage-trip',                    label:'Manage trip'},
     {re:/trenitalia/,      url:'https://www.trenitalia.com/en.html',                    label:'Manage booking'},
     {re:/italo/,           url:'https://www.italotreno.com/en',                         label:'Manage booking'},
@@ -3069,7 +3070,7 @@ function ArrivalsBoard({trip, date, mode}){
   }
   return (
     <div className="card" style={{marginBottom:16}}>
-      <p className="section-label" style={{marginBottom:8}}>{arrivalsMode?'🛬 Arrivals':'🛫 Departures'} · {formatDateShort(date)}</p>
+      <p className="section-label" style={{marginBottom:8}}>{arrivalsMode?'Arrivals':'Departures'} · {formatDateShort(date)}</p>
       {rows.map(({f,who})=>(
         <div key={f.id} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 0',borderBottom:'1px solid var(--color-border)'}}>
           <span style={{fontFamily:'var(--font-mono)',fontWeight:700,fontSize:'.85rem',minWidth:72,flexShrink:0}}>{fmtFlightTimeISO(f[key])||'—'}</span>
@@ -3441,7 +3442,6 @@ function DayView({trip,day,onUpdateTrip}){
           <h2 className="font-display" style={{fontSize:'1.5rem',fontWeight:600,lineHeight:1.2,marginBottom:4}}>{day.label}{dest?<span style={{color:'var(--color-ink-light)',fontWeight:400}}> · {dest.city}</span>:''}</h2>
           <p style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{formatDate(day.date)} · {totalStops} {totalStops===1?'stop':'stops'}</p>
         </div>
-        <span className="pill" style={{flexShrink:0,background:'var(--color-success-soft, rgba(43,182,163,.14))',color:'var(--color-success)',fontWeight:600,fontSize:'.72rem',whiteSpace:'nowrap'}}>● On track</span>
       </div>
       {day.date===trip.startDate && <ArrivalsBoard trip={trip} date={day.date} mode="arrivals"/>}
       {day.date===trip.endDate && day.date!==trip.startDate && <ArrivalsBoard trip={trip} date={day.date} mode="departures"/>}
@@ -3593,10 +3593,9 @@ function GetReadyView({trip, onUpdate, onUpdateTrip}){
 function CalendarExportCard({trip}){
   return (
     <div className="card" style={{padding:'13px 16px',marginBottom:12,display:'flex',alignItems:'center',gap:12}}>
-      <span style={{fontSize:'1.25rem'}} aria-hidden="true">📅</span>
       <div style={{flex:1,minWidth:0}}>
         <p style={{fontWeight:600,fontSize:'.86rem'}}>Add itinerary to your phone calendar</p>
-        <p style={{fontSize:'.74rem',color:'var(--color-ink-light)',lineHeight:1.45}}>Every day and event — Apple, Google, Outlook. Re-export any time the plan changes.</p>
+        <p style={{fontSize:'.74rem',color:'var(--color-ink-light)',lineHeight:1.45}}>Every day and event, for Apple, Google, or Outlook. Re-export any time the plan changes.</p>
       </div>
       <button className="btn btn-secondary btn-sm" onClick={()=>downloadTripICS(trip)} style={{whiteSpace:'nowrap'}}>Export</button>
     </div>
@@ -3608,7 +3607,7 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
     <div className="card" role={onClick?'button':undefined} tabIndex={onClick?0:undefined} onClick={onClick}
       onKeyDown={e=>{if(onClick&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onClick();}}}
       style={{display:'flex',alignItems:'center',gap:12,cursor:onClick?'pointer':'default'}}>
-      <span style={{fontSize:'1.2rem',flexShrink:0}} aria-hidden="true">{emoji}</span>
+      {emoji ? <span style={{fontSize:'1.2rem',flexShrink:0}} aria-hidden="true">{emoji}</span> : null}
       <div style={{flex:1,minWidth:0}}>
         <p style={{fontWeight:600,fontSize:'.88rem'}}>{title}</p>
         {sub && <p style={{fontSize:'.75rem',color:'var(--color-ink-light)',lineHeight:1.45}}>{sub}</p>}
@@ -3621,16 +3620,15 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
     const pins = trip.pinnedIdeas||[];
     return (
       <div style={{marginBottom:16}}>
-        <K>Just an idea · no dates yet — and that's fine</K>
-        <Row emoji="🧠" title="Get recommendations" sub="Best time to go, where to stay, day trips — tuned to your taste" onClick={()=>onGoTab('days')} cta="Ask AI"/>
-        {pins.length>0 && <K>📌 Pinned so far · share these for crew buy-in</K>}
-        {pins.slice(0,3).map(p=><Row key={p.id} emoji="📌" title={p.text}/>)}
-        <Row emoji="🔗" title="Share the idea with your crew" sub="They can browse everything — no account needed" onClick={onShare} cta="Share"/>
+        <K>Just an idea · no dates yet, and that's fine</K>
+        <Row emoji="" title="Get recommendations" sub="Best time to go, where to stay, day trips, tuned to your taste" onClick={()=>onGoTab('days')} cta="Ask AI"/>
+        {pins.length>0 && <K>Pinned so far · share these for crew buy-in</K>}
+        {pins.slice(0,3).map(p=><Row key={p.id} emoji="" title={p.text}/>)}
+        <Row emoji="" title="Share the idea with your crew" sub="They can browse everything, no account needed" onClick={onShare} cta="Share"/>
         <div className="card" style={{display:'flex',alignItems:'center',gap:12,borderColor:'var(--color-accent)',borderStyle:'dashed'}}>
-          <span style={{fontSize:'1.2rem'}} aria-hidden="true">🚀</span>
           <div style={{flex:1,minWidth:0}}>
             <p style={{fontWeight:600,fontSize:'.88rem'}}>Ready to make it real?</p>
-            <p style={{fontSize:'.75rem',color:'var(--color-ink-light)'}}>Add dates below — the full planner unlocks and your pins feed the itinerary.</p>
+            <p style={{fontSize:'.75rem',color:'var(--color-ink-light)'}}>Add dates below. The full planner unlocks and your pins feed the itinerary.</p>
           </div>
         </div>
       </div>
@@ -3645,15 +3643,14 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
         <div className="card" role="button" tabIndex={0} onClick={()=>onGoTab('days')}
           onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onGoTab('days');}}}
           style={{display:'flex',alignItems:'center',gap:12,cursor:'pointer',borderColor:'var(--color-accent)',borderStyle:'dashed'}}>
-          <span style={{fontSize:'1.2rem'}} aria-hidden="true">✨</span>
           <div style={{flex:1,minWidth:0}}>
             <p style={{fontWeight:600,fontSize:'.88rem'}}>Draft your days with AI</p>
             <p style={{fontSize:'.75rem',color:'var(--color-ink-light)'}}>Free, ~20 seconds, fully editable after.</p>
           </div>
           <span className="btn btn-primary btn-sm" style={{whiteSpace:'nowrap'}}>Generate</span>
         </div>
-        <Row emoji="📄" title="Upload hotel or flight confirmations" sub="Locale reads the PDF or screenshot and adds them for you" onClick={()=>onGoTab('days')}/>
-        <Row emoji="👥" title="Invite your crew" sub="Email or text — they see everything, no account needed" onClick={()=>onGoTab('crew')}/>
+        <Row emoji="" title="Upload hotel or flight confirmations" sub="Locale reads the PDF or screenshot and adds them for you" onClick={()=>onGoTab('days')}/>
+        <Row emoji="" title="Invite your crew" sub="Email or text. They see everything, no account needed" onClick={()=>onGoTab('crew')}/>
       </div>
     );
   }
@@ -3662,17 +3659,17 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
   const daysToGo=Math.max(0, Math.ceil((new Date(trip.startDate+'T12:00:00')-new Date())/86400000));
   const due=(trip.checklist||[]).filter(i=>!i.completed && typeof i.daysBeforeTrip==='number' && daysToGo<=i.daysBeforeTrip)
     .sort((a,b)=>b.daysBeforeTrip-a.daysBeforeTrip);
-  due.slice(0,2).forEach(i=>items.push({emoji:'✅',title:i.label,sub:`Due ~${i.daysBeforeTrip} days out · ${daysToGo} to go`,tab:'getready'}));
+  due.slice(0,2).forEach(i=>items.push({emoji:'',title:i.label,sub:`Due ~${i.daysBeforeTrip} days out · ${daysToGo} to go`,tab:'getready'}));
   const pending=(trip.collaborators||[]).filter(m=>(m.rsvp||'pending')==='pending');
-  if(pending.length) items.push({emoji:'👥',title:`${pending.length} crew still pending RSVP`,sub:pending.map(m=>m.name).slice(0,3).join(', ')+' · tap to invite',tab:'crew'});
-  if(!(trip.flights||[]).length) items.push({emoji:'✈️',title:'Add your flights',sub:'Upload a confirmation — Locale reads it for you',tab:'days'});
+  if(pending.length) items.push({emoji:'',title:`${pending.length} crew still pending RSVP`,sub:pending.map(m=>m.name).slice(0,3).join(', ')+' · tap to invite',tab:'crew'});
+  if(!(trip.flights||[]).length) items.push({emoji:'',title:'Add your flights',sub:'Upload a confirmation and Locale reads it for you',tab:'days'});
   else {
     const covered=(m)=>(trip.flights||[]).some(f=>(f.travelerIds||[]).length ? f.travelerIds.includes(m.id) : true);
     const noTravel=(trip.collaborators||[]).filter(m=>(m.rsvp||'pending')!=='no' && !covered(m));
-    if(noTravel.length) items.push({emoji:'🛬',title:noTravel.length===1?(noTravel[0].name+" hasn't added travel yet"):(noTravel.length+" crew haven't added travel yet"),sub:'Everyone adds their own flight — arrivals line up on Day 1',tab:'crew'});
+    if(noTravel.length) items.push({emoji:'',title:noTravel.length===1?(noTravel[0].name+" hasn't added travel yet"):(noTravel.length+" crew haven't added travel yet"),sub:'Everyone adds their own flight; arrivals line up on Day 1',tab:'crew'});
   }
-  if(!(trip.lodging||[]).length) items.push({emoji:'🏨',title:"Add where you're staying",sub:'Upload the booking confirmation',tab:'days'});
-  if(items.length===0) items.push({emoji:'🎉',title:"You're in great shape",sub:'Nothing urgent — browse your days or fine-tune the plan',tab:'days'});
+  if(!(trip.lodging||[]).length) items.push({emoji:'',title:"Add where you're staying",sub:'Upload the booking confirmation',tab:'days'});
+  if(items.length===0) items.push({emoji:'',title:"You're in great shape",sub:'Nothing urgent. Browse your days or fine-tune the plan',tab:'days'});
   return (
     <div style={{marginBottom:16}}>
       <K>Next {Math.min(3,items.length)===1?'thing':Math.min(3,items.length)+' things'} · {daysToGo>0?daysToGo+' days to go':'trip time'}</K>
@@ -3682,45 +3679,27 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare}){
 }
 
 // ── AT A GLANCE ────────────────────────────────────────────────────────────────
-function AtAGlance({trip, onStartPlanning}){
+function AtAGlance({trip, onStartPlanning, onOpenDays}){
   const allCount=trip.days.reduce((n,d)=>n+(d.activities||[]).length+(d.restaurants||[]).length,0);
   return(
     <div style={{padding:'0 16px 32px'}}>
       {trip.days.length===0||allCount===0?(
         <div className="card" style={{padding:24,marginBottom:16,textAlign:'center',borderStyle:'dashed',borderColor:'var(--color-accent-warm)'}}>
-          <div style={{fontSize:'1.9rem',marginBottom:8}} aria-hidden="true">🗺️</div>
           <p style={{fontWeight:600,fontSize:'1rem',marginBottom:4,color:'var(--color-accent)'}}>Ready to plan your trip?</p>
-          <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',lineHeight:1.5,marginBottom:16}}>Let AI draft a day-by-day itinerary in seconds — free, no setup needed. You can edit everything by hand after.</p>
-          <button onClick={()=>onStartPlanning&&onStartPlanning()} className="btn btn-primary" style={{fontSize:'.92rem',padding:'12px 26px'}}>✨ Generate my itinerary</button>
+          <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',lineHeight:1.5,marginBottom:16}}>Let AI draft a day-by-day itinerary in seconds. Free, and you can edit everything by hand after.</p>
+          <button onClick={()=>onStartPlanning&&onStartPlanning()} className="btn btn-primary" style={{fontSize:'.92rem',padding:'12px 26px'}}>Generate my itinerary</button>
         </div>
       ):(
-        <div className="card" style={{padding:16,marginBottom:16}}>
-          <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:4}}>{trip.days.length} days · {allCount} stops planned</p>
-          <p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {formatDateShort(trip.startDate)} – {formatDateShort(trip.endDate)}</p>
+        <div className="card" role="button" tabIndex={0} onClick={()=>onOpenDays&&onOpenDays()}
+          onKeyDown={e=>{if(onOpenDays&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onOpenDays();}}}
+          style={{padding:16,marginBottom:16,display:'flex',alignItems:'center',gap:12,cursor:onOpenDays?'pointer':'default'}}>
+          <div style={{flex:1,minWidth:0}}>
+            <p style={{fontWeight:600,fontSize:'.9rem',marginBottom:4}}>{trip.days.length} days · {allCount} stops planned</p>
+            <p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>{trip.destinations.map(d=>d.city).join(' → ')} · {formatDateShort(trip.startDate)} – {formatDateShort(trip.endDate)}</p>
+          </div>
+          {onOpenDays && <span className="btn btn-secondary btn-sm" style={{whiteSpace:'nowrap'}}>Open Days</span>}
         </div>
       )}
-      {trip.days.filter(d=>(d.activities||[]).length+(d.restaurants||[]).length>0).map(day=>{
-        const items=[...(day.activities||[]).map(a=>({...a,_t:'activity'})),...(day.restaurants||[]).map(r=>({...r,_t:'restaurant'}))];
-        return(
-          <div key={day.id} style={{marginBottom:10}}>
-            <p style={{fontSize:'.75rem',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--color-ink-light)',marginBottom:6,paddingLeft:4}}>{day.label} · {formatDateDow(day.date)}</p>
-            <div className="card" style={{overflow:'hidden'}}>
-              {items.map((item,i)=>(
-                <div key={item.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 16px',borderBottom:i<items.length-1?'1px solid var(--color-border)':'none'}}>
-                  <span style={{fontSize:'1.1rem',flexShrink:0}}>{item.emoji}</span>
-                  <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontWeight:500,fontSize:'.875rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{item.name}</p>
-                    {item.neighborhood&&<p style={{fontSize:'.75rem',color:'var(--color-ink-light)'}}>{item.neighborhood}</p>}
-                  </div>
-                  {item.bucket==='must-do'&&<span className="badge-must" style={{flexShrink:0}} title="Must-do" aria-label="Must-do">★</span>}
-                  {(item.bookingRequired||item.reservationRequired)&&<span style={{fontSize:'.7rem',color:'var(--color-flag)',flexShrink:0}} title="Booking required" aria-label="Booking required">📌</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-      <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)',paddingLeft:4,marginTop:2}}>★ must-do &nbsp;·&nbsp; 📌 booking required</p>
     </div>
   );
 }
@@ -3763,9 +3742,11 @@ function ShareSheet({trip,onClose}){
   const [copied,setCopied]=useState(false);
   const dlgRef=React.useRef(null);
   useModalA11y(dlgRef,onClose);
-  // Include a tappable read-only snapshot link so recipients can actually open the trip (not just a text dump)
-  const shareUrl=(()=>{try{const enc=encodeTrip(trip);return enc?window.location.origin+window.location.pathname+'#trip='+enc:null;}catch(e){return null;}})();
-  const text=`📍 ${trip.title}\n✈️ ${trip.destinations.map(d=>d.city).join(' → ')}\n📅 ${formatDateShort(trip.startDate)} – ${formatDateShort(trip.endDate)}\n\nPlanned with Locale ✨${shareUrl?'\n'+shareUrl:''}`;
+  // Short branded link via share-link edge fn; falls back to the long #trip= URL.
+  const [shareUrl,setShareUrl]=React.useState(()=>{try{const enc=encodeTrip(trip);return enc?window.location.origin+window.location.pathname+'#trip='+enc:null;}catch(e){return null;}});
+  React.useEffect(()=>{ let on=true; makeTripShareUrl(trip).then(u=>{ if(on&&u) setShareUrl(u); }); return ()=>{on=false}; },[trip.id]);
+  const dates=[formatDateShort(trip.startDate),formatDateShort(trip.endDate)].filter(Boolean).join(' – ');
+  const text=`${trip.title}\n${trip.destinations.map(d=>d.city).join(' → ')}${dates?' · '+dates:''}\n\nPlanned with Locale${shareUrl?'\n'+shareUrl:''}`;
   function copy(){navigator.clipboard?.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000)});}
   function share(){if(navigator.share){navigator.share(shareUrl?{title:trip.title,text,url:shareUrl}:{title:trip.title,text}).catch(()=>{});}else copy();}
   return(
@@ -3785,13 +3766,13 @@ function ShareSheet({trip,onClose}){
             </div>
           </div>
           <p className="section-label">Share with your group</p>
-          <div style={{background:'var(--color-cream)',border:'1.5px solid var(--color-border)',borderRadius:10,padding:'10px 14px',fontSize:'.8rem',color:'var(--color-ink-light)',whiteSpace:'pre-line',marginBottom:16}}>{text}</div>
+          <div style={{background:'var(--color-cream)',border:'1.5px solid var(--color-border)',borderRadius:10,padding:'10px 14px',fontSize:'.8rem',color:'var(--color-ink-light)',whiteSpace:'pre-line',overflowWrap:'anywhere',marginBottom:16}}>{text}</div>
           <div style={{display:'flex',gap:8,marginBottom:20}}>
-            <button className="btn btn-primary" style={{flex:2}} onClick={share}>{navigator.share?'📤 Share':'📋 Copy Summary'}</button>
-            <button className="btn btn-secondary" style={{flex:1}} onClick={copy}>{copied?'✅ Copied':'Copy'}</button>
+            <button className="btn btn-primary" style={{flex:2}} onClick={share}>{navigator.share?'Share':'Copy summary'}</button>
+            <button className="btn btn-secondary" style={{flex:1}} onClick={copy}>{copied?'Copied ✓':'Copy'}</button>
           </div>
           <div style={{height:1,background:'var(--color-border)',margin:'16px 0'}}/>
-          <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',textAlign:'center',lineHeight:1.5}}>This shares a <strong>read-only snapshot</strong> — recipients can view your itinerary but can't edit or sync changes. Real-time collaboration is coming in a future update.</p>
+          <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',textAlign:'center',lineHeight:1.5}}>This shares a <strong>read-only snapshot</strong>. Recipients can view your itinerary but can't edit or sync changes.</p>
         </div>
       </div>
     </div>
@@ -5291,12 +5272,10 @@ function MemberEditSheet({member, isOwner, onClose, onSave, onRemove}){
   const [phone,setPhone]=React.useState(member.phone||'');
   const [role,setRole]=React.useState(member.role||'crew');
   const [rsvp,setRsvpVal]=React.useState(member.rsvp||'pending');
-  const [venmo,setVenmo]=React.useState(member.venmo||'');
-  const [zelle,setZelle]=React.useState(member.zelle||'');
   const save=()=>{
     if(isOwner&&!name.trim()){ showToast('Name is required.','warn'); return; }
     if(isOwner&&email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())){ showToast('That email looks off.','warn'); return; }
-    onSave({name:name.trim()||member.name, email:email.trim(), phone:phone.trim(), role, rsvp, venmo:venmo.replace(/^@/,'').trim(), zelle:zelle.trim()});
+    onSave({name:name.trim()||member.name, email:email.trim(), phone:phone.trim(), role, rsvp});
   };
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label="Edit traveler" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -5316,14 +5295,9 @@ function MemberEditSheet({member, isOwner, onClose, onSave, onRemove}){
           {isOwner && (<>
             <label className="section-label" style={{marginTop:8}}>Role</label>
             <select className="input" value={role} onChange={e=>setRole(e.target.value)}>
-              <option value="crew">✏️ Crew — can add notes/suggestions</option>
-              <option value="viewer">👀 Viewer — read-only</option>
+              <option value="crew">Crew · can add notes and suggestions</option>
+              <option value="viewer">Viewer · read-only</option>
             </select>
-            <label className="section-label" style={{marginTop:8}}>Payment handles <span style={{fontWeight:400,textTransform:'none',letterSpacing:0}}>— powers the settle-up buttons in Budget</span></label>
-            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-              <input className="input" style={{flex:'1 1 130px'}} placeholder="Venmo (without @)" value={venmo} onChange={e=>setVenmo(e.target.value)}/>
-              <input className="input" style={{flex:'1 1 130px'}} placeholder="Zelle (email/phone)" value={zelle} onChange={e=>setZelle(e.target.value)}/>
-            </div>
           </>)}
           <label className="section-label" style={{marginTop:8}}>Attendance</label>
           <select className="input" value={rsvp} onChange={e=>setRsvpVal(e.target.value)}>
@@ -5374,10 +5348,9 @@ function CrewSection({trip, onUpdateTrip}){
     track('crew_add', { role, hasEmail: !!email.trim() });
     setName(''); setEmail(''); setPhone(''); setR('pending'); setRole('crew');
   };
-  const shareInvite = ()=>{
-    const encoded = encodeTrip(trip);
-    if(!encoded){ showToast('Could not create an invite link.','error'); return; }
-    const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
+  const shareInvite = async ()=>{
+    const url = await makeTripShareUrl(trip);
+    if(!url){ showToast('Could not create an invite link.','error'); return; }
     if(navigator.share){ navigator.share({title:trip.title, text:'Join my trip on Locale', url}).then(()=>showToast('Invite link shared ✓','info',3000)).catch(()=>{ navigator.clipboard?.writeText(url).then(()=>showToast('Invite link copied — recipients can view this trip.','info',4000)).catch(()=>{}); }); }
     else { navigator.clipboard.writeText(url).then(()=>showToast('Invite link copied — recipients can view this trip.','info',4000)).catch(()=>prompt('Copy invite link:', url)); }
   };
@@ -5413,21 +5386,21 @@ function CrewSection({trip, onUpdateTrip}){
     }
     setFlightSheet(null);
   };
-  const buildInviteUrl = ()=>{ const encoded=encodeTrip(trip); return encoded ? window.location.origin+window.location.pathname+'#trip='+encoded : null; };
+  const buildInviteUrl = async ()=>{ return await makeTripShareUrl(trip); };
   const markInviteSent = (m)=> save(members.map(x=>x.id===m.id?{...x, invitedAt:Date.now(), inviteSentCount:(x.inviteSentCount||0)+1}:x));
-  const shareLinkInvite = (m)=>{
-    const url=buildInviteUrl();
+  const shareLinkInvite = async (m)=>{
+    const url=await buildInviteUrl();
     if(!url){ showToast('Could not create an invite link.','error'); return; }
     track('crew_invite',{via:'link'});
     if(navigator.share){ navigator.share({title:trip.title, text:`Join "${trip.title||'my trip'}" on Locale`, url}).then(()=>{ markInviteSent(m); showToast(`Invite shared for ${m.name} ✓`,'info',3500); }).catch(()=>{}); }
     else {
       navigator.clipboard.writeText(url)
-        .then(()=>{ markInviteSent(m); showToast(`Invite link copied for ${m.name} — paste it into a text or email.`,'info',4500); })
+        .then(()=>{ markInviteSent(m); showToast(`Invite link copied for ${m.name}. Paste it into a text or email.`,'info',4500); })
         .catch(()=>{ markInviteSent(m); prompt(`Copy invite link for ${m.name}:`, url); });
     }
   };
-  const sendTextInvite = (m)=>{
-    const url=buildInviteUrl();
+  const sendTextInvite = async (m)=>{
+    const url=await buildInviteUrl();
     if(!url || !m.phone){ shareLinkInvite(m); return; }
     const smsUrl = 'sms:' + m.phone.replace(/[^+\d]/g,'') + '?&body=' + encodeURIComponent(`Join "${trip.title||'my trip'}" on Locale: ${url}`);
     track('crew_invite',{via:'sms'});
@@ -5436,16 +5409,16 @@ function CrewSection({trip, onUpdateTrip}){
     window.location.href = smsUrl;
   };
   const sendEmailInvite = async (m)=>{
-    const url=buildInviteUrl();
+    const url=await buildInviteUrl();
     if(!url){ showToast('Could not create an invite link.','error'); return; }
     try{
       const c=sb();
       const sess = c ? (await c.auth.getSession()).data.session : null;
-      if(!c || !sess){ showToast('Sign in first (☁ Sync on the trips screen) to send email invites — or use Text / Share link.','warn',6000); return; }
+      if(!c || !sess){ showToast('Sign in first (Sync on the trips screen) to send email invites, or use Text / Share link.','warn',6000); return; }
       const { data: inv, error } = await c.from('trip_invites')
         .insert({trip_id:trip.id, collaborator_id:m.id, email:m.email.trim(), role: m.role==='viewer'?'viewer':'crew'})
         .select('id').single();
-      if(error || !inv){ showToast("Couldn't create the invite — try again in a moment.",'error',4000); return; }
+      if(error || !inv){ showToast("Couldn't create the invite. Try again in a moment.",'error',4000); return; }
       const resp = await fetch(SEND_INVITE_URL, {
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+sess.access_token, 'apikey': SUPABASE_ANON_KEY },
@@ -5453,8 +5426,8 @@ function CrewSection({trip, onUpdateTrip}){
       });
       if(resp.ok){ markInviteSent(m); track('crew_invite',{via:'email'}); showToast(`Invite emailed to ${m.name} ✓`,'info',4000); return; }
       let serverReason=''; try{ const ej=await resp.json(); serverReason=ej?.error?.message||''; }catch(e){}
-      showToast(serverReason || `Couldn't email ${m.name} — try Text or Share link instead.`,'warn',serverReason?7000:4500);
-    }catch(e){ showToast(`Couldn't email ${m.name} — try Text or Share link instead.`,'warn',4500); }
+      showToast(serverReason || `Couldn't email ${m.name}. Try Text or Share link instead.`,'warn',serverReason?7000:4500);
+    }catch(e){ showToast(`Couldn't email ${m.name}. Try Text or Share link instead.`,'warn',4500); }
   };
   return (
     <div>
@@ -5478,13 +5451,13 @@ function CrewSection({trip, onUpdateTrip}){
               style={{flex:1,minWidth:0,cursor:canEditRsvp?'pointer':'default'}}>
               <div style={{display:'flex',alignItems:'center',gap:6}}>
                 <div style={{fontWeight:600,color:'var(--color-ink)'}}>{m.name}</div>
-                <span className={`pill ${m.role==='viewer'?'pill-muted':'pill-neutral'}`} style={{padding:'1px 6px',fontSize:'.65rem'}}>{m.role==='viewer'?'👀 Viewer':'✏️ Crew'}</span>
+                <span className={`pill ${m.role==='viewer'?'pill-muted':'pill-neutral'}`} style={{padding:'1px 6px',fontSize:'.65rem'}}>{m.role==='viewer'?'Viewer':'Crew'}</span>
               </div>
               <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{[m.email,m.phone].filter(Boolean).join(' · ') || 'No contact info'}</div>
               {m.invitedAt && <div style={{fontSize:'.68rem',color:'var(--color-ink-muted)',marginTop:2}}>Invited {relativeAgo(m.invitedAt)}{m.inviteSentCount>1?` · sent ${m.inviteSentCount}×`:''}</div>}
               {canEditRsvp && <div style={{fontSize:'.65rem',color:'var(--color-accent)',marginTop:2}}>Tap to edit</div>}
             </div>
-            {isOwner && (m.rsvp||'pending')!=='going' && <button aria-label={m.invitedAt?`Resend invite to ${m.name}`:`Invite ${m.name}`} onClick={()=>inviteMember(m)} className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',padding:'4px 8px',whiteSpace:'nowrap'}}>{m.invitedAt?'↻ Resend':'✉️ Invite'}</button>}
+            {isOwner && (m.rsvp||'pending')!=='going' && <button aria-label={m.invitedAt?`Resend invite to ${m.name}`:`Invite ${m.name}`} onClick={()=>inviteMember(m)} className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',padding:'4px 8px',whiteSpace:'nowrap'}}>{m.invitedAt?'Resend':'Invite'}</button>}
             <span className={`pill ${(m.rsvp||'pending')==='going'?'pill-accent':(m.rsvp==='no'?'pill-flag':'pill-neutral')}`} style={{whiteSpace:'nowrap',flexShrink:0}}>{(m.rsvp||'pending')==='going'?'● Going':(m.rsvp==='no'?"✕ Can't make it":'○ Pending')}</span>
           </div>
           );
@@ -5510,9 +5483,9 @@ function CrewSection({trip, onUpdateTrip}){
             </div>
             <div style={{padding:'20px 24px 32px',display:'flex',flexDirection:'column',gap:10}}>
               <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:2}}>How should the invite go out?</p>
-              {m.email ? <button className="btn btn-primary" style={{width:'100%',padding:'14px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} onClick={()=>{ setInvitingMember(null); sendEmailInvite(m); }}>📧 Email — {m.email}</button> : null}
-              {m.phone ? <button className="btn btn-secondary" style={{width:'100%',padding:'14px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} onClick={()=>{ setInvitingMember(null); sendTextInvite(m); }}>💬 Text — {m.phone}</button> : null}
-              <button className="btn btn-ghost" style={{width:'100%',padding:'12px'}} onClick={()=>{ setInvitingMember(null); shareLinkInvite(m); }}>🔗 Share the link another way</button>
+              {m.email ? <button className="btn btn-primary" style={{width:'100%',padding:'14px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} onClick={()=>{ setInvitingMember(null); sendEmailInvite(m); }}>Email · {m.email}</button> : null}
+              {m.phone ? <button className="btn btn-secondary" style={{width:'100%',padding:'14px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} onClick={()=>{ setInvitingMember(null); sendTextInvite(m); }}>Text · {m.phone}</button> : null}
+              <button className="btn btn-ghost" style={{width:'100%',padding:'12px'}} onClick={()=>{ setInvitingMember(null); shareLinkInvite(m); }}>Share the link another way</button>
               {!m.email && !m.phone && <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',textAlign:'center',lineHeight:1.5}}>No email or mobile saved for {m.name} — tap their name to add contact info, or share the link.</p>}
             </div>
           </div>
@@ -5520,8 +5493,8 @@ function CrewSection({trip, onUpdateTrip}){
       ); })()}
       {members.length>0 && (
         <div className="card" style={{marginBottom:12}}>
-          <p className="section-label">✈️ Crew travel</p>
-          <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',marginBottom:6}}>Traveling from different cities? Everyone adds their own flight and the arrivals line up above{isOwner?'':' — add yours below'}.</p>
+          <p className="section-label">Crew travel</p>
+          <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',marginBottom:6}}>Traveling from different cities? Everyone adds their own flight and the arrivals line up above{isOwner?'':'. Add yours below'}.</p>
           {members.filter(m=>(m.rsvp||'pending')!=='no').map(m=>{
             const mine=(trip.flights||[]).filter(f=>(f.travelerIds||[]).includes(m.id));
             const canRow = isOwner || m.id===trip._myCollaboratorId;
@@ -5536,15 +5509,15 @@ function CrewSection({trip, onUpdateTrip}){
                       onClick={()=>{ if(canRow) setFlightSheet({member:m, flight:f}); }}
                       onKeyDown={e=>{ if(canRow&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); setFlightSheet({member:m, flight:f}); } }}
                       style={{fontSize:'.75rem',color:'var(--color-ink-light)',cursor:canRow?'pointer':'default',padding:'2px 0'}}>
-                      ✈ {f.flightNumber||f.airline||'Flight'} · {(f.departureAirport||'?')} → {(f.arrivalAirport||'?')} · {formatDateShort((f.departureTime||'').slice(0,10))} {fmtFlightTimeISO(f.arrivalTime)&&('· lands '+fmtFlightTimeISO(f.arrivalTime))}{canRow?' ✎':''}
+                      {f.flightNumber||f.airline||'Flight'} · {(f.departureAirport||'?')} → {(f.arrivalAirport||'?')} · {formatDateShort((f.departureTime||'').slice(0,10))} {fmtFlightTimeISO(f.arrivalTime)&&('· lands '+fmtFlightTimeISO(f.arrivalTime))}{canRow?' ✎':''}
                     </div>
                   ))}
                 </div>
-                {canRow && <button className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',whiteSpace:'nowrap',flexShrink:0}} onClick={()=>setFlightSheet({member:m, flight:null})}>＋ {(!isOwner&&m.id===trip._myCollaboratorId)?'Add my flight':'Add flight'}</button>}
+                {canRow && <button className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',whiteSpace:'nowrap',flexShrink:0}} onClick={()=>setFlightSheet({member:m, flight:null})}>+ {(!isOwner&&m.id===trip._myCollaboratorId)?'Add my flight':'Add flight'}</button>}
               </div>
             );
           })}
-          {(trip.flights||[]).some(f=>!(f.travelerIds||[]).length) && <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:8}}>🧳 Whole-group flights (no travelers tagged) apply to everyone — see the trip header.</p>}
+          {(trip.flights||[]).some(f=>!(f.travelerIds||[]).length) && <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:8}}>Whole-group flights (no travelers tagged) apply to everyone. See the trip header.</p>}
         </div>
       )}
       {flightSheet && (
@@ -5564,8 +5537,8 @@ function CrewSection({trip, onUpdateTrip}){
               </div>
               <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                 <select className="input" aria-label="Role" style={{flex:'1 1 140px'}} value={role} onChange={e=>setRole(e.target.value)}>
-                  <option value="crew">✏️ Crew — can add notes/suggestions</option>
-                  <option value="viewer">👀 Viewer — sees itinerary only</option>
+                  <option value="crew">Crew · can add notes and suggestions</option>
+                  <option value="viewer">Viewer · sees itinerary only</option>
                 </select>
                 <select className="input" style={{flex:'1 1 auto'}} value={rsvp} onChange={e=>setR(e.target.value)}>
                   <option value="going">Going</option>
@@ -5576,7 +5549,7 @@ function CrewSection({trip, onUpdateTrip}){
               <button className="btn btn-primary" onClick={add}>Add</button>
             </div>
           </div>
-          <button className="btn btn-secondary" style={{width:'100%'}} onClick={shareInvite}>🔗 Share invite link</button>
+          <button className="btn btn-secondary" style={{width:'100%'}} onClick={shareInvite}>Share invite link</button>
         </>
       ) : (
         <p style={{fontSize:'.8rem',color:'var(--color-ink-muted)',textAlign:'center',padding:'8px 0'}}>You're viewing this trip as {trip._myRole==='crew'?'Crew':'a Viewer'}{isMe?' — you can set your own RSVP above':''}.</p>
@@ -5585,11 +5558,8 @@ function CrewSection({trip, onUpdateTrip}){
   );
 }
 
-function venmoPayUrl(handle, amount, note){
-  return `https://venmo.com/?txn=pay&audience=private&recipients=${encodeURIComponent(handle)}`+
-    `&amount=${encodeURIComponent((Math.round((Number(amount)||0)*100)/100).toFixed(2))}`+
-    `&note=${encodeURIComponent(note||'Trip expenses')}`;
-}
+
+
 function computeSettlements(balMap){
   const creditors=[],debtors=[];
   Object.entries(balMap).forEach(([id,v])=>{ const c=Math.round(v*100); if(c>0)creditors.push({id,c}); else if(c<0)debtors.push({id,c:-c}); });
@@ -5694,7 +5664,7 @@ function BudgetItemRow({item, members, days, fmt, dayLabel, splitInfo, onSave, o
 }
 
 function BudgetSection({trip, onUpdateTrip}){
-  const isOwner = trip._myRole==='owner' || !trip._myRole; // members see the budget + Venmo/Zelle links, owner edits
+  const isOwner = trip._myRole==='owner' || !trip._myRole; // members see the budget read-only, owner edits
   const budget = (trip.budget && Array.isArray(trip.budget.items)) ? trip.budget : {currency:'USD', items:[], payments:[]};
   const items = budget.items;
   const payments = budget.payments || [];
@@ -5760,7 +5730,7 @@ function BudgetSection({trip, onUpdateTrip}){
       </div>
 
       {items.length===0 ? (
-        <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:14,lineHeight:1.5}}>Track shared costs, choose who paid, and settle up. Add crew on the Crew tab to split unevenly (e.g. skip a child) and get Venmo/Zelle settle-up links.</p>
+        <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:14,lineHeight:1.5}}>Track shared costs, choose who paid, and settle up. Add crew on the Crew tab to split unevenly and mark who has paid who back.</p>
       ) : (
         <div style={{marginBottom:14}}>
           {items.map(i=>(
@@ -5834,15 +5804,11 @@ function BudgetSection({trip, onUpdateTrip}){
             <div style={{marginTop:12}}>
               <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',fontWeight:600,marginBottom:8}}>Settle up</p>
               {settlements.map((s,idx)=>{
-                const to=members.find(m=>m.id===s.to)||{};
-                const note=`${trip.title||'Trip'} settle-up`;
                 return (
                   <div key={idx} style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',padding:'7px 0',borderTop:idx?'1px solid var(--color-border)':'none'}}>
                     <span style={{flex:'1 1 auto',fontSize:'.85rem',color:'var(--color-ink)'}}>
                       <strong>{nameOf(s.from)}</strong> → <strong>{nameOf(s.to)}</strong> <span style={{fontFamily:'var(--font-mono)',color:'var(--color-flag)'}}>{fmt(s.amount)}</span>
                     </span>
-                    {to.venmo && <a className="btn btn-secondary btn-sm" href={venmoPayUrl(to.venmo,s.amount,note)} target="_blank" rel="noopener noreferrer">Venmo</a>}
-                    {to.zelle && <button className="btn btn-secondary btn-sm" onClick={()=>{navigator.clipboard?.writeText(to.zelle).then(()=>showToast(`Zelle for ${to.name}: ${to.zelle} copied`,'info',3500)).catch(()=>showToast(`Zelle: ${to.zelle}`,'info',4000));}}>Zelle</button>}
                     {isOwner && <button className="btn btn-ghost btn-sm" onClick={()=>recordPayment(s.from,s.to,s.amount)}>Mark paid</button>}
                   </div>
                 );
@@ -5864,11 +5830,10 @@ function BudgetSection({trip, onUpdateTrip}){
               </div>
             </details>
           )}
-          <p style={{marginTop:12,fontSize:'.68rem',color:'var(--color-ink-muted)',lineHeight:1.5}}>Venmo opens a prefilled payment; Zelle has no web link, so we copy the recipient's handle for you to paste in your bank app. To add someone's handles, tap their name on the Crew tab.</p>
         </div>
       )}
       {members.length<2 && items.length>0 && (
-        <p style={{marginTop:12,fontSize:'.8rem',color:'var(--color-ink-light)'}}>Add 2+ people on the <strong>Crew</strong> tab to split costs unevenly and get settle-up links.</p>
+        <p style={{marginTop:12,fontSize:'.8rem',color:'var(--color-ink-light)'}}>Add 2+ people on the <strong>Crew</strong> tab to split costs and settle up.</p>
       )}
     </div>
   );
@@ -5953,7 +5918,7 @@ function TripDateEditor({trip, onUpdateTrip}) {
         </div>
         {!editing && (
           <button onClick={()=>setEditing(true)} style={{background:'var(--color-cream-dark)',border:'none',borderRadius:20,padding:'5px 14px',fontSize:'.78rem',fontWeight:500,color:'var(--color-ink-light)',cursor:'pointer'}}>
-            ✏️ Edit dates
+            Edit dates
           </button>
         )}
       </div>
@@ -6083,15 +6048,14 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
           {/* Top bar: Back + action buttons */}
           {(()=>{
             const iconBtn=(danger)=>({width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',background:danger?'rgba(255,80,80,.28)':'rgba(255,255,255,.18)',border:'none',borderRadius:12,color:'#fff',fontSize:'1.15rem',cursor:'pointer',backdropFilter:'blur(4px)',flexShrink:0});
-            const doShare=()=>{
+            const doShare=async ()=>{
               track('share_link');
-              const encoded = encodeTrip(trip);
-              if(!encoded){alert('Could not encode trip.');return;}
-              const url = window.location.origin + window.location.pathname + '#trip=' + encoded;
+              const url = await makeTripShareUrl(trip);
+              if(!url){alert('Could not encode trip.');return;}
               if(navigator.share){
-                navigator.share({title: trip.title, text: `Check out my trip to ${(trip.destinations||[]).map(d=>d.city).join(' & ')||trip.title} on Locale! (Read-only snapshot)`, url}).then(()=>showToast('Trip link shared ✓','info',3000)).catch(()=>{});
+                navigator.share({title: trip.title, text: `${trip.title} · planned with Locale`, url}).then(()=>showToast('Trip link shared ✓','info',3000)).catch(()=>{});
               } else {
-                navigator.clipboard.writeText(url).then(()=>showToast('Link copied — recipients can view but not edit.','info',4000)).catch(()=>{ prompt('Copy this read-only snapshot link:', url); });
+                navigator.clipboard.writeText(url).then(()=>showToast('Link copied. Recipients can view but not edit.','info',4000)).catch(()=>{ prompt('Copy this read-only snapshot link:', url); });
               }
             };
             return (
@@ -6102,7 +6066,6 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
             </div>
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
               <button onClick={doShare} aria-label="Share trip" title="Share trip" style={iconBtn(false)}>🔗</button>
-              <button onClick={()=>downloadTripICS(trip)} aria-label="Add itinerary to calendar" title="Add to calendar (.ics)" style={iconBtn(false)}>📅</button>
               <button onClick={()=>generateTripPDF(trip)} aria-label="Download trip as PDF" title="Download PDF" style={iconBtn(false)}>⬇️</button>
               {isOwner && <button aria-label="Delete trip" title="Delete trip" onClick={()=>{ if(window.confirm(`Delete "${trip.title}"? This can't be undone.`)) onDelete(trip.id); }} style={iconBtn(true)}>🗑️</button>}
             </div>
@@ -6121,7 +6084,11 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
             <AvatarStack collaborators={trip.collaborators}/>
             <span className="occasion-pill">{getOccasionEmoji(trip.occasion)} {getOccasionLabel(trip.occasion)}</span>
           </div>
-          {(flags.length>0||liveReqs.length>0)&&(
+          {(()=>{ const er=(trip.checklist||[]).filter(i=>/passport|visa|\beta\b|ees|esta|entry/i.test(i.label||'')); return er.length>0 && er.every(i=>i.completed); })() ? (
+            (flags.length>0||liveReqs.length>0) && <div style={{marginTop:16}}>
+              <span style={{display:'inline-block',background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)',color:'#fff',fontSize:'.8rem'}}>Entry requirements covered ✓</span>
+            </div>
+          ) : (flags.length>0||liveReqs.length>0)&&(
             <div style={{marginTop:16,display:'flex',gap:8,flexWrap:'wrap'}}>
               {flags.map((f,i)=>(
                 <div key={i} style={{background:'rgba(0,0,0,.35)',borderRadius:10,padding:'6px 12px',backdropFilter:'blur(4px)'}}>
@@ -6230,7 +6197,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
                 </div>
               ))}
             </div>
-            {(trip.days||[]).some(d=>(d.activities||[]).length||(d.restaurants||[]).length) && <AtAGlance trip={trip} onStartPlanning={()=>setActiveTab('days')}/>}
+            {(trip.days||[]).some(d=>(d.activities||[]).length||(d.restaurants||[]).length) && <AtAGlance trip={trip} onStartPlanning={()=>setActiveTab('days')} onOpenDays={()=>{setActiveTab('days');track('tab_view',{tab:'days',via:'glance'});window.scrollTo({top:0});}}/>}
             <CurrencyConverter destinations={trip.destinations}/>
           </div>
         )}
@@ -6286,7 +6253,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
                   {isOwner && <button
                     onClick={()=>setShowRegenModal(true)}
                     style={{marginLeft:'auto',background:'none',border:'1px solid var(--color-border)',borderRadius:20,padding:'4px 12px',fontSize:'.75rem',color:'var(--color-ink-muted)',cursor:'pointer'}}
-                  >✨ Update itinerary</button>}
+                  >Update itinerary</button>}
                 </div>
                 {isOwner && (trip.days||[]).every(d=>!(d.activities||[]).length&&!(d.restaurants||[]).length) && (
                   <div className="card" style={{padding:18,marginBottom:16,textAlign:'center',borderStyle:'dashed',borderColor:'var(--color-accent-warm)'}}>
@@ -6313,11 +6280,10 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
       <div className="bottomnav-spacer" aria-hidden="true"></div>
       <nav className="bottom-nav" aria-label="Trip sections">
         {TABS.map(t=>{
-          const ico={overview:'🏠',days:'📆',crew:'👥',getready:'✅',budget:'💰',celebrate:'🎉'}[t.id]||'✨';
           const short={overview:'Overview',days:'Days',crew:'Crew',getready:'Ready',budget:'Budget',celebrate:'Party'}[t.id]||t.label;
           return (
             <button key={t.id} className={`bn-item${activeTab===t.id?' active':''}`} onClick={()=>{setActiveTab(t.id);track('tab_view',{tab:t.id});window.scrollTo({top:0});}} aria-label={t.label}>
-              <span className="bn-ico" aria-hidden="true">{ico}</span>{short}
+              <span className="bn-ico" aria-hidden="true"><BnIcon id={t.id}/></span>{short}
             </button>
           );
         })}
@@ -6325,6 +6291,19 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
       {showShare && <ShareSheet trip={trip} onClose={()=>setShowShare(false)}/>}
     </div>
   );
+}
+
+// Luxe pass: clean line icons for the bottom tab bar (emoji read as clutter on iOS)
+function BnIcon({id}){
+  const P={
+    overview:<path d="M3 10.5 12 3l9 7.5M5.5 8.8V21h4.8v-5.6h3.4V21h4.8V8.8"/>,
+    days:<><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></>,
+    crew:<><circle cx="8.5" cy="8.5" r="3.2"/><path d="M2.5 20c.6-3.4 3-5.3 6-5.3s5.4 1.9 6 5.3"/><circle cx="16.8" cy="9.8" r="2.6"/><path d="M15.6 14.9c2.9.2 5.1 1.9 5.9 5.1"/></>,
+    getready:<><circle cx="12" cy="12" r="8.5"/><path d="M8.2 12.3l2.6 2.6 5-5.2"/></>,
+    budget:<><rect x="3" y="6.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15.5h4"/></>,
+    celebrate:<path d="M12 3.5l1.8 4.9 4.9 1.8-4.9 1.8L12 16.9l-1.8-4.9-4.9-1.8 4.9-1.8L12 3.5zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16z"/>,
+  }[id]||<circle cx="12" cy="12" r="8.5"/>;
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{display:'block',margin:'0 auto'}}>{P}</svg>;
 }
 
 // ── IA Phase 2a: trips drawer — Planned → Ideas → Past (global level) ─────────
@@ -6549,6 +6528,30 @@ function Dashboard({trips, onSelectTrip, onNewTrip, cloudUser, setCloudUser, onO
 }
 
 // ── Share / Import helpers ────────────────────────────────────────────────
+const SHARE_LINK_URL = SUPABASE_URL + '/functions/v1/share-link';
+// Short branded share links: store the encoded snapshot server-side, share #s=<id>.
+// Any failure falls back to the long-but-working #trip= URL.
+async function makeTripShareUrl(trip){
+  const enc=encodeTrip(trip);
+  if(!enc) return null;
+  const longUrl=window.location.origin+window.location.pathname+'#trip='+enc;
+  try{
+    const res=await fetch(SHARE_LINK_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},body:JSON.stringify({payload:enc})});
+    if(!res.ok) return longUrl;
+    const {id}=await res.json();
+    return (id && /^[a-z0-9]{6,12}$/.test(id)) ? window.location.origin+window.location.pathname+'#s='+id : longUrl;
+  }catch(e){ return longUrl; }
+}
+async function resolveShortShareLink(){
+  const m=window.location.hash.match(/[#&]s=([a-z0-9]{6,12})/);
+  if(!m) return null;
+  try{
+    const res=await fetch(SHARE_LINK_URL+'?id='+m[1],{headers:{'apikey':SUPABASE_ANON_KEY}});
+    if(!res.ok) return null;
+    const {payload}=await res.json();
+    return payload?decodeTrip(payload):null;
+  }catch(e){ return null; }
+}
 function encodeTrip(trip) {
   try { return btoa(unescape(encodeURIComponent(JSON.stringify(trip)))); } catch(e) { return null; }
 }
@@ -6659,10 +6662,11 @@ function App() {
   const [installPrompt, setInstallPrompt] = React.useState(null);
   const [showInstall, setShowInstall] = React.useState(false);
   const [sharedTrip, setSharedTrip] = React.useState(()=>getSharedTripFromHash());
+  React.useEffect(()=>{ resolveShortShareLink().then(t=>{ if(t) setSharedTrip(t); }); },[]);
   const [showDrawer, setShowDrawer] = React.useState(false); // IA Phase 2a: trips drawer
   // First-run welcome: only for fresh users (demo trips only), never over an invite link
   const [showWelcome, setShowWelcome] = React.useState(()=>{
-    try { return !localStorage.getItem('locale_welcome_seen') && !getSharedTripFromHash() && loadTrips().every(t=>t.isDemo); } catch(e){ return false; }
+    try { return !localStorage.getItem('locale_welcome_seen') && !getSharedTripFromHash() && !/[#&]s=/.test(window.location.hash) && loadTrips().every(t=>t.isDemo); } catch(e){ return false; }
   });
   const dismissWelcome = ()=>{ try{ localStorage.setItem('locale_welcome_seen','1'); }catch(e){} setShowWelcome(false); };
 
@@ -6946,6 +6950,7 @@ function BugReportButton({ currentView }) {
       <button
         onClick={() => setOpen(true)}
         title="Feedback & bug report"
+        className="feedback-fab"
         style={{
           position: 'fixed', bottom: 24, right: 16, zIndex: 9000,
           width: 40, height: 40, borderRadius: '50%',
@@ -7304,11 +7309,6 @@ class ErrorBoundary extends React.Component {
   assert('profilePromptText includes interests', profilePromptText({style:'Live like a local',interests:['Food & restaurants']}).includes('Food & restaurants'));
 
   // ── NEW v1.0 (2.1): budget split + settle-up ─
-  // Venmo prefill link
-  const vurl = venmoPayUrl('alex-m', 25.5, 'Paris settle-up');
-  assert('venmoPayUrl targets venmo.com', vurl.startsWith('https://venmo.com/?txn=pay'));
-  assert('venmoPayUrl includes recipient', vurl.includes('recipients=alex-m'));
-  assert('venmoPayUrl formats amount to 2dp', vurl.includes('amount=25.50'));
   // computeSettlements greedy matching
   const s1 = computeSettlements({a:10, b:-10});
   assert('settle: single debtor→creditor', s1.length===1 && s1[0].from==='b' && s1[0].to==='a' && Math.abs(s1[0].amount-10)<1e-6);
