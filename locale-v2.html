@@ -5638,7 +5638,8 @@ function CrewSection({trip, onUpdateTrip}){
           const isMe = !isOwner && m.id===trip._myCollaboratorId;
           const canEditRsvp = isOwner || isMe;
           return (
-          <div key={m.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderBottom:'1px solid var(--color-border)'}}>
+          <React.Fragment key={m.id}>
+          <div style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderBottom:'1px solid var(--color-border)'}}>
             <span style={{width:36,height:36,borderRadius:'50%',background:m.avatarColor,color:'#0E1117',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,flexShrink:0,boxShadow:'0 0 0 2px var(--color-surface), 0 0 0 4px '+m.avatarColor}}>{(m.name||'?').charAt(0).toUpperCase()}</span>
             <div role={canEditRsvp?'button':undefined} tabIndex={canEditRsvp?0:undefined} aria-label={canEditRsvp?`Edit ${m.name}`:undefined}
               onClick={()=>{ if(canEditRsvp) setEditingMemberId(m.id); }}
@@ -5652,15 +5653,19 @@ function CrewSection({trip, onUpdateTrip}){
               {m.invitedAt && <div style={{fontSize:'.68rem',color:'var(--color-ink-muted)',marginTop:2}}>Invited {relativeAgo(m.invitedAt)}{m.inviteSentCount>1?` · sent ${m.inviteSentCount}×`:''}</div>}
               {canEditRsvp && <div style={{fontSize:'.65rem',color:'var(--color-accent)',marginTop:2}}>Tap to edit</div>}
             </div>
-            {/* P1 carryover: loved a pin, still Pending · one tap to confirm, never auto-set */}
-            {isOwner && m.rsvpSuggested==='going' && (m.rsvp||'pending')==='pending' && (
-              <button className="btn btn-secondary btn-sm" style={{fontSize:'.7rem',whiteSpace:'nowrap',flexShrink:0}}
-                title="Loved the pins while this was still an idea"
-                onClick={(e)=>{ e.stopPropagation(); setRsvp(m.id,'going'); }}>Loved it · mark Going</button>
-            )}
             {isOwner && (m.rsvp||'pending')!=='going' && <button aria-label={m.invitedAt?`Resend invite to ${m.name}`:`Invite ${m.name}`} onClick={()=>inviteMember(m)} className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',padding:'4px 8px',whiteSpace:'nowrap'}}>{m.invitedAt?'Resend':'Invite'}</button>}
             <span className={`pill ${(m.rsvp||'pending')==='going'?'pill-accent':(m.rsvp==='no'?'pill-flag':'pill-neutral')}`} style={{whiteSpace:'nowrap',flexShrink:0}}>{(m.rsvp||'pending')==='going'?'● Going':(m.rsvp==='no'?"✕ Can't make it":'○ Pending')}</span>
           </div>
+          {/* P1 carryover: loved a pin while this was an idea, still Pending. Its own strip
+              so the member row never has to fit a third control on a narrow phone. */}
+          {isOwner && m.rsvpSuggested==='going' && (m.rsvp||'pending')==='pending' && (
+            <div key={m.id+'-sug'} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 16px 10px',borderBottom:'1px solid var(--color-border)',background:'var(--color-accent-soft)'}}>
+              <p style={{flex:1,minWidth:0,fontSize:'.74rem',color:'var(--color-ink-light)',lineHeight:1.45}}>{m.name} loved your pins while this was still an idea.</p>
+              <button className="btn btn-secondary btn-sm" style={{fontSize:'.72rem',whiteSpace:'nowrap',flexShrink:0}}
+                onClick={()=>setRsvp(m.id,'going')}>Mark Going</button>
+            </div>
+          )}
+          </React.Fragment>
           );
         })}
       </div>
