@@ -1839,6 +1839,19 @@ function visibleEntryFlags(trip, liveReqs, dismissed){
     });
 }
 
+// Where should a lodging entry link? An Airbnb or Vrbo booking belongs in that app,
+// where the guest sees check-in instructions and messaging. A hotel belongs on its
+// own site. Everything else falls back to a scoped search rather than Maps, because
+// what you usually want here is the booking, not the pin.
+function lodgingLink(l){
+  const blob=[l&&l.name, l&&l.notes, l&&l.confirmationNumber].filter(Boolean).join(' ');
+  if(/airbnb/i.test(blob)) return { url:'https://www.airbnb.com/trips', label:'Open in Airbnb' };
+  if(/vrbo/i.test(blob))   return { url:'https://www.vrbo.com/traveler/trips', label:'Open in Vrbo' };
+  if(/booking\.com/i.test(blob)) return { url:'https://secure.booking.com/mytrips', label:'Open in Booking.com' };
+  const q=encodeURIComponent(((l&&l.name)||'')+' '+((l&&l.address)||''));
+  return { url:'https://duckduckgo.com/?q='+q+'%20official%20site', label:'Open hotel site' };
+}
+
 // ── CHECKLIST GENERATOR · tactical trip-prep tasks only ──────────────────────
 function generateChecklist(trip){
   const items=[];
@@ -2127,7 +2140,7 @@ function normalizeTrip(t){
   const packingList = (Array.isArray(t.packingList) && t.packingList.length > 0) ? t.packingList : null;
   const lodging = t.lodging || [];
   // Phase 2c (additive): per-flight travelers. Empty travelerIds = whole-group flight (legacy).
-  const flights = (t.flights||[]).map(f=>({...f, travelerIds: Array.isArray(f.travelerIds)?f.travelerIds:[], addedBy: f.addedBy||null}));
+  const flights = (t.flights||[]).map(f=>({...f, travelerIds: Array.isArray(f.travelerIds)?f.travelerIds:[], addedBy: f.addedBy||null, via: f.via||''}));
   // v3→v4 (additive, v0.9): planningStage ('idea'|'booked') + ideation results
   const planningStage = t.planningStage === 'idea' ? 'idea' : 'booked';
   const ideation = t.ideation ?? null;
@@ -3336,20 +3349,29 @@ function fmtFlightTimeISO(iso){ if(!iso) return ''; const m=/T(\d{2}):(\d{2})/.e
 function minutesOfISO(iso){ const m=/T(\d{2}):(\d{2})/.exec(iso||''); return m?(+m[1])*60+(+m[2]):null; }
 function gapLabel(mins){ if(mins==null||mins<=0) return ''; const h=Math.floor(mins/60), mm=mins%60; return (h?h+'h ':'')+(mm?mm+'m':(h?'':'0m')); }
 
+// date = a specific day, or null for "every flight on the trip".
+// This used to be pinned to trip.startDate, which meant an overnight international
+// flight never showed at all: leave Austin Sep 16, land Heathrow Sep 17, and the
+// Day 1 board looked for arrivals ON Sep 16 and found none. Boards now render on
+// whichever day the flight actually touches down.
 function ArrivalsBoard({trip, date, mode}){
-  if(!date) return null;
   const arrivalsMode = mode!=='departures';
   const key = arrivalsMode?'arrivalTime':'departureTime';
   const portKey = arrivalsMode?'arrivalAirport':'departureAirport';
-  const flights=(trip.flights||[]).filter(f=>((f[key]||'').slice(0,10))===date)
-    .sort((a,b)=>(a[key]||'')<(b[key]||'')?-1:1);
+  const flights=(trip.flights||[]).filter(f=>{
+    if(!f[key]) return false;
+    return date ? ((f[key]||'').slice(0,10))===date : true;
+  }).sort((a,b)=>(a[key]||'')<(b[key]||'')?-1:1);
   if(!flights.length) return null;
   const rows=flights.map(f=>({f, who:flightTravelers(trip,f)}));
   const times=flights.map(f=>minutesOfISO(f[key])).filter(t=>t!=null);
   const ports=[...new Set(flights.map(f=>String(f[portKey]||'').trim().toUpperCase()).filter(Boolean))];
   const last=flights[flights.length-1];
+  // "Everyone in by 8pm" only means something within a single day.
+  const dates=[...new Set(flights.map(f=>(f[key]||'').slice(0,10)))];
+  const sameDay = dates.length===1;
   let callout=null, warn=false;
-  if(flights.length>1){
+  if(flights.length>1 && sameDay){
     if(ports.length>1){ callout='DIFFERENT '+(arrivalsMode?'ARRIVAL':'DEPARTURE')+' POINTS ('+ports.join(' / ')+') · PLAN TRANSFERS SEPARATELY'; warn=true; }
     else if(times.length>1){
       const span=Math.max(...times)-Math.min(...times);
@@ -3365,12 +3387,13 @@ function ArrivalsBoard({trip, date, mode}){
   const t24=(iso)=>fmtBoardTime(iso);
   return (
     <div style={{background:'#16130F',borderRadius:'var(--radius-card)',padding:'18px 20px',marginBottom:16,boxShadow:'var(--shadow-card)'}}>
-      <p style={{fontFamily:'var(--font-mono)',fontSize:'.62rem',fontWeight:500,letterSpacing:'.18em',textTransform:'uppercase',color:'#8C857A',marginBottom:12}}>{arrivalsMode?'Arrivals':'Departures'} · {(trip.destinations||[])[0]?.city||''} · {formatDateShort(date)}</p>
+      <p style={{fontFamily:'var(--font-mono)',fontSize:'.62rem',fontWeight:500,letterSpacing:'.18em',textTransform:'uppercase',color:'#8C857A',marginBottom:12}}>{arrivalsMode?'Arrivals':'Departures'} · {(trip.destinations||[])[0]?.city||''}{date?(' · '+formatDateShort(date)):' · whole trip'}</p>
       {rows.map(({f,who})=>(
         <div key={f.id} style={{display:'grid',gridTemplateColumns:'64px 1fr auto',gap:12,alignItems:'baseline',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
           <span style={{fontFamily:'var(--font-mono)',fontWeight:600,fontSize:'.95rem',color:'#FFD9A8',fontVariantNumeric:'tabular-nums'}}>{t24(f[key])}</span>
           <div style={{minWidth:0}}>
-            <div style={{fontSize:'.85rem',fontWeight:500,color:'#F5F1E9',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{f.flightNumber||f.airline||'Flight'} · {(arrivalsMode?(f.departureAirport||'?'):(f.arrivalAirport||'?'))}<span style={{color:'#8C857A'}}>{(f.travelerIds||[]).length? ' · '+who.map(m=>m.name).join(', ') : ' · Whole group'}</span></div>
+            <div style={{fontSize:'.85rem',fontWeight:500,color:'#F5F1E9',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{f.flightNumber||f.airline||'Flight'} · {(arrivalsMode?(f.departureAirport||'?'):(f.arrivalAirport||'?'))}{f.via?(' via '+f.via):''}<span style={{color:'#8C857A'}}>{(f.travelerIds||[]).length? ' · '+who.map(m=>m.name).join(', ') : ' · Whole group'}</span></div>
+            {!sameDay && <div style={{fontFamily:'var(--font-mono)',fontSize:'.65rem',color:'#8C857A',marginTop:2}}>{formatDateShort((f[key]||'').slice(0,10))}</div>}
           </div>
           <span style={{display:'flex',flexShrink:0}}>{who.slice(0,4).map(m=>(
             <span key={m.id} title={m.name} style={{width:20,height:20,borderRadius:'50%',background:m.avatarColor,color:'#0E1117',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'.58rem',marginLeft:-6,boxShadow:'0 0 0 2px #16130F'}}>{(m.name||'?').charAt(0).toUpperCase()}</span>
@@ -3393,6 +3416,9 @@ function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDele
   const [dep,setDep]=React.useState((flight?.departureTime||'').slice(0,16));
   const [arr,setArr]=React.useState((flight?.arrivalTime||'').slice(0,16));
   const [notes,setNotes]=React.useState(flight?.notes||'');
+  // Connections used to have nowhere to go: Stephanie put "DL2323, DL5988" in the
+  // flight-number field and "Connection in JFK, 2.40 hour layover" in notes.
+  const [via,setVia]=React.useState(flight?.via||'');
   const [travelerIds,setTravelerIds]=React.useState(flight?(flight.travelerIds||[]):(member?[member.id]:[]));
   const dlgRef=React.useRef(null);
   useModalA11y(dlgRef, onClose, true);
@@ -3404,6 +3430,7 @@ function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDele
       direction: flight?.direction||'outbound',
       airline: airline.trim(), flightNumber: flightNumber.trim().toUpperCase(),
       departureAirport: fromAp.trim(), arrivalAirport: toAp.trim(),
+      via: via.trim().toUpperCase(),
       departureTime: dep.length===16?dep+':00':dep,
       arrivalTime: arr?(arr.length===16?arr+':00':arr):'',
       confirmationNumber: flight?.confirmationNumber||null,
@@ -3433,6 +3460,7 @@ function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDele
           <input className="input" type="datetime-local" value={dep} onChange={e=>setDep(e.target.value)}/>
           <label className="section-label" style={{marginTop:8}}>Lands (local time)</label>
           <input className="input" type="datetime-local" value={arr} onChange={e=>setArr(e.target.value)}/>
+          <input className="input" style={{marginTop:8}} placeholder="Connecting through (JFK) · optional" aria-label="Connecting airport" value={via} onChange={e=>setVia(e.target.value)}/>
           <input className="input" style={{marginTop:8}} placeholder="Notes (terminal, bags…)" value={notes} onChange={e=>setNotes(e.target.value)}/>
           {isOwner && members.length>1 && (<>
             <label className="section-label" style={{marginTop:8}}>Who's on this flight?</label>
@@ -3752,8 +3780,10 @@ function DayView({trip,day,onUpdateTrip}){
           <p style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{formatDate(day.date)} · {totalStops} {totalStops===1?'stop':'stops'}</p>
         </div>
       </div>
-      {day.date===trip.startDate && <ArrivalsBoard trip={trip} date={day.date} mode="arrivals"/>}
-      {day.date===trip.endDate && day.date!==trip.startDate && <ArrivalsBoard trip={trip} date={day.date} mode="departures"/>}
+      {/* Renders on whatever day the flight lands or leaves · returns null when the
+          day has none, so no gating is needed here. */}
+      <ArrivalsBoard trip={trip} date={day.date} mode="arrivals"/>
+      <ArrivalsBoard trip={trip} date={day.date} mode="departures"/>
       {(() => {
         const dayItems = (trip.budget?.items||[]).filter(i=>i.day===day.id);
         if(!dayItems.length) return null;
@@ -3802,15 +3832,42 @@ function DayView({trip,day,onUpdateTrip}){
           )}
         </div>
       )}
-      {hotel&&(
-        <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:'rgba(184,92,56,.05)',borderRadius:10,border:'1px solid rgba(184,92,56,.12)',marginBottom:16}}>
-          <span style={{fontSize:'1.1rem',flexShrink:0}}>🏨</span>
-          <div style={{minWidth:0,flex:1}}>
-            <p style={{fontWeight:600,fontSize:'.875rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{hotel.name}</p>
-            <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{hotel.address}</p>
+      {/* Lodging used to repeat in full on every single day. It now surfaces where it
+          actually matters · the day you check in (with the access details the crew
+          need) and the day you check out · and stays a quiet one-liner in between. */}
+      {hotel&&(()=>{
+        const isCheckIn = hotel.checkIn===day.date;
+        const isCheckOut = hotel.checkOut===day.date;
+        const link = lodgingLink(hotel);
+        if(!isCheckIn && !isCheckOut){
+          return (
+            <p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',marginBottom:16}}>
+              Staying at <a href={link.url} target="_blank" rel="noopener noreferrer" style={{color:'var(--color-ink-light)',textDecoration:'underline'}}>{hotel.name}</a>
+            </p>
+          );
+        }
+        return (
+          <div className="card" style={{marginBottom:16}}>
+            <p className="section-label" style={{margin:'0 0 6px'}}>{isCheckIn?'Check in today':'Check out today'}</p>
+            <p style={{fontWeight:600,fontSize:'.95rem',lineHeight:1.35}}>{hotel.name}</p>
+            {hotel.address && <p style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginTop:2}}>{hotel.address}</p>}
+            <p style={{fontFamily:'var(--font-mono)',fontVariantNumeric:'tabular-nums',fontSize:'.78rem',color:'var(--color-ink-light)',marginTop:6}}>
+              {isCheckIn
+                ? ('Check in' + (hotel.checkInTime?(' from '+fmt12h(hotel.checkInTime)):'') + (hotel.roomType?(' · '+hotel.roomType):''))
+                : ('Check out' + (hotel.checkOutTime?(' by '+fmt12h(hotel.checkOutTime)):''))}
+              {hotel.confirmationNumber?(' · conf '+hotel.confirmationNumber):''}
+            </p>
+            {/* Door codes, lockbox, building access · the thing the crew actually needs on arrival */}
+            {isCheckIn && hotel.notes && (
+              <p style={{fontSize:'.8rem',color:'var(--color-ink)',lineHeight:1.55,marginTop:8,paddingTop:8,borderTop:'1px solid var(--color-border)'}}>{hotel.notes}</p>
+            )}
+            <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
+              <a className="btn btn-secondary btn-sm" href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a>
+              {hotel.address && <a className="btn btn-ghost btn-sm" href={'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(hotel.address)} target="_blank" rel="noopener noreferrer">Directions ↗</a>}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       {/* Day route · inline map + Google Maps handoff */}
       {(()=>{
         const routeUrl=buildDayRouteUrl(trip,day);
@@ -4082,10 +4139,10 @@ function PinCard({pin, city, myMemberId, onReact, showReactions}){
   );
 }
 
-function NextThreeThings({trip, isOwner, onGoTab, onShare, onUpdateTrip}){
+function NextThreeThings({trip, isOwner, onGoTab, onShare, onUpdateTrip, onCompleteChecklistItem}){
   const {myMemberId, react} = makePinReactor(trip, onUpdateTrip);
   const K = ({children}) => <p className="section-label" style={{margin:'8px 0 0'}}>{children}</p>;
-  const Row = ({emoji,title,sub,onClick,cta}) => (
+  const Row = ({emoji,title,sub,onClick,cta,onDone}) => (
     <div className="card" role={onClick?'button':undefined} tabIndex={onClick?0:undefined} onClick={onClick}
       onKeyDown={e=>{if(onClick&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onClick();}}}
       style={{display:'flex',alignItems:'center',gap:12,cursor:onClick?'pointer':'default'}}>
@@ -4094,6 +4151,10 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare, onUpdateTrip}){
         <p style={{fontWeight:600,fontSize:'.88rem',lineHeight:1.5}}>{title}</p>
         {sub && <p style={{fontSize:'.75rem',color:'var(--color-ink-light)',lineHeight:1.5,marginTop:2}}>{sub}</p>}
       </div>
+      {onDone && (
+        <button className="btn btn-secondary btn-sm" style={{whiteSpace:'nowrap',flexShrink:0}}
+          onClick={e=>{ e.stopPropagation(); onDone(); }}>Done</button>
+      )}
       {cta && <span className="btn btn-secondary btn-sm" style={{whiteSpace:'nowrap'}}>{cta}</span>}
     </div>
   );
@@ -4140,9 +4201,35 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare, onUpdateTrip}){
 
   const items=[];
   const daysToGo=Math.max(0, Math.ceil((new Date(trip.startDate+'T12:00:00')-new Date())/86400000));
+
+  // Once the trip is underway, "next 3 things" means what is actually happening,
+  // pulled live from the confirmed itinerary rather than pre-trip prep.
+  const todayISO=new Date(new Date().getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const underway = trip.startDate && trip.endDate && todayISO>=trip.startDate && todayISO<=trip.endDate;
+  if(underway){
+    const today=(trip.days||[]).find(d=>d.date===todayISO);
+    const todayStops=today?[...(today.activities||[]),...(today.restaurants||[])]
+      .sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0)):[];
+    if(todayStops.length){
+      return (
+        <div style={{margin:'0 0 24px',display:'flex',flexDirection:'column',gap:12}}>
+          <K>Today · {formatDateDow?formatDateDow(todayISO):todayISO}</K>
+          {todayStops.slice(0,3).map(s=>(
+            <Row key={s.id} emoji="" title={s.name}
+              sub={[s.time?fmt12h(s.time):null, s.neighborhood||s.address||null].filter(Boolean).join(' · ')||'Tap to open the day'}
+              onClick={()=>onGoTab('days')}/>
+          ))}
+        </div>
+      );
+    }
+  }
+
   const due=(trip.checklist||[]).filter(i=>!i.completed && typeof i.daysBeforeTrip==='number' && daysToGo<=i.daysBeforeTrip)
     .sort((a,b)=>b.daysBeforeTrip-a.daysBeforeTrip);
-  due.slice(0,2).forEach(i=>items.push({emoji:'',title:i.label,sub:`Due ~${i.daysBeforeTrip} days out · ${daysToGo} to go`,tab:'getready'}));
+  // These are real checklist rows, so they get a real Done control. Previously
+  // tapping only jumped to the Get Ready tab and nothing could ever be ticked off
+  // from here, so the same three reminders sat there forever.
+  due.slice(0,2).forEach(i=>items.push({emoji:'',title:i.label,sub:`Due ~${i.daysBeforeTrip} days out · ${daysToGo} to go`,tab:'getready',checklistId:i.id}));
   const pending=(trip.collaborators||[]).filter(m=>(m.rsvp||'pending')==='pending');
   if(pending.length) items.push({emoji:'',title:`${pending.length} crew still pending RSVP`,sub:pending.map(m=>m.name).slice(0,3).join(', ')+' · tap to invite',tab:'crew'});
   if(!(trip.flights||[]).length) items.push({emoji:'',title:'Add your flights',sub:'Upload a confirmation and Locale reads it for you',tab:'days'});
@@ -4156,7 +4243,10 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare, onUpdateTrip}){
   return (
     <div style={{margin:'0 0 24px',display:'flex',flexDirection:'column',gap:12}}>
       <K>Next {Math.min(3,items.length)===1?'thing':Math.min(3,items.length)+' things'} · {daysToGo>0?daysToGo+' days to go':'trip time'}</K>
-      {items.slice(0,3).map((it,i)=><Row key={i} emoji={it.emoji} title={it.title} sub={it.sub} onClick={()=>onGoTab(it.tab)}/>)}
+      {items.slice(0,3).map((it,i)=>(
+        <Row key={i} emoji={it.emoji} title={it.title} sub={it.sub} onClick={()=>onGoTab(it.tab)}
+          onDone={it.checklistId && onCompleteChecklistItem ? ()=>onCompleteChecklistItem(it.checklistId) : null}/>
+      ))}
     </div>
   );
 }
@@ -5960,7 +6050,8 @@ function CrewSection({trip, onUpdateTrip}){
         <span className="pill pill-muted" style={{fontWeight:600}}>● {counts.pending||0} pending</span>
         {counts.no ? <span className="pill pill-muted" style={{fontWeight:600}}>● {counts.no} can't</span> : null}
       </div>
-      <ArrivalsBoard trip={trip} date={trip.startDate} mode="arrivals"/>
+      {/* Crew tab shows every arrival on the trip, not just the ones landing on day 1 */}
+      <ArrivalsBoard trip={trip} date={null} mode="arrivals"/>
       <div className="card" style={{marginBottom:12,padding:0}}>
         {members.length===0 && <div style={{padding:16,color:'var(--color-ink-light)',fontSize:'.9rem'}}>No one added yet. Add travelers below, then share the invite link.</div>}
         {members.map(m=>{
@@ -6635,7 +6726,9 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
             <span style={{fontSize:'2rem',lineHeight:1}}>{(()=>{const m=(trip.title||'').match(/^\p{Emoji}/u);return m?m[0]:(trip.emoji||'✈️');})()}</span>
             <div style={{flex:1,minWidth:0}}>
               <h1 style={{fontFamily:'var(--font-display)',fontSize:'clamp(1.4rem,5vw,2rem)',fontWeight:700,color:'#fff',lineHeight:1.15,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{(trip.title||'').replace(/^\p{Emoji}\s*/u,'')}</h1>
-              <p style={{color:'rgba(255,255,255,.85)',fontFamily:'var(--font-mono)',fontSize:'.7rem',letterSpacing:'.05em',textTransform:'uppercase',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{formatDate(trip.startDate)} – {formatDate(trip.endDate)} · {countdown}</p>
+              {/* Wraps instead of truncating · on a phone this used to cut off mid-word
+                  ("TOMORROW! FIN…"), hiding the countdown exactly when it matters most. */}
+              <p style={{color:'rgba(255,255,255,.85)',fontFamily:'var(--font-mono)',fontSize:'.7rem',letterSpacing:'.05em',textTransform:'uppercase',lineHeight:1.45}}>{formatDate(trip.startDate)} – {formatDate(trip.endDate)}{countdown?(' · '+countdown):''}</p>
             </div>
           </div>
           <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:flags.length>0?12:0}}>
@@ -6720,7 +6813,12 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
         {activeTab==='overview' && (
           <div>
             {/* IA Phase 2b · Overview per approved wireframes: Next 3 → calendar → stops → glance → owner tools */}
-            <NextThreeThings trip={trip} isOwner={isOwner} onUpdateTrip={onUpdateTrip} onGoTab={(t)=>{setActiveTab(t);track('tab_view',{tab:t,via:'next3'});window.scrollTo({top:0});}} onShare={()=>setShowShare(true)}/>
+            <NextThreeThings trip={trip} isOwner={isOwner} onUpdateTrip={onUpdateTrip}
+              onCompleteChecklistItem={isOwner?(id)=>{
+                handleChecklistUpdate((trip.checklist||[]).map(i=>i.id===id?{...i,completed:true}:i));
+                showToast('Checked off ✓','info',2000);
+              }:null}
+              onGoTab={(t)=>{setActiveTab(t);track('tab_view',{tab:t,via:'next3'});window.scrollTo({top:0});}} onShare={()=>setShowShare(true)}/>
             {(trip.days||[]).some(d=>(d.activities||[]).length||(d.restaurants||[]).length) && trip.planningStage!=='idea' && <CalendarExportCard trip={trip}/>}
             {/* ── Edit Trip Dates (owner-only) · sits right under Next-3; for idea trips it IS the unlock ── */}
             {isOwner && <TripDateEditor trip={trip} onUpdateTrip={onUpdateTrip}/>}
@@ -7971,6 +8069,14 @@ class ErrorBoundary extends React.Component {
     return r.collaborators[0].rsvp==='pending';
   })());
   assert('carryover is a no-op with no reactions', applyPinReactionCarryover({collaborators:[{id:'a',rsvp:'pending'}],pinnedIdeas:[{id:'p1'}]}).suggested===0);
+
+  // ── NEW Round 17: arrivals, connections, lodging ─
+  assert('normalizeTrip defaults flight.via', normalizeTrip({title:'x',flights:[{id:'f1'}]}).flights[0].via==='');
+  assert('normalizeTrip preserves flight.via', normalizeTrip({title:'x',flights:[{id:'f1',via:'JFK'}]}).flights[0].via==='JFK');
+  assert('lodgingLink routes an Airbnb stay to Airbnb', (()=>{ const l=lodgingLink({name:'Airbnb loft in Alfama'}); return /airbnb\.com/.test(l.url) && /Airbnb/.test(l.label); })());
+  assert('lodgingLink routes Vrbo and Booking.com', /vrbo\.com/.test(lodgingLink({name:'Vrbo cottage'}).url) && /booking\.com/.test(lodgingLink({notes:'via Booking.com'}).url));
+  assert('lodgingLink sends a hotel to its own site, not Maps', (()=>{ const l=lodgingLink({name:'The Hoxton, Shoreditch',address:'81 Great Eastern St'}); return !/google\.com\/maps/.test(l.url) && /hotel site/i.test(l.label); })());
+  assert('lodgingLink is null-safe', typeof lodgingLink({}).url==='string' && typeof lodgingLink(null).url==='string');
 
   // ── NEW Round 16: feedback batch ─
   assert('fmtBoardTime is 12-hour, padded, uppercase meridiem', fmtBoardTime('2026-09-16T15:50:00')===' 3:50 PM' && fmtBoardTime('2026-09-17T12:05:00')==='12:05 PM');
