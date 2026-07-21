@@ -246,7 +246,7 @@ select.input { background-image: var(--select-arrow); background-repeat: no-repe
 .consider-block { background: var(--color-accent-soft); border-left: 3px solid var(--color-accent); padding: 10px 14px; border-radius: 0 8px 8px 0; margin-top: 8px; font-size: .8rem; color: var(--color-ink-light); line-height: 1.5; }
 
 /* ── Weather strip ── */
-.weather-strip { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--color-accent-soft); border-radius: 10px; margin-bottom: 16px; font-size: .85rem; color: var(--color-accent); border: 1px solid #B8D8DF; }
+/* .weather-strip removed in Round 13 · the fake per-country forecast it styled is gone */
 
 /* ── Currency ── */
 .currency-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--color-cream-dark); }
@@ -1560,6 +1560,127 @@ async function fetchEntryReq(passport, dest){
   }catch(e){ return null; }
 }
 
+// ── WEATHER (Open-Meteo · free, no key, no proxy) ─────────────────────────────
+// Two public endpoints, both CORS-open and keyless, so this runs straight from
+// the client with no Supabase hop and no quota to manage (unlike entry
+// requirements, which is why that one goes through an edge function).
+// Cities do not move, so geocodes cache for 90 days; forecasts cache for 3 hours.
+const WX_GEO_URL='https://geocoding-api.open-meteo.com/v1/search';
+const WX_FORECAST_URL='https://api.open-meteo.com/v1/forecast';
+const WX_WINDOW_DAYS=16; // Open-Meteo's forecast horizon · past that we show nothing rather than guess
+
+// WMO weather interpretation codes → plain label + wet/snow classification.
+const WMO={
+  0:['Clear',0],1:['Mostly clear',0],2:['Partly cloudy',0],3:['Overcast',0],
+  45:['Fog',0],48:['Freezing fog',0],
+  51:['Light drizzle',1],53:['Drizzle',1],55:['Heavy drizzle',1],
+  56:['Freezing drizzle',1],57:['Freezing drizzle',1],
+  61:['Light rain',1],63:['Rain',1],65:['Heavy rain',2],
+  66:['Freezing rain',2],67:['Freezing rain',2],
+  71:['Light snow',1],73:['Snow',2],75:['Heavy snow',2],77:['Snow grains',1],
+  80:['Light showers',1],81:['Showers',1],82:['Heavy showers',2],
+  85:['Snow showers',1],86:['Heavy snow showers',2],
+  95:['Thunderstorms',2],96:['Thunderstorms with hail',2],99:['Thunderstorms with hail',2],
+};
+function wmoLabel(code){ const e=WMO[code]; return e?e[0]:'Unsettled'; }
+// A day is "wet enough to rethink outdoor plans" when the code says precipitation
+// AND the odds are real. Deliberately conservative: a 30% chance of light drizzle
+// should not nag someone about their itinerary.
+function isWetDay(wx){
+  if(!wx) return false;
+  const sev=(WMO[wx.code]||[null,0])[1];
+  if(sev>=2) return true;
+  return sev>=1 && ((wx.pop||0)>=55 || (wx.precip||0)>=0.12);
+}
+async function geocodeCity(city, countryCode){
+  const name=(city||'').trim(); if(!name) return null;
+  const key='locale_wxgeo_'+name.toLowerCase()+'_'+(countryCode||'');
+  try{ const c=JSON.parse(localStorage.getItem(key)||'null'); if(c && Date.now()-c.t < 90*86400000) return c.v; }catch(e){}
+  try{
+    const url=WX_GEO_URL+'?name='+encodeURIComponent(name)+'&count=5&language=en&format=json';
+    const res=await fetch(url); if(!res.ok) return null;
+    const data=await res.json();
+    const list=data&&Array.isArray(data.results)?data.results:[];
+    if(!list.length) return null;
+    // Prefer a hit in the expected country · "Paris" is also in Texas.
+    const hit=(countryCode && list.find(r=>r.country_code===countryCode)) || list[0];
+    const v={lat:hit.latitude, lon:hit.longitude};
+    try{ localStorage.setItem(key, JSON.stringify({t:Date.now(), v})); }catch(e){}
+    return v;
+  }catch(e){ return null; }
+}
+// Returns { 'YYYY-MM-DD': {code,hi,lo,precip,pop} } for one destination, or null.
+async function fetchCityForecast(city, countryCode){
+  const name=(city||'').trim(); if(!name) return null;
+  const key='locale_wxfc_'+name.toLowerCase()+'_'+(countryCode||'');
+  try{ const c=JSON.parse(localStorage.getItem(key)||'null'); if(c && Date.now()-c.t < 3*3600000) return c.v; }catch(e){}
+  const geo=await geocodeCity(name, countryCode); if(!geo) return null;
+  try{
+    const url=WX_FORECAST_URL+'?latitude='+geo.lat+'&longitude='+geo.lon
+      +'&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max'
+      +'&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days='+WX_WINDOW_DAYS;
+    const res=await fetch(url); if(!res.ok) return null;
+    const d=(await res.json()).daily; if(!d||!Array.isArray(d.time)) return null;
+    const v={};
+    d.time.forEach((date,i)=>{
+      v[date]={ code:d.weather_code[i], hi:Math.round(d.temperature_2m_max[i]), lo:Math.round(d.temperature_2m_min[i]),
+                precip:d.precipitation_sum[i], pop:d.precipitation_probability_max[i] };
+    });
+    try{ localStorage.setItem(key, JSON.stringify({t:Date.now(), v})); }catch(e){}
+    return v;
+  }catch(e){ return null; }
+}
+
+// Outdoor classification. Category is the strong signal when the model set one,
+// but AI-generated stops are inconsistent, so fall back to keywords in the name.
+const WX_INDOOR_CATS=['museum','food','shopping','entertainment','culture','transport','documents'];
+const WX_OUTDOOR_CATS=['outdoor','tour','sightseeing'];
+const WX_OUTDOOR_WORDS=/\b(park|garden|beach|hike|hiking|walk|walking|market|zoo|safari|boat|cruise|kayak|bike|cycling|picnic|vineyard|trail|island|falls|lookout|viewpoint|miradouro|rooftop|terrace|pier|harbou?r|castle|ruins|cathedral square|plaza|piazza|bridge|stadium|golf|ski|snorkel|dive|surf)\b/i;
+const WX_INDOOR_WORDS=/\b(museum|gallery|theatre|theater|cinema|spa|restaurant|cafe|café|bar|pub|brunch|dinner|lunch|shopping|mall|aquarium|library|palace interior|exhibit|show|concert hall)\b/i;
+function isOutdoorStop(stop){
+  if(!stop) return false;
+  const cat=(stop.category||'').toLowerCase();
+  const text=[stop.name,stop.notes].filter(Boolean).join(' ');
+  if(WX_INDOOR_WORDS.test(text)) return false;
+  if(WX_INDOOR_CATS.includes(cat)) return false;
+  if(WX_OUTDOOR_CATS.includes(cat)) return true;
+  return WX_OUTDOOR_WORDS.test(text);
+}
+function dayStops(day){ return [...(day.activities||[]), ...(day.restaurants||[])]; }
+// Replace `out` with `incoming` in a stop list, preserving the outgoing stop's slot
+// in the timeline. Returns the list untouched if `out` is not in it, so the caller
+// can run it over both activities and restaurants without checking which holds what.
+function swapStopIn(list, out, incoming){
+  const arr=list||[];
+  if(!out || !incoming || !arr.some(s=>s.id===out.id)) return arr;
+  return arr.map(s=> s.id===out.id ? {...incoming, sortOrder:s.sortOrder} : s);
+}
+// Suggest, never rearrange (DECISIONS.md). Returns the wet day's outdoor load and
+// one concrete indoor stop on a drier day that would make a sensible trade.
+function weatherSwapSuggestion(day, days, wxByDate){
+  if(!day || !day.date || !wxByDate) return null;
+  const wx=wxByDate[day.date];
+  if(!isWetDay(wx)) return null;
+  // Outdoor load counts everything on the day, but only ACTIVITIES are swap
+  // candidates on either side · trading a dinner reservation for a hike is not a
+  // sensible suggestion, and it would move a stop between the two lists.
+  const outdoors=dayStops(day).filter(isOutdoorStop);
+  if(outdoors.length<2) return null;
+  const outdoorStop=(day.activities||[]).find(isOutdoorStop);
+  if(!outdoorStop) return null;
+  // Look for an indoor activity sitting on a day that is meaningfully drier.
+  let best=null;
+  (days||[]).forEach(d=>{
+    if(!d || d.id===day.id || !d.date || best) return;
+    const dwx=wxByDate[d.date];
+    if(!dwx || isWetDay(dwx)) return;
+    const cand=(d.activities||[]).find(s=>!isOutdoorStop(s));
+    if(cand) best={day:d, stop:cand};
+  });
+  if(!best) return null;
+  return { wx, outdoorCount:outdoors.length, outdoorStop, swapDay:best.day, swapStop:best.stop };
+}
+
 function getIntlFlags(trip){
   const flags=[];
   const seen=new Set();
@@ -1916,6 +2037,8 @@ function normalizeTrip(t){
     packingList, lodging, flights,
     planningStage, ideation, budget,
     pinnedIdeas, mustEvents,
+    // Round 13 (additive): day ids whose weather swap suggestion the owner dismissed.
+    dismissedWxSwaps: Array.isArray(t.dismissedWxSwaps) ? t.dismissedWxSwaps : [],
   };
 }
 // Persona demo: the Dreamer/First-timer · an idea trip with recommendations + pins, no dates.
@@ -3430,8 +3553,23 @@ function DayView({trip,day,onUpdateTrip}){
   };
 
   const hotel=trip.lodging?.find(l=>!l.destinationId||l.destinationId===day.destinationId);
-  const wxMap={GB:{icon:'🌤',cond:'Partly Cloudy',hi:17,lo:12,unit:'C',rain:30},FR:{icon:'☀️',cond:'Mild & Sunny',hi:20,lo:14,unit:'C',rain:10},US:{icon:'☀️',cond:'Sunny',hi:30,lo:24,unit:'F',rain:5}};
-  const wx=dest?wxMap[dest.countryCode]||null:null;
+  // Real forecast for this day's city (Open-Meteo). Replaces the placeholder that
+  // used to show the same invented numbers per country on every day of every trip.
+  const [wxByDate,setWxByDate]=React.useState(null);
+  React.useEffect(()=>{
+    let alive=true;
+    if(!dest || !dest.city || !day.date){ setWxByDate(null); return; }
+    const ahead=(new Date(day.date+'T00:00:00') - new Date(new Date().toDateString()))/86400000;
+    if(!(ahead>=0 && ahead<WX_WINDOW_DAYS)){ setWxByDate(null); return; } // outside the forecast horizon
+    fetchCityForecast(dest.city, dest.countryCode).then(v=>{ if(alive) setWxByDate(v); });
+    return ()=>{ alive=false; };
+  },[dest&&dest.city, dest&&dest.countryCode, day.date]);
+  const wx = wxByDate ? (wxByDate[day.date]||null) : null;
+  const wxSwap = React.useMemo(
+    ()=> wxByDate ? weatherSwapSuggestion(day, trip.days||[], wxByDate) : null,
+    [wxByDate, day, trip.days]
+  );
+  const wxDismissed = (trip.dismissedWxSwaps||[]).includes(day.id);
   function saveNotes(v){onUpdateTrip({...trip,days:trip.days.map(d=>d.id===day.id?{...d,notes:v}:d)});}
 
   // Merge activities + restaurants into one timeline.
@@ -3498,12 +3636,40 @@ function DayView({trip,day,onUpdateTrip}){
         );
       })()}
       {wx&&(
-        <div className="weather-strip" style={{marginBottom:16}}>
-          <span style={{fontSize:'1.5rem'}}>{wx.icon}</span>
-          <div style={{flex:1}}>
-            <p style={{fontWeight:500,fontSize:'.9rem'}}>{wx.cond}</p>
-            <p style={{fontSize:'.8rem',color:'var(--color-ink-light)'}}>High {wx.hi}°{wx.unit} · Low {wx.lo}°{wx.unit} · 🌧 {wx.rain}% rain</p>
+        <div style={{display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap',
+          padding:'10px 0 11px',borderTop:'1px solid var(--color-border)',borderBottom:'1px solid var(--color-border)',marginBottom:16}}>
+          <span className="section-label" style={{margin:0}}>Forecast</span>
+          <span style={{fontSize:'.85rem',fontWeight:500,color:'var(--color-ink)'}}>{wmoLabel(wx.code)}</span>
+          <span style={{fontFamily:'var(--font-mono)',fontVariantNumeric:'tabular-nums',fontSize:'.8rem',color:'var(--color-ink-light)'}}>
+            {wx.hi}° / {wx.lo}°{(wx.pop||0)>=20?(' · '+wx.pop+'% rain'):''}
+          </span>
+        </div>
+      )}
+      {/* Weather-aware suggestion. Suggests only · the swap is always an explicit tap (DECISIONS.md). */}
+      {wxSwap && !wxDismissed && (
+        <div className="card" style={{marginBottom:16,borderColor:'var(--color-accent)',borderStyle:'dashed'}}>
+          <div style={{display:'flex',alignItems:'flex-start',gap:10}}>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontWeight:600,fontSize:'.88rem',marginBottom:3}}>{wmoLabel(wxSwap.wx.code)} on {formatDateDow ? formatDateDow(day.date) : day.date}, with {wxSwap.outdoorCount} outdoor stops</p>
+              <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',lineHeight:1.55}}>
+                Consider trading <strong style={{color:'var(--color-ink)'}}>{wxSwap.outdoorStop.name}</strong> for <strong style={{color:'var(--color-ink)'}}>{wxSwap.swapStop.name}</strong> on {formatDateShort(wxSwap.swapDay.date)}, which looks drier.
+              </p>
+            </div>
+            <button className="btn btn-ghost btn-sm" aria-label="Dismiss weather suggestion" style={{flexShrink:0,color:'var(--color-ink-muted)'}}
+              onClick={()=>onUpdateTrip({...trip, dismissedWxSwaps:[...(trip.dismissedWxSwaps||[]), day.id]})}>✕</button>
           </div>
+          {isOwner && (
+            <button className="btn btn-secondary btn-sm" style={{marginTop:10}}
+              onClick={()=>{
+                const days=(trip.days||[]).map(d=>{
+                  if(d.id===day.id) return {...d, activities:swapStopIn(d.activities, wxSwap.outdoorStop, wxSwap.swapStop)};
+                  if(d.id===wxSwap.swapDay.id) return {...d, activities:swapStopIn(d.activities, wxSwap.swapStop, wxSwap.outdoorStop)};
+                  return d;
+                });
+                onUpdateTrip({...trip, days});
+                showToast('Swapped ✓ · undo by swapping back','info',4000);
+              }}>Swap them</button>
+          )}
         </div>
       )}
       {hotel&&(
@@ -7529,6 +7695,54 @@ class ErrorBoundary extends React.Component {
     return r.collaborators[0].rsvp==='pending';
   })());
   assert('carryover is a no-op with no reactions', applyPinReactionCarryover({collaborators:[{id:'a',rsvp:'pending'}],pinnedIdeas:[{id:'p1'}]}).suggested===0);
+
+  // ── NEW Round 13: weather-aware suggestions ─
+  assert('wmoLabel maps known codes and falls back', wmoLabel(0)==='Clear' && wmoLabel(65)==='Heavy rain' && wmoLabel(4242)==='Unsettled');
+  assert('isWetDay: heavy codes are wet regardless of odds', isWetDay({code:65,pop:0,precip:0}) && isWetDay({code:95,pop:10,precip:0}));
+  assert('isWetDay: light rain needs real odds', !isWetDay({code:61,pop:20,precip:0.01}) && isWetDay({code:61,pop:70,precip:0.01}));
+  assert('isWetDay: light rain qualifies on volume alone', isWetDay({code:61,pop:10,precip:0.4}));
+  assert('isWetDay: dry codes are never wet', !isWetDay({code:0,pop:90,precip:5}) && !isWetDay({code:2,pop:80,precip:1}));
+  assert('isWetDay: null-safe', !isWetDay(null) && !isWetDay(undefined));
+  assert('isOutdoorStop: category wins', isOutdoorStop({name:'X',category:'outdoor'}) && !isOutdoorStop({name:'X',category:'museum'}));
+  assert('isOutdoorStop: keywords catch uncategorized stops', isOutdoorStop({name:'Borough Market stroll'}) && isOutdoorStop({name:'Hyde Park picnic'}));
+  assert('isOutdoorStop: indoor words override an outdoor category', !isOutdoorStop({name:'Tate Modern gallery',category:'outdoor'}));
+  assert('isOutdoorStop: unknown text is not outdoor', !isOutdoorStop({name:'Something vague'}) && !isOutdoorStop(null));
+  assert('swapStopIn replaces in place and keeps sortOrder', (()=>{
+    const out={id:'a',name:'Park',sortOrder:2}, inc={id:'b',name:'Tate',sortOrder:9};
+    const r=swapStopIn([{id:'z',sortOrder:0},out], out, inc);
+    return r.length===2 && r[1].id==='b' && r[1].sortOrder===2 && r[0].id==='z';
+  })());
+  assert('swapStopIn is a no-op when the stop is absent', (()=>{
+    const list=[{id:'z'}]; return swapStopIn(list,{id:'a'},{id:'b'})===list && swapStopIn(null,{id:'a'},{id:'b'}).length===0;
+  })());
+  assert('weatherSwapSuggestion: fires on a wet day with 2+ outdoor stops', (()=>{
+    const wet={id:'d1',date:'2026-09-01',activities:[{id:'a1',name:'Hyde Park',category:'outdoor'},{id:'a2',name:'Camden Market',category:'outdoor'}],restaurants:[]};
+    const dry={id:'d2',date:'2026-09-02',activities:[{id:'a3',name:'Tate Modern',category:'museum'}],restaurants:[]};
+    const wx={'2026-09-01':{code:65,pop:90,precip:0.6},'2026-09-02':{code:0,pop:0,precip:0}};
+    const s=weatherSwapSuggestion(wet,[wet,dry],wx);
+    return s && s.outdoorCount===2 && s.outdoorStop.id==='a1' && s.swapStop.id==='a3' && s.swapDay.id==='d2';
+  })());
+  assert('weatherSwapSuggestion: silent on a dry day', (()=>{
+    const d={id:'d1',date:'2026-09-01',activities:[{id:'a1',name:'Hyde Park',category:'outdoor'},{id:'a2',name:'Camden Market',category:'outdoor'}]};
+    return weatherSwapSuggestion(d,[d],{'2026-09-01':{code:0,pop:0,precip:0}})===null;
+  })());
+  assert('weatherSwapSuggestion: silent with only one outdoor stop', (()=>{
+    const wet={id:'d1',date:'2026-09-01',activities:[{id:'a1',name:'Hyde Park',category:'outdoor'},{id:'a2',name:'Tate',category:'museum'}]};
+    const dry={id:'d2',date:'2026-09-02',activities:[{id:'a3',name:'V and A',category:'museum'}]};
+    return weatherSwapSuggestion(wet,[wet,dry],{'2026-09-01':{code:65,pop:90,precip:.6},'2026-09-02':{code:0,pop:0,precip:0}})===null;
+  })());
+  assert('weatherSwapSuggestion: silent when every other day is also wet', (()=>{
+    const wet={id:'d1',date:'2026-09-01',activities:[{id:'a1',name:'Hyde Park',category:'outdoor'},{id:'a2',name:'Camden Market',category:'outdoor'}]};
+    const wet2={id:'d2',date:'2026-09-02',activities:[{id:'a3',name:'Tate',category:'museum'}]};
+    return weatherSwapSuggestion(wet,[wet,wet2],{'2026-09-01':{code:65,pop:90,precip:.6},'2026-09-02':{code:82,pop:95,precip:.9}})===null;
+  })());
+  assert('weatherSwapSuggestion: never proposes a restaurant as the swap', (()=>{
+    const wet={id:'d1',date:'2026-09-01',activities:[{id:'a1',name:'Hyde Park',category:'outdoor'},{id:'a2',name:'Camden Market',category:'outdoor'}],restaurants:[]};
+    const dry={id:'d2',date:'2026-09-02',activities:[],restaurants:[{id:'r1',name:'Dishoom',category:'food'}]};
+    return weatherSwapSuggestion(wet,[wet,dry],{'2026-09-01':{code:65,pop:90,precip:.6},'2026-09-02':{code:0,pop:0,precip:0}})===null;
+  })());
+  assert('weatherSwapSuggestion: null-safe on missing data', weatherSwapSuggestion(null,[],{})===null && weatherSwapSuggestion({id:'x'},[],null)===null);
+  assert('normalizeTrip defaults dismissedWxSwaps', Array.isArray(normalizeTrip({title:'x'}).dismissedWxSwaps));
 
   // ── NEW v0.9: ideation validation ─
   const ide = validateIdeation({destination_summary:'Great fit.', best_time:{when:'Sept',why:'fewer crowds'},
