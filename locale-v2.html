@@ -3389,8 +3389,8 @@ function ArrivalsBoard({trip, date, mode}){
     <div style={{background:'#16130F',borderRadius:'var(--radius-card)',padding:'18px 20px',marginBottom:16,boxShadow:'var(--shadow-card)'}}>
       <p style={{fontFamily:'var(--font-mono)',fontSize:'.62rem',fontWeight:500,letterSpacing:'.18em',textTransform:'uppercase',color:'#8C857A',marginBottom:12}}>{arrivalsMode?'Arrivals':'Departures'} · {(trip.destinations||[])[0]?.city||''}{date?(' · '+formatDateShort(date)):' · whole trip'}</p>
       {rows.map(({f,who})=>(
-        <div key={f.id} style={{display:'grid',gridTemplateColumns:'64px 1fr auto',gap:12,alignItems:'baseline',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
-          <span style={{fontFamily:'var(--font-mono)',fontWeight:600,fontSize:'.95rem',color:'#FFD9A8',fontVariantNumeric:'tabular-nums'}}>{t24(f[key])}</span>
+        <div key={f.id} style={{display:'grid',gridTemplateColumns:'88px 1fr auto',gap:12,alignItems:'baseline',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
+          <span style={{fontFamily:'var(--font-mono)',fontWeight:600,fontSize:'.95rem',color:'#FFD9A8',fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap'}}>{t24(f[key])}</span>
           <div style={{minWidth:0}}>
             <div style={{fontSize:'.85rem',fontWeight:500,color:'#F5F1E9',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{f.flightNumber||f.airline||'Flight'} · {(arrivalsMode?(f.departureAirport||'?'):(f.arrivalAirport||'?'))}{f.via?(' via '+f.via):''}<span style={{color:'#8C857A'}}>{(f.travelerIds||[]).length? ' · '+who.map(m=>m.name).join(', ') : ' · Whole group'}</span></div>
             {!sameDay && <div style={{fontFamily:'var(--font-mono)',fontSize:'.65rem',color:'#8C857A',marginTop:2}}>{formatDateShort((f[key]||'').slice(0,10))}</div>}
