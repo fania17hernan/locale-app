@@ -1779,6 +1779,43 @@ function weatherSwapSuggestion(day, days, wxByDate){
   return { wx, outdoorCount:outdoors.length, outdoorStop, swapDay:best.day, swapStop:best.stop };
 }
 
+// ── DAY TIPS (itinerary-aware) ────────────────────────────────────────────────
+// The old "city tips" were a static lookup keyed by city, so they were identical
+// on every day of every trip and ignored the itinerary completely. This asks for
+// recommendations anchored to the stops actually planned for THAT day, and tells
+// the model what is already planned elsewhere so it stops repeating itself.
+const DAY_TIPS_URL = SUPABASE_URL + '/functions/v1/day-tips';
+async function fetchDayTips(trip, day){
+  const dest = (trip.destinations||[]).find(d=>d.id===day.destinationId) || (trip.destinations||[])[0];
+  if(!dest || !dest.city) return { error:'No city set for this day yet.' };
+  const stops = [...(day.activities||[]), ...(day.restaurants||[])];
+  const areas = [...new Set(stops.map(s=>s.neighborhood).filter(Boolean))];
+  // Everything planned elsewhere on the trip, so suggestions do not duplicate it.
+  const avoid = (trip.days||[]).filter(d=>d.id!==day.id)
+    .flatMap(d=>[...(d.activities||[]), ...(d.restaurants||[])]).map(s=>s.name).filter(Boolean);
+  const interests = [
+    trip.tasteProfile && trip.tasteProfile.summary,
+    ...(trip.mustEvents||[]).map(m=>m.title||m.name||''),
+    ...(trip.pinnedIdeas||[]).map(p=>p.title||p.text||''),
+  ].filter(Boolean).join('; ');
+  try{
+    const session = await ensureAnonSession();
+    if(!session) return { error:'Sign in to get local tips.' };
+    const res = await fetch(DAY_TIPS_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':SUPABASE_ANON_KEY},
+      body: JSON.stringify({
+        trip_id: trip.id, city: dest.city, country: dest.country||'',
+        dayLabel: day.label||'', stops: stops.map(s=>s.name).filter(Boolean),
+        areas, avoid, interests,
+      }),
+    });
+    const data = await res.json().catch(()=>null);
+    if(!res.ok) return { error: (data && data.error && data.error.message) || 'Could not get tips right now.' };
+    return { tips: (data && data.tips) || [] };
+  }catch(e){ return { error:'Could not reach the tips service.' }; }
+}
+
 function getIntlFlags(trip){
   const flags=[];
   const seen=new Set();
@@ -2133,6 +2170,8 @@ function normalizeTrip(t){
     activities: (d.activities||[]).map(normStop),
     restaurants: (d.restaurants||[]).map(normStop),
     comments: Array.isArray(d.comments) ? d.comments : [],
+    // Round 18 (additive): cached itinerary-aware suggestions for this day.
+    aiTips: (d.aiTips && Array.isArray(d.aiTips.items)) ? d.aiTips : null,
   }));
   // v2→v3: packingList, lodging, flights
   // null or [] = never generated → PackingView will auto-generate
@@ -2419,6 +2458,64 @@ function CurrencyConverter({destinations}){
 }
 
 // ── CITY TIDBITS ──────────────────────────────────────────────────────────────
+// Itinerary-aware suggestions for one day. Cached on the day itself so reopening
+// does not re-spend, and so a regenerate is a deliberate act.
+function DayTips({trip, day, dest, isOwner, onUpdateTrip}){
+  const [busy,setBusy]=React.useState(false);
+  const [err,setErr]=React.useState('');
+  const saved = day.aiTips && Array.isArray(day.aiTips.items) ? day.aiTips.items : null;
+  const stopCount = (day.activities||[]).length + (day.restaurants||[]).length;
+
+  const run = async ()=>{
+    setBusy(true); setErr('');
+    const r = await fetchDayTips(trip, day);
+    setBusy(false);
+    if(r.error){ setErr(r.error); return; }
+    if(!r.tips || !r.tips.length){ setErr('No suggestions came back. Try again in a moment.'); return; }
+    onUpdateTrip({...trip, days:(trip.days||[]).map(d=>d.id===day.id?{...d, aiTips:{generatedAt:Date.now(), items:r.tips}}:d)});
+  };
+  const addStop = (t)=>{
+    const list=[...(day.activities||[])];
+    list.push({id:uuid(), name:t.name, address:'', neighborhood:t.area||'', bucket:'nice-to-have',
+      category: t.kind==='food'||t.kind==='drink' ? 'food' : (t.kind==='walk'?'outdoor':'sightseeing'),
+      bookingRequired:false, notes:t.why||'', thingsToConsider:[],
+      sortOrder: Math.max(-1,...(day.activities||[]).map(s=>s.sortOrder??0),...(day.restaurants||[]).map(s=>s.sortOrder??0))+1});
+    onUpdateTrip({...trip, days:(trip.days||[]).map(d=>d.id===day.id?{...d, activities:list}:d)});
+    showToast('Added to this day ✓','info',2500);
+  };
+
+  return (
+    <div className="card" style={{marginBottom:12}}>
+      <p className="section-label" style={{margin:'0 0 4px'}}>Near today's plan</p>
+      <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',lineHeight:1.5}}>
+        {stopCount
+          ? 'Picks close to where you already are on this day, not a generic city list.'
+          : 'Add a stop or two first and these get anchored to that neighbourhood.'}
+      </p>
+      {saved && (
+        <div style={{marginTop:12,display:'flex',flexDirection:'column',gap:10}}>
+          {saved.map((t,i)=>(
+            <div key={i} style={{display:'flex',alignItems:'flex-start',gap:10,paddingTop:i?10:0,borderTop:i?'1px solid var(--color-border)':'none'}}>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{fontWeight:600,fontSize:'.86rem',lineHeight:1.4}}>{t.name}</p>
+                {t.area && <p style={{fontFamily:'var(--font-mono)',fontSize:'.65rem',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--color-accent)',marginTop:2}}>{t.area}</p>}
+                {t.why && <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',lineHeight:1.55,marginTop:3}}>{t.why}</p>}
+              </div>
+              {isOwner && <button className="btn btn-ghost btn-sm" style={{flexShrink:0,whiteSpace:'nowrap'}} onClick={()=>addStop(t)}>Add</button>}
+            </div>
+          ))}
+        </div>
+      )}
+      {err && <p style={{fontSize:'.78rem',color:'var(--color-flag)',marginTop:8,lineHeight:1.5}}>{err}</p>}
+      {isOwner && (
+        <button className="btn btn-secondary btn-sm" style={{marginTop:12}} disabled={busy} onClick={run}>
+          {busy?'Thinking…':(saved?'Suggest different ones':'Suggest places nearby')}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function CityTidbits({destinations, trip, onUpdateTrip}){
   const isOwner = !trip || trip._myRole==='owner' || !trip._myRole; // members can browse tips, not edit days
   const [open,setOpen]=useState({});
@@ -3953,8 +4050,9 @@ function DayView({trip,day,onUpdateTrip}){
           Fallback to the first stop when a day's destinationId is stale (older/demo data). */}
       {(()=>{ const tipsDest = dest || (trip.destinations||[])[0]; return tipsDest ? (
         <details style={{marginTop:16}}>
-          <summary className="card" style={{cursor:'pointer',listStyle:'none',padding:'14px 16px',fontWeight:600,fontSize:'.95rem'}}>💡 {tipsDest.city} tips &amp; local know-how <span style={{float:'right',color:'var(--color-ink-muted)',fontWeight:400}}>▾</span></summary>
+          <summary className="card" style={{cursor:'pointer',listStyle:'none',padding:'14px 16px',fontWeight:600,fontSize:'.95rem'}}>{tipsDest.city} tips &amp; local know-how <span style={{float:'right',color:'var(--color-ink-muted)',fontWeight:400}}>▾</span></summary>
           <div style={{marginTop:8}}>
+            <DayTips trip={trip} day={day} dest={tipsDest} isOwner={isOwner} onUpdateTrip={onUpdateTrip}/>
             <CityTidbits destinations={[tipsDest]} trip={trip} onUpdateTrip={onUpdateTrip}/>
           </div>
         </details>
