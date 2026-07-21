@@ -1115,26 +1115,82 @@ async function cloudPull(){
     return { trips, updatedAt };
   }catch(e){ return null; }
 }
+// Deletions are recorded explicitly. Everything below used to infer them as
+// "any server row not in my local list", which destroyed data · see cloudPush.
+const DK='locale_deleted_v1';
+function loadTombstones(){ try{ const a=JSON.parse(localStorage.getItem(DK)||'[]'); return Array.isArray(a)?a.filter(x=>x&&x.id):[]; }catch(e){ return []; } }
+function addTombstone(id){ try{ const a=loadTombstones().filter(x=>x.id!==id); a.push({id,ts:Date.now()}); localStorage.setItem(DK,JSON.stringify(a.slice(-200))); }catch(e){} }
+function clearTombstones(ids){ try{ const s=new Set(ids); localStorage.setItem(DK,JSON.stringify(loadTombstones().filter(x=>!s.has(x.id)))); }catch(e){} }
+
+// D5: an organiser pushes the whole trip object, so a member's guarded-RPC write
+// (their own flight, their pin reactions) can be overwritten by the organiser's
+// next save if their local copy is stale. Merge those member-owned collections
+// back in from the server before pushing. `myCollabId` is the pusher's own
+// collaborator id: their own entries stay local-authoritative, everyone else's
+// come from the server.
+function mergeMemberFields(local, server, myCollabId){
+  if(!server) return local;
+  const out={...local};
+  // Flights: union by id. Anything a member added is the server's to own.
+  const localFlights=Array.isArray(local.flights)?local.flights:[];
+  const serverFlights=Array.isArray(server.flights)?server.flights:[];
+  const mineOrUnowned=localFlights.filter(f=>!f.addedBy || f.addedBy===myCollabId);
+  const theirs=serverFlights.filter(f=>f.addedBy && f.addedBy!==myCollabId);
+  const seen=new Set();
+  out.flights=[...mineOrUnowned,...theirs].filter(f=>{ if(!f||seen.has(f.id)) return false; seen.add(f.id); return true; });
+  // Pin reactions: per member. Keep mine from local, take everyone else's from server.
+  const serverPins={}; (Array.isArray(server.pinnedIdeas)?server.pinnedIdeas:[]).forEach(p=>{ if(p&&p.id) serverPins[p.id]=p; });
+  out.pinnedIdeas=(Array.isArray(local.pinnedIdeas)?local.pinnedIdeas:[]).map(p=>{
+    const sp=serverPins[p.id]; if(!sp) return p;
+    const mine=(p.reactions||[]).filter(r=>r.memberId===myCollabId);
+    const others=(sp.reactions||[]).filter(r=>r.memberId!==myCollabId);
+    return {...p, reactions:[...others,...mine]};
+  });
+  return out;
+}
+
 async function cloudPush(trips){
   try{
     const c=sb(); if(!c) return;
     const u=await cloudGetUser(); if(!u) return;
     // Only push trips this user actually owns · a shared trip's row belongs to
-    // someone else, and RLS would reject (and fail the whole batch) if we tried.
-    const payload=(trips||[]).filter(t=>!t.isDemo && t.id && (!t._ownerId || t._ownerId===u.id));
-    const ids=payload.map(t=>t.id);
-    if(payload.length){
-      await c.from('trips').upsert(
-        payload.map(t=>{ const {_ownerId,_myRole,_myCollaboratorId,...clean}=t; return { id:t.id, user_id:u.id, data:clean, updated_at:new Date().toISOString() }; }),
-        { onConflict:'id' }
-      );
+    // someone else and RLS would reject it.
+    const mine=(trips||[]).filter(t=>!t.isDemo && t.id && (!t._ownerId || t._ownerId===u.id));
+    const row=(t)=>{ const {_ownerId,_myRole,_myCollaboratorId,...clean}=t; return { id:t.id, user_id:u.id, data:clean, updated_at:new Date().toISOString() }; };
+    if(mine.length){
+      // Re-read what the server holds so member writes survive this push (D5).
+      try{
+        const { data:current } = await c.from('trips').select('id,data').in('id',mine.map(t=>t.id));
+        if(current&&current.length){
+          const byId={}; current.forEach(r=>{ byId[r.id]=r.data; });
+          for(let i=0;i<mine.length;i++){
+            const srv=byId[mine[i].id];
+            if(srv) mine[i]=mergeMemberFields(mine[i], srv, mine[i]._myCollaboratorId||null);
+          }
+        }
+      }catch(e){ /* fall through · a failed re-read must not block the push */ }
+      // Try one batch for speed, but a batch is all-or-nothing: a single rejected
+      // row used to silently stop EVERY trip from syncing, with no error surfaced
+      // (that is how trips went missing between devices). On failure, retry row by
+      // row so one bad trip can never hold the rest hostage, and say so out loud.
+      const { error } = await c.from('trips').upsert(mine.map(row), { onConflict:'id' });
+      if(error){
+        let failed=0;
+        for(const t of mine){
+          try{ const r=await c.from('trips').upsert(row(t),{onConflict:'id'}); if(r.error) failed++; }
+          catch(e){ failed++; }
+        }
+        if(failed) showToast(`${failed} trip${failed>1?'s':''} could not sync · still saved on this device.`,'warn',6000);
+      }
     }
-    // Each trip is its own row now, so a deleted-locally trip needs an explicit
-    // delete · a single overwrite (the old one-row-per-user approach) can't
-    // express "this trip is gone" anymore.
-    let del=c.from('trips').delete().eq('user_id',u.id);
-    if(ids.length) del=del.not('id','in','('+ids.join(',')+')');
-    await del;
+    // Explicit deletes only, scoped to ids we actually deleted. The previous
+    // version issued an unbounded `delete where user_id = me` whenever the local
+    // list was empty or demo-only, wiping every trip on the account.
+    const tomb=loadTombstones().map(x=>x.id);
+    if(tomb.length){
+      const { error } = await c.from('trips').delete().eq('user_id',u.id).in('id',tomb);
+      if(!error) clearTombstones(tomb);
+    }
   }catch(e){ /* offline cache still holds the data; will resync next save */ }
 }
 let _cloudPushTimer=null;
@@ -6947,8 +7003,9 @@ function getSharedTripFromHash() {
   return m ? decodeTrip(m[1]) : null;
 }
 
-function SharedTripBanner({ trip, onAccept, onDismiss }) {
+function SharedTripBanner({ trip, signedInEmail, busy, onJoin, onCopy, onSignIn, onDismiss }) {
   const t = normalizeTrip(trip);
+  const [email,setEmail] = React.useState('');
   const dest = (t.destinations||[]).map(d=>d.city).join(' → ') || 'Unknown destination';
   return (
     <div style={{
@@ -6973,14 +7030,39 @@ function SharedTripBanner({ trip, onAccept, onDismiss }) {
         <p style={{fontFamily:'var(--font-display)',fontSize:'1.1rem',fontWeight:600,textAlign:'center',color:'var(--color-accent)',marginBottom:20}}>
           {t.title || 'Shared Trip'} · {dest}
         </p>
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
-          <button className="btn btn-primary" style={{width:'100%',padding:'14px'}} onClick={()=>onAccept(t)}>
-            Add to my trips
-          </button>
-          <button className="btn btn-ghost" style={{width:'100%',padding:'14px'}} onClick={onDismiss}>
-            No thanks
-          </button>
-        </div>
+        {/* Joining requires a signed-in account · that is what creates the membership
+            record. The old flow copied the trip into local storage with a brand new
+            id and never signed anyone in, so the invitee got a private photocopy and
+            the organiser never saw them. See SYNC-DIAGNOSIS-2026-07-21.md. */}
+        {signedInEmail ? (
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            <p style={{fontSize:'.78rem',color:'var(--color-ink-muted)',textAlign:'center',marginBottom:2}}>Signed in as {signedInEmail}</p>
+            <button className="btn btn-primary" style={{width:'100%',padding:'14px'}} disabled={busy} onClick={()=>onJoin(t)}>
+              {busy?'Joining…':'Join this trip'}
+            </button>
+            <button className="btn btn-ghost" style={{width:'100%',padding:'12px'}} onClick={()=>onCopy(t)}>
+              Just save a read-only copy
+            </button>
+            <button className="btn btn-ghost" style={{width:'100%',padding:'10px'}} onClick={onDismiss}>No thanks</button>
+          </div>
+        ) : (
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            <p style={{fontSize:'.82rem',color:'var(--color-ink-light)',textAlign:'center',lineHeight:1.5,marginBottom:2}}>
+              Sign in to join, so the organiser can see your RSVP and your flights.
+              Use the address the invite was sent to.
+            </p>
+            <input className="input" type="email" autoComplete="email" placeholder="you@email.com"
+              value={email} onChange={e=>setEmail(e.target.value)} style={{width:'100%'}}/>
+            <button className="btn btn-primary" style={{width:'100%',padding:'14px'}} disabled={busy||!email.trim()}
+              onClick={()=>onSignIn(email.trim(), t)}>
+              {busy?'Sending…':'Email me a sign-in link'}
+            </button>
+            <button className="btn btn-ghost" style={{width:'100%',padding:'12px'}} onClick={()=>onCopy(t)}>
+              Just save a read-only copy
+            </button>
+            <button className="btn btn-ghost" style={{width:'100%',padding:'10px'}} onClick={onDismiss}>No thanks</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -7097,10 +7179,16 @@ function App() {
     // Live sync: when another device changes this row, pull + merge automatically ·
     // no manual refresh or re-auth needed. Realtime is included in Supabase's tier
     // (no extra cost); RLS (owner-only) still governs who can receive the event.
+    // D4: this used to filter on user_id=eq.<me>, which meant a member never
+    // received any event at all (they do not own the row) and an organiser only
+    // ever heard their own writes. Subscribing without a filter lets Postgres send
+    // every trips change; RLS still decides what actually reaches this client, so
+    // we only hear about rows we can already read (ours, plus ones we are a member
+    // of). That is exactly the set we want to react to.
     const subscribeRealtime = (uid) => {
       if(!c || tripsChannel) return;
       tripsChannel = c.channel('trips-sync-'+uid)
-        .on('postgres_changes', { event:'*', schema:'public', table:'trips', filter:'user_id=eq.'+uid }, async ()=>{
+        .on('postgres_changes', { event:'*', schema:'public', table:'trips' }, async ()=>{
           if(!active) return;
           const pulled = await cloudPull();
           if(active) mergeCloudTrips(pulled);
@@ -7123,6 +7211,18 @@ function App() {
       if(merged) cloudPush(merged); // backstop: push up anything that never made it to the cloud
       showToast('Synced across your devices ✓','info',3000);
       subscribeRealtime(u.id);
+      // Resume an invite that was interrupted by the magic-link round trip: the
+      // redirect drops the URL hash, so without this the invitee signs in and lands
+      // on the dashboard with no idea they still need to join.
+      try{
+        const pend=JSON.parse(localStorage.getItem('locale_pending_invite')||'null');
+        if(pend && pend.tripId && Date.now()-pend.t < 3600000){
+          localStorage.removeItem('locale_pending_invite');
+          const target=(merged||[]).find(t=>t.id===pend.tripId);
+          if(target){ setActiveTripId(target.id); setView('detail'); showToast('You are in · welcome aboard ✓','info',4000); }
+          else showToast('Signed in, but no invite was found for this email. Ask the organiser to invite this exact address.','warn',8000);
+        } else if(pend){ localStorage.removeItem('locale_pending_invite'); }
+      }catch(e){}
     }
     track('app_open', { version: APP_VERSION, standalone: (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||false, width: window.innerWidth });
     // Global error telemetry (capped at 5/session)
@@ -7172,18 +7272,68 @@ function App() {
   };
 
   const handleDeleteTrip = (id) => {
+    addTombstone(id); // explicit intent · cloudPush only deletes what is tombstoned
     saveAndSet(trips.filter(t=>t.id!==id));
     setView('dashboard');
   };
 
-  const handleAcceptSharedTrip = (trip) => {
-    const fresh = {...normalizeTrip(trip), id: uuid()};
-    const updated = [...trips, fresh];
-    saveAndSet(updated);
+  const [inviteBusy,setInviteBusy]=React.useState(false);
+
+  // A read-only copy. Honest fallback for someone with no invite (or who declines
+  // to sign in): a detached snapshot with its own id, which is what this has always
+  // really been. It is no longer presented as "joining".
+  const handleCopySharedTrip = (trip) => {
+    const fresh = {...normalizeTrip(trip), id: uuid(), _snapshotOf: trip.id||null};
+    saveAndSet([...trips, fresh]);
     setSharedTrip(null);
     window.location.hash = '';
     setActiveTripId(fresh.id);
     setView('detail');
+    showToast('Saved as a read-only copy · changes will not reach the organiser.','info',6000);
+  };
+
+  // Actually join: claim the invite tied to this signed-in email, then pull so the
+  // real shared trip (owned by the organiser) lands in the list.
+  const handleJoinSharedTrip = async (trip) => {
+    setInviteBusy(true);
+    try{
+      const c=sb();
+      let claimed=0;
+      try{ const { data } = await c.rpc('claim_pending_trip_invites'); claimed=Number(data)||0; }catch(e){}
+      const pulled = await cloudPull();
+      const cloudTrips = (pulled&&pulled.trips)||[];
+      const target = cloudTrips.find(x=>x.id===trip.id);
+      if(target){
+        const byId={}; trips.forEach(t=>{ byId[t.id]=t; });
+        cloudTrips.map(normalizeTrip).forEach(t=>{ byId[t.id]=t; });
+        const merged=Object.values(byId);
+        setTrips(merged); saveTrips(merged);
+        setSharedTrip(null); window.location.hash='';
+        setActiveTripId(target.id); setView('detail');
+        showToast(claimed>0?'You are in · welcome aboard ✓':'Opened the shared trip ✓','info',4000);
+      } else {
+        // Signed in, but this email has no invite for this trip. Be explicit rather
+        // than silently handing back a copy that will never sync.
+        showToast('No invite found for this email. Ask the organiser to invite this address, or save a read-only copy.','warn',7000);
+      }
+    }catch(e){
+      showToast('Could not join · try again.','error');
+    }
+    finally{ setInviteBusy(false); }
+  };
+
+  // The magic link redirect drops the hash, so stash the invite and resume after
+  // sign-in (see the pending-invite resume effect below).
+  const handleInviteSignIn = async (email, trip) => {
+    setInviteBusy(true);
+    try{
+      try{ localStorage.setItem('locale_pending_invite', JSON.stringify({tripId:trip.id, t:Date.now()})); }catch(e){}
+      await cloudSignIn(email);
+      showToast('Check your email for the sign-in link, then you will land right here.','info',7000);
+    }catch(e){
+      showToast('Could not send the link · try again.','error');
+    }
+    finally{ setInviteBusy(false); }
   };
 
   const handleInstall = async () => {
@@ -7207,7 +7357,11 @@ function App() {
       {sharedTrip && (
         <SharedTripBanner
           trip={sharedTrip}
-          onAccept={handleAcceptSharedTrip}
+          signedInEmail={cloudUser&&cloudUser.email}
+          busy={inviteBusy}
+          onJoin={handleJoinSharedTrip}
+          onCopy={handleCopySharedTrip}
+          onSignIn={handleInviteSignIn}
           onDismiss={()=>{ setSharedTrip(null); window.location.hash=''; }}
         />
       )}
@@ -7695,6 +7849,55 @@ class ErrorBoundary extends React.Component {
     return r.collaborators[0].rsvp==='pending';
   })());
   assert('carryover is a no-op with no reactions', applyPinReactionCarryover({collaborators:[{id:'a',rsvp:'pending'}],pinnedIdeas:[{id:'p1'}]}).suggested===0);
+
+  // ── NEW Round 14: sync + collaboration integrity ─
+  assert('mergeMemberFields keeps another member\'s flight', (()=>{
+    const local={flights:[{id:'f1',addedBy:null}]};
+    const server={flights:[{id:'f1',addedBy:null},{id:'f2',addedBy:'m2'}]};
+    const r=mergeMemberFields(local,server,'m1');
+    return r.flights.length===2 && r.flights.some(f=>f.id==='f2');
+  })());
+  assert('mergeMemberFields lets me delete my own flight', (()=>{
+    const local={flights:[]};
+    const server={flights:[{id:'f1',addedBy:'m1'}]};
+    return mergeMemberFields(local,server,'m1').flights.length===0;
+  })());
+  assert('mergeMemberFields does not resurrect a whole-group flight I removed', (()=>{
+    const local={flights:[]};
+    const server={flights:[{id:'f1',addedBy:null}]};
+    return mergeMemberFields(local,server,'m1').flights.length===0;
+  })());
+  assert('mergeMemberFields never duplicates a flight', (()=>{
+    const local={flights:[{id:'f1',addedBy:'m1'}]};
+    const server={flights:[{id:'f1',addedBy:'m1'}]};
+    return mergeMemberFields(local,server,'m1').flights.length===1;
+  })());
+  assert('mergeMemberFields preserves other members\' reactions', (()=>{
+    const local={pinnedIdeas:[{id:'p1',reactions:[{memberId:'m1',reaction:'love'}]}]};
+    const server={pinnedIdeas:[{id:'p1',reactions:[{memberId:'m2',reaction:'pass'},{memberId:'m1',reaction:'maybe'}]}]};
+    const r=mergeMemberFields(local,server,'m1').pinnedIdeas[0].reactions;
+    return r.length===2 && r.some(x=>x.memberId==='m2'&&x.reaction==='pass') && r.some(x=>x.memberId==='m1'&&x.reaction==='love');
+  })());
+  assert('mergeMemberFields is a no-op without a server copy', (()=>{
+    const local={flights:[{id:'f1'}],pinnedIdeas:[]};
+    return mergeMemberFields(local,null,'m1')===local;
+  })());
+  assert('mergeMemberFields tolerates missing collections', (()=>{
+    const r=mergeMemberFields({}, {}, 'm1');
+    return Array.isArray(r.flights) && Array.isArray(r.pinnedIdeas);
+  })());
+  assert('tombstones round-trip and clear', (()=>{
+    const before=localStorage.getItem(DK);
+    try{
+      localStorage.removeItem(DK);
+      addTombstone('t1'); addTombstone('t2'); addTombstone('t1');
+      const ids=loadTombstones().map(x=>x.id);
+      const okAdd = ids.length===2 && ids.includes('t1') && ids.includes('t2');
+      clearTombstones(['t1']);
+      const left=loadTombstones().map(x=>x.id);
+      return okAdd && left.length===1 && left[0]==='t2';
+    } finally { if(before===null) localStorage.removeItem(DK); else localStorage.setItem(DK,before); }
+  })());
 
   // ── NEW Round 13: weather-aware suggestions ─
   assert('wmoLabel maps known codes and falls back', wmoLabel(0)==='Clear' && wmoLabel(65)==='Heavy rain' && wmoLabel(4242)==='Unsettled');
