@@ -1073,6 +1073,10 @@ async function cloudSignIn(email){
   if(error) throw error;
 }
 async function cloudSignOut(){ try{ const c=sb(); if(c) await c.auth.signOut(); }catch(e){} }
+// The guarded member RPCs raise SEAT_REMOVED when a membership outlives the
+// collaborator row it points at, so the UI can say what actually happened instead
+// of "try again" on something that will never succeed.
+function seatRemoved(e){ return /SEAT_REMOVED/.test((e&&(e.message||e.details||e.hint))||String(e||'')); }
 // Fire-and-forget product analytics -> public.usage_events (insert-only RLS).
 // Never blocks or breaks the UI; silently no-ops offline. NOTE: supabase-js
 // builders are thenable but don't implement .catch() directly · use .then(ok,err).
@@ -3919,7 +3923,7 @@ function makePinReactor(trip, onUpdateTrip){
     track('pin_reaction',{reaction:cleared?'clear':key, self:!isOwner});
     if(!isOwner){
       const c=sb();
-      if(c) (async()=>{ try{ const {error}=await c.rpc('react_to_pin',{p_trip_id:trip.id,p_pin_id:String(pinId),p_reaction:cleared?null:key}); if(error) throw error; }catch(e){ showToast("Couldn't save your reaction · try again.",'error'); } })();
+      if(c) (async()=>{ try{ const {error}=await c.rpc('react_to_pin',{p_trip_id:trip.id,p_pin_id:String(pinId),p_reaction:cleared?null:key}); if(error) throw error; }catch(e){ showToast(seatRemoved(e)?'Your spot on this trip was removed by the organiser.':"Couldn't save your reaction · try again.",'error',6000); } })();
     }
   };
   return { myMemberId: me, react };
@@ -5733,7 +5737,7 @@ function CrewSection({trip, onUpdateTrip}){
       // has to go through the guarded function since trips are owner-write-only.
       if(id!==trip._myCollaboratorId) return;
       const c=sb();
-      if(c) (async()=>{ try{ const {error}=await c.rpc('set_my_rsvp',{p_trip_id:trip.id,p_rsvp:rsvp}); if(error) throw error; }catch(e){ showToast("Couldn't update RSVP · try again.",'error'); } })();
+      if(c) (async()=>{ try{ const {error}=await c.rpc('set_my_rsvp',{p_trip_id:trip.id,p_rsvp:rsvp}); if(error) throw error; }catch(e){ showToast(seatRemoved(e)?'Your spot on this trip was removed by the organiser.':"Couldn't update RSVP · try again.",'error',6000); } })();
       return;
     }
     // An explicit answer retires the carryover suggestion for good.
@@ -5741,7 +5745,15 @@ function CrewSection({trip, onUpdateTrip}){
   };
   const setPay = (id, field, val)=> save(members.map(m=>m.id===id?{...m, [field]:val}:m));
   const updateMember = (id, patch)=> save(members.map(m=>m.id===id?{...m, ...patch}:m));
-  const remove = (id)=> { if(window.confirm('Remove this person from the trip?')) save(members.filter(m=>m.id!==id)); };
+  // Removing a traveler must also retire their server-side seat. Without this the
+  // trip_members row outlives the collaborator it points at, and that person keeps
+  // read access while every write they make silently updates nothing.
+  const remove = (id)=> {
+    if(!window.confirm('Remove this person from the trip?')) return;
+    save(members.filter(m=>m.id!==id));
+    const c=sb();
+    if(c) (async()=>{ try{ await c.rpc('remove_trip_member',{p_trip_id:trip.id,p_collaborator_id:id}); }catch(e){} })();
+  };
   const [editingMemberId,setEditingMemberId]=React.useState(null);
   const [name,setName]=React.useState('');
   const [email,setEmail]=React.useState('');
@@ -5782,7 +5794,7 @@ function CrewSection({trip, onUpdateTrip}){
     track('crew_flight_save',{self:!isOwner});
     if(!isOwner){
       const c=sb();
-      if(c) (async()=>{ try{ const {error}=await c.rpc('set_my_flight',{p_trip_id:trip.id,p_flight:entry}); if(error) throw error; }catch(e){ showToast("Couldn't sync your flight · try again.",'error'); } })();
+      if(c) (async()=>{ try{ const {error}=await c.rpc('set_my_flight',{p_trip_id:trip.id,p_flight:entry}); if(error) throw error; }catch(e){ showToast(seatRemoved(e)?'Your spot on this trip was removed by the organiser.':"Couldn't sync your flight · try again.",'error',6000); } })();
     }
     setFlightSheet(null); showToast('Flight saved ✓','info',2500);
   };
