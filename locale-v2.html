@@ -729,6 +729,44 @@ function searchCities(q){
   }).slice(0,6);
 }
 
+// The curated list is ~670 cities, which misses most of the world: Guadalajara,
+// San Miguel de Allende, and any town smaller than a capital simply were not
+// offerable. Open-Meteo's geocoder (already used for the forecast · free, keyless,
+// global, down to small towns) fills the gap. Local list answers instantly and the
+// network results append, so typing never waits on the network.
+const _citySearchCache={};
+async function searchCitiesRemote(q){
+  const key=(q||'').toLowerCase().trim();
+  if(key.length<2) return [];
+  if(_citySearchCache[key]) return _citySearchCache[key];
+  try{
+    const url=WX_GEO_URL+'?name='+encodeURIComponent(key)+'&count=8&language=en&format=json';
+    const res=await fetch(url); if(!res.ok) return [];
+    const data=await res.json();
+    const out=(Array.isArray(data.results)?data.results:[]).map(r=>({
+      city:r.name,
+      country:r.country||'',
+      countryCode:r.country_code||'',
+      region:r.admin1||'',
+      isInternational:(r.country_code||'')!=='US',
+      display:[r.name,r.admin1,r.country].filter(Boolean).join(', '),
+      _remote:true,
+    }));
+    _citySearchCache[key]=out;
+    return out;
+  }catch(e){ return []; }
+}
+// Merge without duplicating what the curated list already offers.
+function mergeCityResults(local, remote){
+  const seen=new Set((local||[]).map(c=>(c.city+'|'+(c.countryCode||'')).toLowerCase()));
+  const extra=(remote||[]).filter(c=>{
+    const k=(c.city+'|'+(c.countryCode||'')).toLowerCase();
+    if(seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+  return [...(local||[]), ...extra].slice(0,8);
+}
+
 const CITY_DATA={
   GB:{
     transport:"Use Oyster card or contactless on the Tube and buses. Heathrow Express to Paddington ~15 min, £37. Black cabs metered; Uber widely available.",
@@ -1757,29 +1795,48 @@ function getIntlFlags(trip){
 
   countryCodes.forEach(cc=>{
     if(SCHENGEN.includes(cc)&&passport==='US'&&!isDone('EES pre-registration'))
-      push({severity:'critical',emoji:'🚨',label:'EES Registration Required',
+      push({severity:'critical',emoji:'🚨',cc,kind:'registration',label:'EES Registration Required',
         desc:'Required for all non-EU nationals entering the Schengen Area. Register before travel.',
         url:'https://eu-entry.europa.eu'});
     if(cc==='GB'&&passport==='US'&&!isDone('UK ETA'))
-      push({severity:'critical',emoji:'🚨',label:'UK ETA Required',
+      push({severity:'critical',emoji:'🚨',cc,kind:'visa',label:'UK ETA Required',
         desc:'US passport holders must obtain a UK Electronic Travel Authorisation (ETA) before travel. Apply at least 72 hours before departure.',
         url:'https://www.gov.uk/guidance/apply-for-an-electronic-travel-authorisation-eta'});
     if(cc==='AU'&&passport==='US'&&!isDone('Australia eTA'))
-      push({severity:'warning',emoji:'⚠️',label:'Australia eTA Required',
+      push({severity:'warning',emoji:'⚠️',cc,kind:'visa',label:'Australia eTA Required',
         desc:'Electronic Travel Authority required before departure. Apply online · typically instant.',
         url:'https://eta.homeaffairs.gov.au'});
     if(cc==='US'&&passport!=='US'){
       if(VWP.includes(passport)&&!isDone('ESTA'))
-        push({severity:'warning',emoji:'⚠️',label:'US Entry · ESTA Required',
+        push({severity:'warning',emoji:'⚠️',cc,kind:'visa',label:'US Entry · ESTA Required',
           desc:'Citizens of Visa Waiver Program countries must apply for ESTA before traveling to the US.',
           url:'https://esta.cbp.dhs.gov'});
       else if(!VWP.includes(passport)&&!isDone('US visa'))
-        push({severity:'critical',emoji:'🚨',label:'US Visa Required',
+        push({severity:'critical',emoji:'🚨',cc,kind:'visa',label:'US Visa Required',
           desc:'Your passport country requires a US visa to enter. Apply well in advance.',
           url:'https://travel.state.gov/content/travel/en/us-visas.html'});
     }
   });
   return flags;
+}
+
+// The static rules above and the live Travel Buddy data both describe entry
+// requirements, and used to render side by side · a UK trip showed both
+// "UK ETA Required" and "United Kingdom: eTA". Live data wins where it exists,
+// but the static rule stays as the fallback: the API is capped at 120 calls a
+// month, so when the quota runs out the traveler still gets warned.
+function visibleEntryFlags(trip, liveReqs, dismissed){
+  const live={}; (liveReqs||[]).forEach(({cc,req})=>{ if(req) live[cc]=req; });
+  const skip=dismissed||[];
+  return getIntlFlags(trip)
+    .filter(f=>!skip.includes(f.label))
+    .filter(f=>{
+      const l=live[f.cc];
+      if(!l) return true;
+      if(f.kind==='visa') return !(l.visa_rules&&l.visa_rules.primary_rule);
+      if(f.kind==='registration') return !l.mandatory_registration;
+      return true;
+    });
 }
 
 // ── CHECKLIST GENERATOR · tactical trip-prep tasks only ──────────────────────
@@ -3241,6 +3298,17 @@ function resolveStopAuthor(trip, item){
 // Converts a "HH:MM" (24h wall-clock) string to a friendly "h:mm am/pm" display.
 // These times are already local to the stop (e.g. a Paris arrival is Paris local
 // time) · no timezone math needed, just a nicer format than military time.
+// 12-hour time for the arrivals board. Hour is space-padded so the mono column
+// still lines up, and the meridiem is uppercase to suit the board treatment.
+// Flight times are stored as LOCAL time at each airport (the form asks for local
+// time on both ends), which is the correct model: a 15:50 departure from Austin is
+// Austin time, a 12:05 landing at Heathrow is London time. No conversion applied.
+function fmtBoardTime(iso){
+  const m=/T(\d{2}):(\d{2})/.exec(iso||''); if(!m) return '—';
+  let h=parseInt(m[1],10); const ap=h>=12?'PM':'AM';
+  h=h%12; if(h===0) h=12;
+  return (h<10?' ':'')+h+':'+m[2]+' '+ap;
+}
 function fmt12h(t){
   if(!t) return '';
   const m=/^(\d{1,2}):(\d{2})/.exec(String(t)); if(!m) return String(t);
@@ -3286,13 +3354,15 @@ function ArrivalsBoard({trip, date, mode}){
     else if(times.length>1){
       const span=Math.max(...times)-Math.min(...times);
       callout = arrivalsMode
-        ? ("EVERYONE IN BY "+((last[key].match(/T(\d{2}:\d{2})/)||[])[1]||'')+(span>=90?(' · SPAN '+gapLabel(span).toUpperCase()+' · EARLY LANDERS DROP BAGS'):' · MEET AT THE HOTEL'))
-        : ('LAST ONE OUT AT '+((last[key].match(/T(\d{2}:\d{2})/)||[])[1]||''));
+        ? ("EVERYONE IN BY "+fmtBoardTime(last[key]).trim()+(span>=90?(' · SPAN '+gapLabel(span).toUpperCase()+' · EARLY LANDERS DROP BAGS'):' · MEET AT THE HOTEL'))
+        : ('LAST ONE OUT AT '+fmtBoardTime(last[key]).trim());
     }
   }
   // Airport-board treatment (design brief): dark surface, 24h tabular times in
   // warm amber, one line per flight. 50 years of airport signage solved this layout.
-  const t24=(iso)=>((iso||'').match(/T(\d{2}:\d{2})/)||[])[1]||'—';
+  // Stephanie's call (2026-07-21): no military time anywhere, even here. The board
+  // keeps its tabular alignment because fmtBoardTime pads the hour.
+  const t24=(iso)=>fmtBoardTime(iso);
   return (
     <div style={{background:'#16130F',borderRadius:'var(--radius-card)',padding:'18px 20px',marginBottom:16,boxShadow:'var(--shadow-card)'}}>
       <p style={{fontFamily:'var(--font-mono)',fontSize:'.62rem',fontWeight:500,letterSpacing:'.18em',textTransform:'uppercase',color:'#8C857A',marginBottom:12}}>{arrivalsMode?'Arrivals':'Departures'} · {(trip.destinations||[])[0]?.city||''} · {formatDateShort(date)}</p>
@@ -3881,8 +3951,22 @@ function pinDisplay(p, city){
     title=(m[0]||t).trim(); detail=m.slice(1).join(' · ').trim();
     if(title.length>64){ detail=(title+(detail?' · '+detail:'')); title=title.slice(0,61).trim()+'…'; }
   }
+  // Maps is right for somewhere you need to GET to, wrong for a named venue you want
+  // to read about or book. Restaurants, museums, hotels and the like get a search
+  // scoped to the venue that lands on its own site; neighbourhoods, regions and
+  // timing notes still get Maps.
   const q=encodeURIComponent(title+(city?(' '+city):''));
-  return { tag: tag||'Idea', title, detail: detail||'', link: 'https://www.google.com/maps/search/?api=1&query='+q };
+  const t=(tag||'').toLowerCase();
+  const areaTags=['stay','timing','day trip','neighborhood','neighbourhood','area','region'];
+  const isVenue = !areaTags.includes(t) &&
+    /\b(restaurant|cafe|café|bar|museum|gallery|theatre|theater|hotel|club|venue|shop|store|spa|bakery|brewery|winery|palace|castle)\b/i.test(title+' '+(detail||''));
+  return {
+    tag: tag||'Idea', title, detail: detail||'',
+    link: isVenue
+      ? 'https://duckduckgo.com/?q='+encodeURIComponent(title+(city?(' '+city):'')+' official site')
+      : 'https://www.google.com/maps/search/?api=1&query='+q,
+    linkLabel: isVenue ? 'Look it up' : 'Explore on Maps',
+  };
 }
 
 // ── PIN REACTIONS (P1 Dreamer) ────────────────────────────────────────────────
@@ -3992,7 +4076,7 @@ function PinCard({pin, city, myMemberId, onReact, showReactions}){
       </div>
       {open && d.detail && <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',lineHeight:1.6,marginTop:6}}>{d.detail}</p>}
       {open && <a href={d.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-        style={{display:'inline-block',marginTop:10,fontSize:'.78rem',fontWeight:600,color:'var(--color-accent-deep)'}}>Explore on Maps ↗</a>}
+        style={{display:'inline-block',marginTop:10,fontSize:'.78rem',fontWeight:600,color:'var(--color-accent-deep)'}}>{d.linkLabel||'Explore on Maps'} ↗</a>}
       {showReactions && <PinReactions pin={pin} myMemberId={myMemberId} onReact={onReact}/>}
     </div>
   );
@@ -4260,6 +4344,7 @@ function CityAutocomplete({value, country, onChange, onCountryChange}) {
     document.addEventListener('mousedown', handler);
     return ()=>document.removeEventListener('mousedown', handler);
   },[]);
+  const lastQueryRef = React.useRef('');
 
   // Normalize on blur so "ZUrich" → "Zurich" without fighting the user mid-keystroke.
   // Known cities get canonical casing; unknown ones get per-word title case (hyphen/space aware).
@@ -4275,6 +4360,16 @@ function CityAutocomplete({value, country, onChange, onCountryChange}) {
     const matches = searchCities(v);
     setSuggestions(matches);
     setFocused(true);
+    // Widen to the global geocoder in the background · results append when they land,
+    // and a stale response for an older keystroke is discarded.
+    const q=(v||'').trim();
+    lastQueryRef.current=q;
+    if(q.length>=2){
+      searchCitiesRemote(q).then(remote=>{
+        if(lastQueryRef.current!==q || !remote.length) return;
+        setSuggestions(prev=>mergeCityResults(searchCities(q), remote));
+      });
+    }
     // Also try CITY_TO_COUNTRY exact match for auto-fill without selecting from list
     const key = v.toLowerCase().trim();
     const cityMatch = CITY_TO_COUNTRY[key];
@@ -6313,14 +6408,29 @@ function TripDateEditor({trip, onUpdateTrip}) {
       cur.setDate(cur.getDate() + 1);
     }
 
-    // Per-stop dates: each stop's range must be valid and inside the trip range
-    for(const s of stops){
+    // Moving a trip used to be blocked outright: the stops still held the OLD dates,
+    // which now sat outside the new range, so you had to hand-edit every stop before
+    // the trip itself would budge. Shift the stops by the same delta instead, then
+    // clamp anything that still falls outside (e.g. the trip got shorter).
+    const shiftDays = (trip.startDate && startDate) ? Math.round((new Date(startDate+'T12:00:00') - new Date(trip.startDate+'T12:00:00'))/86400000) : 0;
+    const shift=(d)=>{ if(!d) return d; const x=new Date(d+'T12:00:00'); x.setDate(x.getDate()+shiftDays); return x.toISOString().slice(0,10); };
+    const clamp=(d)=> !d ? d : (d<startDate ? startDate : (d>endDate ? endDate : d));
+    const adjusted = stops.map(s=>{
+      let a=clamp(shiftDays?shift(s.arrivalDate):s.arrivalDate);
+      let dep=clamp(shiftDays?shift(s.departureDate):s.departureDate);
+      if(a && dep && dep<a) dep=a; // a shortened trip can invert a stop; keep it coherent
+      return {...s, arrivalDate:a, departureDate:dep};
+    });
+    // Only a genuinely contradictory stop the user typed by hand should block a save.
+    for(const s of adjusted){
       if(s.arrivalDate && s.departureDate && s.departureDate < s.arrivalDate){ setError(`${s.city||'A stop'}: departure can't be before arrival.`); return; }
-      if((s.arrivalDate && (s.arrivalDate < startDate || s.arrivalDate > endDate)) || (s.departureDate && (s.departureDate < startDate || s.departureDate > endDate))){ setError(`${s.city||'A stop'}: dates must fall within the trip dates.`); return; }
     }
-    const nextDestinations = (trip.destinations||[]).map(d=>{ const s=stops.find(x=>x.id===d.id); return s?{...d, arrivalDate:s.arrivalDate, departureDate:s.departureDate}:d; });
+    const nextDestinations = (trip.destinations||[]).map(d=>{ const s=adjusted.find(x=>x.id===d.id); return s?{...d, arrivalDate:s.arrivalDate, departureDate:s.departureDate}:d; });
 
-    const existingDays = trip.days || [];
+    // Shift the itinerary with the trip. Without this, moving a trip even one day
+    // meant no existing day matched the new range and every activity, restaurant and
+    // note was silently dropped.
+    const existingDays = (trip.days || []).map(d => shiftDays && d.date ? {...d, date: shift(d.date)} : d);
     // Keep existing days that fall within new range (preserving their content)
     const kept = existingDays.filter(d => allDates.includes(d.date));
     // Only reconcile stubs if the itinerary has real content; otherwise leave days
@@ -6448,9 +6558,9 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
   // Dismissible entry banners: cleared per trip, owner only; auto-collapse (checklist) still applies
   const dismissedReqs = trip.dismissedEntryReqs || [];
   const dismissReq = (key)=> onUpdateTrip({...trip, dismissedEntryReqs:[...dismissedReqs, key]});
-  const flags = getIntlFlags(trip).filter(f=>!dismissedReqs.includes(f.label));
-  // Live visa/entry data (Travel Buddy) · augments the rules-based flags above, works for viewers with no key
+  // Live visa/entry data (Travel Buddy) · supersedes the rules-based flags below
   const [liveReqs,setLiveReqs] = React.useState([]);
+  const flags = visibleEntryFlags(trip, liveReqs, dismissedReqs);
   React.useEffect(()=>{
     let on=true;
     const passport = trip.travelerPassportCountry || 'US';
@@ -7861,6 +7971,48 @@ class ErrorBoundary extends React.Component {
     return r.collaborators[0].rsvp==='pending';
   })());
   assert('carryover is a no-op with no reactions', applyPinReactionCarryover({collaborators:[{id:'a',rsvp:'pending'}],pinnedIdeas:[{id:'p1'}]}).suggested===0);
+
+  // ── NEW Round 16: feedback batch ─
+  assert('fmtBoardTime is 12-hour, padded, uppercase meridiem', fmtBoardTime('2026-09-16T15:50:00')===' 3:50 PM' && fmtBoardTime('2026-09-17T12:05:00')==='12:05 PM');
+  assert('fmtBoardTime handles midnight and noon', fmtBoardTime('2026-01-01T00:15:00')==='12:15 AM' && fmtBoardTime('2026-01-01T12:00:00')==='12:00 PM');
+  assert('fmtBoardTime falls back cleanly', fmtBoardTime('')==='—' && fmtBoardTime(null)==='—');
+  assert('no 24-hour clock left in the arrivals board', (()=>{ const s=fmtBoardTime('2026-09-16T18:00:00'); return /PM/.test(s) && !/18:/.test(s); })());
+  assert('visibleEntryFlags: live visa data supersedes the static rule', (()=>{
+    const trip=normalizeTrip({title:'x',travelerPassportCountry:'US',destinations:[{id:'d1',city:'London',countryCode:'GB',isInternational:true}]});
+    const before=visibleEntryFlags(trip,[],[]);
+    const after=visibleEntryFlags(trip,[{cc:'GB',req:{visa_rules:{primary_rule:{name:'eTA'}}}}],[]);
+    return before.some(f=>f.label==='UK ETA Required') && !after.some(f=>f.label==='UK ETA Required');
+  })());
+  assert('visibleEntryFlags: static rule survives when live data is missing', (()=>{
+    const trip=normalizeTrip({title:'x',travelerPassportCountry:'US',destinations:[{id:'d1',city:'London',countryCode:'GB',isInternational:true}]});
+    return visibleEntryFlags(trip,[{cc:'GB',req:null}],[]).some(f=>f.label==='UK ETA Required');
+  })());
+  assert('visibleEntryFlags: registration rule needs live registration data to be hidden', (()=>{
+    const trip=normalizeTrip({title:'x',travelerPassportCountry:'US',destinations:[{id:'d1',city:'Paris',countryCode:'FR',isInternational:true}]});
+    const visaOnly=visibleEntryFlags(trip,[{cc:'FR',req:{visa_rules:{primary_rule:{name:'Visa not required'}}}}],[]);
+    const withReg=visibleEntryFlags(trip,[{cc:'FR',req:{mandatory_registration:{name:'EES'}}}],[]);
+    return visaOnly.some(f=>f.kind==='registration') && !withReg.some(f=>f.kind==='registration');
+  })());
+  assert('visibleEntryFlags still honours dismissals', (()=>{
+    const trip=normalizeTrip({title:'x',travelerPassportCountry:'US',destinations:[{id:'d1',city:'London',countryCode:'GB',isInternational:true}]});
+    return !visibleEntryFlags(trip,[],['UK ETA Required']).some(f=>f.label==='UK ETA Required');
+  })());
+  assert('pinDisplay sends a named venue to its own site, not Maps', (()=>{
+    const d=pinDisplay({id:'p',text:'x',tag:'Eat',title:'Dishoom',detail:'Bombay cafe worth the queue'},'London');
+    return !/google\.com\/maps/.test(d.link) && d.linkLabel==='Look it up';
+  })());
+  assert('pinDisplay still sends a neighbourhood to Maps', (()=>{
+    const d=pinDisplay({id:'p',text:'x',tag:'Stay',title:'Príncipe Real',detail:'Leafy and walkable'},'Lisbon');
+    return /google\.com\/maps/.test(d.link) && d.linkLabel==='Explore on Maps';
+  })());
+  assert('pinDisplay keeps Maps for timing notes', /google\.com\/maps/.test(pinDisplay({id:'p',text:'x',tag:'Timing',title:'Late May',detail:'Jacaranda season'},'Lisbon').link));
+  assert('mergeCityResults appends remote hits without duplicating local ones', (()=>{
+    const local=[{city:'Paris',countryCode:'FR'}];
+    const remote=[{city:'Paris',countryCode:'FR'},{city:'Paris',countryCode:'US'},{city:'Guadalajara',countryCode:'MX'}];
+    const r=mergeCityResults(local,remote);
+    return r.length===3 && r.filter(c=>c.city==='Paris'&&c.countryCode==='FR').length===1 && r.some(c=>c.city==='Guadalajara');
+  })());
+  assert('mergeCityResults is null-safe and capped', mergeCityResults(null,null).length===0 && mergeCityResults([],new Array(20).fill(0).map((_,i)=>({city:'C'+i,countryCode:'X'}))).length===8);
 
   // ── NEW Round 14: sync + collaboration integrity ─
   assert('mergeMemberFields keeps another member\'s flight', (()=>{
