@@ -3877,7 +3877,8 @@ function DayView({trip,day,onUpdateTrip}){
   // UAT #8 · a day's identity is its weekday+date; UAT #6 · a custom label overrides it.
   // "Day N" is the auto-generated default and is treated as "no custom label".
   const hasCustomLabel = !!(day.label && !/^Day\s*\d+$/i.test(String(day.label).trim()));
-  const dayTitle = hasCustomLabel ? day.label : formatDateDowLong(day.date);
+  // Never render a blank heading: fall back to the date, then any stored label, then a generic word.
+  const dayTitle = hasCustomLabel ? day.label : (formatDateDowLong(day.date) || day.label || 'Day');
   return(
     <div style={{padding:'0 16px 32px'}}>
       {/* Header · editable day title (#6) + weekday/date identity (#8) */}
