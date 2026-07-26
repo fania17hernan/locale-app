@@ -1555,6 +1555,7 @@ function uuid(){return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=
 function formatDate(iso){if(!iso)return'';return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
 function formatDateShort(iso){if(!iso)return'';return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
 function formatDateDow(iso){if(!iso)return'';return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
+function formatDateDowLong(iso){if(!iso)return'';return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}
 // Maps every trip date to the stop (city) the group is in that day, from stop arrival/departure dates.
 // On transition days the arriving city wins. Used to scaffold AI generation AND to correct its output.
 function dateCityScaffold(trip){
@@ -1886,7 +1887,10 @@ function lodgingLink(l){
   if(/vrbo/i.test(blob))   return { url:'https://www.vrbo.com/traveler/trips', label:'Open in Vrbo' };
   if(/booking\.com/i.test(blob)) return { url:'https://secure.booking.com/mytrips', label:'Open in Booking.com' };
   const q=encodeURIComponent(((l&&l.name)||'')+' '+((l&&l.address)||''));
-  return { url:'https://duckduckgo.com/?q='+q+'%20official%20site', label:'Open hotel site' };
+  // Prefer a stored booking/site URL; otherwise a Google search that resolves to
+  // the hotel's own site. Never a DuckDuckGo query page (UAT #5).
+  const stored=(l&&l.url&&/^https?:\/\//i.test(l.url))?l.url:null;
+  return { url: stored || ('https://www.google.com/search?q='+q+'%20official%20site'), label:'Open hotel site' };
 }
 
 // ── CHECKLIST GENERATOR · tactical trip-prep tasks only ──────────────────────
@@ -2677,7 +2681,7 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
                                 {(trip.days||[]).map(day=>(
                                   <button key={day.id} className="btn btn-secondary btn-sm" style={{justifyContent:'flex-start',textAlign:'left'}}
                                     onClick={()=>addToDay(p, day.id)}>
-                                    {day.label} · {formatDateDow(day.date)}
+                                    {day.label && !/^Day\s*\d+$/i.test(String(day.label).trim()) ? (day.label+' · ') : ''}{formatDateDow(day.date)}
                                   </button>
                                 ))}
                               </div>
@@ -3743,6 +3747,8 @@ function DayView({trip,day,onUpdateTrip}){
   const [addingType,setAddingType]=useState(null); // 'activity'|'restaurant'|null
   const [editingItem,setEditingItem]=useState(null); // {item, type}
   const [showMap,setShowMap]=useState(false);
+  const [editingTitle,setEditingTitle]=useState(false); // UAT #6 · inline day-title edit
+  const [titleDraft,setTitleDraft]=useState('');
   const [dayNoteDraft,setDayNoteDraft]=useState('');
   const dest=trip.destinations.find(d=>d.id===day.destinationId);
   const acts=(day.activities||[]).filter(a=>filter==='all'||a.bucket===filter);
@@ -3868,13 +3874,32 @@ function DayView({trip,day,onUpdateTrip}){
     return ()=>sortable.destroy();
   },[canReorder,isOwner]);
 
+  // UAT #8 · a day's identity is its weekday+date; UAT #6 · a custom label overrides it.
+  // "Day N" is the auto-generated default and is treated as "no custom label".
+  const hasCustomLabel = !!(day.label && !/^Day\s*\d+$/i.test(String(day.label).trim()));
+  // Never render a blank heading: fall back to the date, then any stored label, then a generic word.
+  const dayTitle = hasCustomLabel ? day.label : (formatDateDowLong(day.date) || day.label || 'Day');
   return(
     <div style={{padding:'0 16px 32px'}}>
-      {/* Header · day label + derived status pill */}
+      {/* Header · editable day title (#6) + weekday/date identity (#8) */}
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:16}}>
-        <div style={{minWidth:0}}>
-          <h2 className="font-display" style={{fontSize:'1.5rem',fontWeight:600,lineHeight:1.2,marginBottom:4}}>{day.label}{dest?<span style={{color:'var(--color-ink-light)',fontWeight:400}}> · {dest.city}</span>:''}</h2>
-          <p style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{formatDate(day.date)} · {totalStops} {totalStops===1?'stop':'stops'}</p>
+        <div style={{minWidth:0,flex:1}}>
+          {editingTitle ? (
+            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:4}}>
+              <input className="input" autoFocus value={titleDraft} maxLength={60}
+                placeholder={formatDateDowLong(day.date)}
+                onChange={e=>setTitleDraft(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter'){ updateDay({...day,label:titleDraft.trim()}); setEditingTitle(false); } if(e.key==='Escape'){ setEditingTitle(false); } }}
+                style={{flex:1,fontSize:'1.1rem'}}/>
+              <button className="btn btn-primary btn-sm" onClick={()=>{ updateDay({...day,label:titleDraft.trim()}); setEditingTitle(false); }}>Save</button>
+            </div>
+          ) : (
+            <h2 className="font-display" style={{fontSize:'1.5rem',fontWeight:600,lineHeight:1.2,marginBottom:4,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+              <span style={{minWidth:0}}>{dayTitle}{dest?<span style={{color:'var(--color-ink-light)',fontWeight:400}}> · {dest.city}</span>:''}</span>
+              {isOwner&&<button className="btn btn-ghost btn-sm" aria-label="Edit day title" title="Rename this day" style={{fontSize:'.8rem',padding:'2px 6px',lineHeight:1}} onClick={()=>{ setTitleDraft(hasCustomLabel?day.label:''); setEditingTitle(true); }}>✎</button>}
+            </h2>
+          )}
+          <p style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{hasCustomLabel?(formatDateDow(day.date)+' · '):''}{totalStops} {totalStops===1?'stop':'stops'}</p>
         </div>
       </div>
       {/* Renders on whatever day the flight lands or leaves · returns null when the
@@ -4118,7 +4143,7 @@ function pinDisplay(p, city){
   return {
     tag: tag||'Idea', title, detail: detail||'',
     link: isVenue
-      ? 'https://duckduckgo.com/?q='+encodeURIComponent(title+(city?(' '+city):'')+' official site')
+      ? 'https://www.google.com/search?q='+encodeURIComponent(title+(city?(' '+city):'')+' official site')
       : 'https://www.google.com/maps/search/?api=1&query='+q,
     linkLabel: isVenue ? 'Look it up' : 'Explore on Maps',
   };
@@ -8173,7 +8198,8 @@ class ErrorBoundary extends React.Component {
   assert('normalizeTrip preserves flight.via', normalizeTrip({title:'x',flights:[{id:'f1',via:'JFK'}]}).flights[0].via==='JFK');
   assert('lodgingLink routes an Airbnb stay to Airbnb', (()=>{ const l=lodgingLink({name:'Airbnb loft in Alfama'}); return /airbnb\.com/.test(l.url) && /Airbnb/.test(l.label); })());
   assert('lodgingLink routes Vrbo and Booking.com', /vrbo\.com/.test(lodgingLink({name:'Vrbo cottage'}).url) && /booking\.com/.test(lodgingLink({notes:'via Booking.com'}).url));
-  assert('lodgingLink sends a hotel to its own site, not Maps', (()=>{ const l=lodgingLink({name:'The Hoxton, Shoreditch',address:'81 Great Eastern St'}); return !/google\.com\/maps/.test(l.url) && /hotel site/i.test(l.label); })());
+  assert('lodgingLink sends a hotel to its own site, not Maps or DuckDuckGo', (()=>{ const l=lodgingLink({name:'The Hoxton, Shoreditch',address:'81 Great Eastern St'}); return !/google\.com\/maps/.test(l.url) && !/duckduckgo\.com/.test(l.url) && /hotel site/i.test(l.label); })());
+  assert('lodgingLink prefers a stored booking URL when present', (()=>{ const l=lodgingLink({name:'The Hoxton',url:'https://thehoxton.com/london/shoreditch/'}); return l.url==='https://thehoxton.com/london/shoreditch/'; })());
   assert('lodgingLink is null-safe', typeof lodgingLink({}).url==='string' && typeof lodgingLink(null).url==='string');
 
   // ── NEW Round 16: feedback batch ─
