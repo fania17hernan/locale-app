@@ -1237,6 +1237,14 @@ async function cloudPush(trips){
 }
 let _cloudPushTimer=null;
 function cloudPushDebounced(trips){ clearTimeout(_cloudPushTimer); _cloudPushTimer=setTimeout(()=>cloudPush(trips), 1200); }
+// P0a · trips that live only on THIS device — built or edited without a real
+// account signed in (no _ownerId tag), so the cloud has never received them. On
+// sign-in these must be pushed UP *before* the cloud-wins pull, otherwise a
+// thinner or older cloud row of the same id overwrites the good local copy and
+// silently loses data (the anonymous-session wipe). Pure + unit-tested.
+function unsyncedLocalTrips(trips){
+  return (trips||[]).filter(t=> t && !t.isDemo && t.id && !t._ownerId);
+}
 
 // Calls the server-side AI proxy. Streams when the server streams (itinerary),
 // returns the full text either way. onDelta(textSoFar) fires during streaming.
@@ -7549,6 +7557,15 @@ function App() {
       // "not a function" synchronously, which aborted syncIn() before it ever
       // reached cloudPull() below. Wrap in an async IIFE + try/catch instead.
       (async()=>{ try{ await c?.rpc('claim_pending_trip_invites'); }catch(e){} })(); // link any pending Crew invites to this login (Phase 4)
+      // P0a · claim device-local trips to THIS account BEFORE pulling, so the
+      // cloud-wins merge below can't clobber a locally-built trip with a thinner
+      // or older cloud row of the same id. cloudPush tags them to this uid and
+      // merges members' server-side fields; the pull then returns the good,
+      // re-owned copy. Guarded so a failure here never blocks the normal sync.
+      try{
+        const toClaim=unsyncedLocalTrips(loadTrips());
+        if(toClaim.length){ await cloudPush(toClaim); }
+      }catch(e){}
       const pulled=await cloudPull(); if(!active) return;
       const merged=mergeCloudTrips(pulled);
       if(merged) cloudPush(merged); // backstop: push up anything that never made it to the cloud
@@ -8201,6 +8218,11 @@ class ErrorBoundary extends React.Component {
   assert('lodgingLink sends a hotel to its own site, not Maps or DuckDuckGo', (()=>{ const l=lodgingLink({name:'The Hoxton, Shoreditch',address:'81 Great Eastern St'}); return !/google\.com\/maps/.test(l.url) && !/duckduckgo\.com/.test(l.url) && /hotel site/i.test(l.label); })());
   assert('lodgingLink prefers a stored booking URL when present', (()=>{ const l=lodgingLink({name:'The Hoxton',url:'https://thehoxton.com/london/shoreditch/'}); return l.url==='https://thehoxton.com/london/shoreditch/'; })());
   assert('lodgingLink is null-safe', typeof lodgingLink({}).url==='string' && typeof lodgingLink(null).url==='string');
+  // P0a · anon-session trip claim (silent data-loss guard)
+  assert('unsyncedLocalTrips keeps never-synced local trips', (()=>{ const r=unsyncedLocalTrips([{id:'a'},{id:'b',_ownerId:'u1'},{id:'c'}]); return r.length===2 && r[0].id==='a' && r[1].id==='c'; })());
+  assert('unsyncedLocalTrips excludes demos and already-owned trips', unsyncedLocalTrips([{id:'d',isDemo:true},{id:'e',_ownerId:'u2'}]).length===0);
+  assert('unsyncedLocalTrips excludes rows without an id', unsyncedLocalTrips([{_ownerId:null}]).length===0);
+  assert('unsyncedLocalTrips is null-safe', unsyncedLocalTrips(null).length===0 && unsyncedLocalTrips(undefined).length===0);
 
   // ── NEW Round 16: feedback batch ─
   assert('fmtBoardTime is 12-hour, padded, uppercase meridiem', fmtBoardTime('2026-09-16T15:50:00')===' 3:50 PM' && fmtBoardTime('2026-09-17T12:05:00')==='12:05 PM');
