@@ -114,6 +114,7 @@ a:focus-visible,.btn:focus-visible{outline:3px solid #FFB27A;outline-offset:3px;
     <a class="logo" href="#">Loc<span class="grad-text">ale</span></a>
     <div class="links">
       <a class="hideable" href="#features">Features</a>
+      <a class="hideable" href="#demos">See it</a>
       <a class="hideable" href="#security">Security</a>
       <a class="hideable" href="#test">Try it</a>
       <a class="hideable" href="whats-new.html">What's New</a>
@@ -151,6 +152,228 @@ a:focus-visible,.btn:focus-visible{outline:3px solid #FFB27A;outline-offset:3px;
     </div>
   </div>
 </section>
+
+<!-- ── SEE IT IN ACTION · quick feature demos ─────────────────────────────── -->
+<section id="demos">
+  <div class="wrap">
+    <p class="eyebrow">See it in action</p>
+    <h2>What it actually looks like.</h2>
+    <p class="section-sub">Pick a feature · see the screen and the fastest way to use it. Every sample below is real UI from the app.</p>
+
+    <div class="demo-tabs" role="tablist" aria-label="Feature demos">
+      <button class="demo-tab is-active" role="tab" aria-selected="true" aria-controls="dp-days" id="dt-days">🗓 Day plan</button>
+      <button class="demo-tab" role="tab" aria-selected="false" aria-controls="dp-crew" id="dt-crew">👥 Crew</button>
+      <button class="demo-tab" role="tab" aria-selected="false" aria-controls="dp-arrivals" id="dt-arrivals">🛬 Arrivals</button>
+      <button class="demo-tab" role="tab" aria-selected="false" aria-controls="dp-budget" id="dt-budget">💸 Budget</button>
+      <button class="demo-tab" role="tab" aria-selected="false" aria-controls="dp-ready" id="dt-ready">🧳 Get ready</button>
+      <button class="demo-tab" role="tab" aria-selected="false" aria-controls="dp-ideas" id="dt-ideas">💭 Just an idea</button>
+    </div>
+
+    <div class="demo-stage">
+      <!-- DAY PLAN -->
+      <div class="demo-panel is-active" id="dp-days" role="tabpanel" aria-labelledby="dt-days">
+        <div class="demo-phone">
+          <div class="dp-head"><span>Thursday, Sep 17</span><span class="dp-dim">London · 4 stops</span></div>
+          <div class="dp-row"><span class="dp-time">09:30</span><div><b>Borough Market</b><span class="dp-badge">★</span><span class="dp-sub">Breakfast before the crowds</span></div></div>
+          <div class="dp-row"><span class="dp-time">12:00</span><div><b>Tate Modern</b><span class="dp-sub">10 min walk along the river</span></div></div>
+          <div class="dp-row"><span class="dp-time">19:30</span><div><b>Padella</b><span class="dp-badge dp-book">Booking</span><span class="dp-sub">Notes: <span class="dp-link">opentable.com/padella</span></span></div></div>
+          <div class="dp-actions"><span class="dp-chip">✏️ Edit</span><span class="dp-chip dp-chip-hi">📅 Move to day</span><span class="dp-chip">🗺️ Map</span></div>
+        </div>
+        <div class="demo-copy">
+          <h3>A real day, not a wish list</h3>
+          <p>AI drafts each day geo-clustered so you're not crossing the city twice. Every stop takes notes, links, times, and a ★ for the must-dos.</p>
+          <ul class="demo-uses">
+            <li><b>Wrong day?</b> Tap a stop → <em>Move to day</em> → pick another. No re-typing.</li>
+            <li><b>Paste a booking link</b> into notes · it becomes tappable for everyone.</li>
+            <li><b>Rename a day</b> ("Beach day") · the weekday and date stay underneath.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- CREW -->
+      <div class="demo-panel" id="dp-crew" role="tabpanel" aria-labelledby="dt-crew" hidden>
+        <div class="demo-phone">
+          <div class="dp-head"><span>Crew</span><span class="dp-dim">5 going · 1 pending</span></div>
+          <div class="dp-person"><span class="dp-av" style="background:#FF8A3D">M</span><div><b>Mateo</b><span class="dp-sub">Going · added his own flight</span></div></div>
+          <div class="dp-person"><span class="dp-av" style="background:#5AC98F">A</span><div><b>Ana</b><span class="dp-sub">Going · viewer</span></div></div>
+          <div class="dp-person"><span class="dp-av" style="background:#8A8F9C">J</span><div><b>Jules</b><span class="dp-sub dp-warn">Pending · invite sent</span></div></div>
+          <div class="dp-actions"><span class="dp-chip dp-chip-hi">✉️ Invite by email</span><span class="dp-chip">💬 Text a link</span></div>
+        </div>
+        <div class="demo-copy">
+          <h3>Everyone sees it. Only you can break it.</h3>
+          <p>Invite as <b>Crew</b> (can RSVP, add notes, add their own flight) or <b>Viewer</b> (read-only). The trip itself stays in the owner's hands.</p>
+          <ul class="demo-uses">
+            <li><b>No account needed</b> to look · share a link and they're in.</li>
+            <li><b>Chasing people?</b> The Overview tells you who still hasn't RSVP'd or added travel.</li>
+            <li><b>Everyone's flights</b> land on one arrivals board automatically.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ARRIVALS -->
+      <div class="demo-panel" id="dp-arrivals" role="tabpanel" aria-labelledby="dt-arrivals" hidden>
+        <div class="demo-phone">
+          <div class="dp-board-head">ARRIVALS · WED 16 SEP · LHR</div>
+          <div class="dp-board"><span>18:25</span><span>AA6001</span><span>PHX</span><span class="dp-ok">LANDS FIRST</span></div>
+          <div class="dp-board"><span>20:10</span><span>DL5996</span><span>JFK</span><span>ON TIME</span></div>
+          <div class="dp-board"><span>21:45</span><span>BA0284</span><span>SFO</span><span>ON TIME</span></div>
+          <div class="dp-note">☕ 3h 20m gap · Mateo waits at arrivals for the last landing</div>
+        </div>
+        <div class="demo-copy">
+          <h3>Six inboxes, one board</h3>
+          <p>Crew flying in from different cities each add their own flight. Locale lines them up on the landing day like an airport board · gaps, terminals, and who waits for whom.</p>
+          <ul class="demo-uses">
+            <li><b>Upload a confirmation</b> · Locale reads the PDF or screenshot and fills it in.</li>
+            <li><b>Connections supported</b> · multi-leg trips show as one journey.</li>
+            <li><b>Add it all to your phone calendar</b> in one tap (.ics).</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- BUDGET -->
+      <div class="demo-panel" id="dp-budget" role="tabpanel" aria-labelledby="dt-budget" hidden>
+        <div class="demo-phone">
+          <div class="dp-head"><span>Budget</span><span class="dp-dim">$2,480 · 6 people</span></div>
+          <div class="dp-row"><span class="dp-amt">$960</span><div><b>Airbnb · Shoreditch</b><span class="dp-sub">Split 6 ways · you're owed $800</span></div></div>
+          <div class="dp-row"><span class="dp-amt">$310</span><div><b>Dinner at Padella</b><span class="dp-sub">Split 5 ways · toddler excluded</span></div></div>
+          <div class="dp-row"><span class="dp-amt">$88</span><div><b>Tate tickets</b><span class="dp-sub dp-warn">Unpaid · 2 people</span></div></div>
+          <div class="dp-actions"><span class="dp-chip dp-chip-hi">Settle up →</span><span class="dp-chip">Venmo</span></div>
+        </div>
+        <div class="demo-copy">
+          <h3>Split costs without the awkward math</h3>
+          <p>Log an expense with just a label and an amount · decide who owes what later. Exclude anyone who shouldn't be on a given line.</p>
+          <ul class="demo-uses">
+            <li><b>Mark people paid</b> as the money lands · see who's still outstanding.</li>
+            <li><b>Settle up</b> opens Venmo or your banking app · Locale never moves money itself.</li>
+            <li><b>Not splitting costs?</b> Hide the whole tab for that trip.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- GET READY -->
+      <div class="demo-panel" id="dp-ready" role="tabpanel" aria-labelledby="dt-ready" hidden>
+        <div class="demo-phone">
+          <div class="dp-head"><span>Get ready</span><span class="dp-dim">12 of 18 done</span></div>
+          <div class="dp-check"><span class="dp-box dp-done">✓</span><span>Passport valid 6+ months past return</span></div>
+          <div class="dp-check"><span class="dp-box dp-done">✓</span><span>UK ETA approved</span></div>
+          <div class="dp-check"><span class="dp-box"></span><span>Travel insurance · due 14 days out<span class="dp-sub">Tap Done right from the Overview</span></span></div>
+          <div class="dp-check"><span class="dp-box"></span><span>Pack rain shell · 60% rain Thursday</span></div>
+        </div>
+        <div class="demo-copy">
+          <h3>The stuff that ruins trips, caught early</h3>
+          <p>Locale knows US passport holders need a UK ETA and EES pre-registration for the EU · and tells you 30 days out, not at the gate.</p>
+          <ul class="demo-uses">
+            <li><b>Packing list builds itself</b> from your destinations and the forecast.</li>
+            <li><b>Your Overview shows the next 3 things</b> · pulled live from this list.</li>
+            <li><b>Tick items off</b> without leaving the home screen.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- IDEAS -->
+      <div class="demo-panel" id="dp-ideas" role="tabpanel" aria-labelledby="dt-ideas" hidden>
+        <div class="demo-phone">
+          <div class="dp-head"><span>Lisbon…? 🇵🇹</span><span class="dp-dim">No dates yet</span></div>
+          <div class="dp-pin"><b>Time Out Market</b><span class="dp-sub">Everything under one roof · easy first night</span><span class="dp-react">❤️ 3 · 🤔 1</span></div>
+          <div class="dp-pin"><b>Sintra day trip</b><span class="dp-sub">40 min by train · palaces</span><span class="dp-react">❤️ 4</span></div>
+          <div class="dp-cta-mini">Add dates to make it real →</div>
+        </div>
+        <div class="demo-copy">
+          <h3>Start with a vibe, not an itinerary</h3>
+          <p>No dates? No problem. Pin ideas, share them, and let the crew react · you'll see what people actually want before anyone books a thing.</p>
+          <ul class="demo-uses">
+            <li><b>Ask for recommendations</b> · best time to go, where to stay, day trips.</li>
+            <li><b>Reactions carry over</b> to RSVPs when the trip becomes real.</li>
+            <li><b>Add dates</b> and the full planner unlocks · your pins feed the itinerary.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <p class="demo-foot">Every sample trip inside Locale is labelled by the kind of traveler it suits · <b>The Organizer</b>, <b>The Dreamer</b>, <b>The First-timer</b> · so you can open the one closest to your trip and poke around.</p>
+    <div style="text-align:center;margin-top:22px"><a class="btn btn-primary" href="locale-v2.html">Try it with your own trip →</a></div>
+  </div>
+</section>
+
+<style>
+  #demos{padding:72px 0}
+  .demo-tabs{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:26px 0 22px}
+  .demo-tab{font-family:var(--font-body);font-size:.85rem;font-weight:500;color:var(--ink-light);background:var(--surface);
+    border:1px solid var(--border);border-radius:999px;padding:9px 16px;cursor:pointer;transition:.15s;min-height:40px}
+  .demo-tab:hover{border-color:var(--coral);color:var(--ink)}
+  .demo-tab.is-active{background:var(--coral-deep);border-color:var(--coral-deep);color:#fff}
+  .demo-tab:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
+  .demo-stage{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:24px}
+  .demo-panel{display:none;gap:30px;align-items:center}
+  .demo-panel.is-active{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr)}
+  @media(max-width:760px){.demo-panel.is-active{grid-template-columns:1fr}}
+  .demo-phone{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;font-size:.82rem}
+  .dp-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding-bottom:10px;margin-bottom:10px;
+    border-bottom:1px solid var(--border);font-family:var(--font-display);font-weight:700;color:var(--ink)}
+  .dp-dim{font-family:var(--font-body);font-weight:400;font-size:.72rem;color:var(--ink-muted)}
+  .dp-row,.dp-person,.dp-check,.dp-pin{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(40,48,62,.55)}
+  .dp-row b,.dp-person b,.dp-pin b{color:var(--ink);font-size:.85rem}
+  .dp-time,.dp-amt{font-family:var(--font-mono);font-size:.72rem;color:var(--ink-muted);flex-shrink:0;min-width:44px}
+  .dp-amt{color:var(--coral)}
+  .dp-sub{display:block;color:var(--ink-muted);font-size:.74rem;margin-top:2px;line-height:1.45}
+  .dp-warn{color:#FFB020}
+  .dp-link{color:var(--coral);text-decoration:underline}
+  .dp-badge{display:inline-block;margin-left:6px;font-size:.68rem;color:var(--coral)}
+  .dp-book{border:1px solid var(--border);border-radius:5px;padding:0 5px;color:var(--ink-muted)}
+  .dp-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+  .dp-chip{font-size:.7rem;border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--ink-light)}
+  .dp-chip-hi{border-color:var(--coral);color:var(--coral)}
+  .dp-av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:.72rem;font-weight:700;color:#10131a;flex-shrink:0}
+  .dp-board-head{font-family:var(--font-mono);font-size:.66rem;letter-spacing:.1em;color:#FFB020;
+    padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--border)}
+  .dp-board{display:grid;grid-template-columns:52px 62px 40px 1fr;gap:6px;font-family:var(--font-mono);
+    font-size:.7rem;color:#FFB020;padding:6px 0}
+  .dp-board span:last-child{text-align:right;color:var(--ink-muted)}
+  .dp-ok{color:var(--success)!important}
+  .dp-note{margin-top:10px;font-size:.72rem;color:var(--ink-muted);border-top:1px solid var(--border);padding-top:9px}
+  .dp-box{width:16px;height:16px;border:1px solid var(--border);border-radius:4px;flex-shrink:0;margin-top:2px;
+    display:flex;align-items:center;justify-content:center;font-size:.66rem}
+  .dp-done{background:var(--success);border-color:var(--success);color:#10131a}
+  .dp-check span:not(.dp-box){color:var(--ink-light);font-size:.8rem;line-height:1.45}
+  .dp-pin{flex-direction:column;gap:2px}
+  .dp-react{font-size:.72rem;color:var(--ink-muted);margin-top:4px}
+  .dp-cta-mini{margin-top:12px;text-align:center;font-size:.76rem;color:var(--coral);
+    border:1px dashed var(--coral);border-radius:8px;padding:8px}
+  .demo-copy h3{font-family:var(--font-display);font-size:1.25rem;font-weight:700;color:var(--ink);margin-bottom:8px}
+  .demo-copy p{color:var(--ink-light);font-size:.92rem;line-height:1.65;margin-bottom:14px}
+  .demo-uses{list-style:none;display:flex;flex-direction:column;gap:9px}
+  .demo-uses li{color:var(--ink-light);font-size:.86rem;line-height:1.55;padding-left:20px;position:relative}
+  .demo-uses li::before{content:"→";position:absolute;left:0;color:var(--coral)}
+  .demo-uses b{color:var(--ink)}
+  .demo-foot{text-align:center;color:var(--ink-muted);font-size:.84rem;line-height:1.6;margin-top:22px;max-width:620px;margin-left:auto;margin-right:auto}
+  .demo-foot b{color:var(--ink-light)}
+</style>
+
+<script>
+(function(){
+  var tabs=[].slice.call(document.querySelectorAll('.demo-tab'));
+  function show(tab){
+    tabs.forEach(function(t){
+      var panel=document.getElementById(t.getAttribute('aria-controls'));
+      var on=(t===tab);
+      t.classList.toggle('is-active',on);
+      t.setAttribute('aria-selected',on?'true':'false');
+      if(panel){ panel.classList.toggle('is-active',on); panel.hidden=!on; }
+    });
+  }
+  tabs.forEach(function(t,i){
+    t.addEventListener('click',function(){ show(t); });
+    // Left/right arrows move between tabs, per WAI-ARIA tab pattern.
+    t.addEventListener('keydown',function(e){
+      if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft') return;
+      e.preventDefault();
+      var next=tabs[(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length];
+      next.focus(); show(next);
+    });
+  });
+})();
+</script>
 
 <section id="security" class="sec">
   <div class="wrap">
