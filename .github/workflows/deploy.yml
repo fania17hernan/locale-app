@@ -74,6 +74,20 @@ jobs:
             echo "🚨 SECURITY: service_role reference found! Remove before deploying."
             exit 1
           fi
+          # A leaked Supabase service_role key is a base64 JWT, so the literal
+          # grep above can never see it. Decode every JWT payload and check the
+          # role claim. The anon key is expected and allowed (RLS protects it).
+          FOUND=0
+          for tok in $(grep -rhoE "eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}" --include="*.html" . | sort -u); do
+            PAYLOAD=$(echo "$tok" | cut -d. -f2)
+            PAD=$(( (4 - ${#PAYLOAD} % 4) % 4 )); for i in $(seq 1 $PAD); do PAYLOAD="${PAYLOAD}="; done
+            DECODED=$(echo "$PAYLOAD" | tr '_-' '/+' | base64 -d 2>/dev/null || true)
+            if echo "$DECODED" | grep -q "service_role"; then
+              echo "🚨 SECURITY: a service_role JWT is embedded in a deployable file! Remove before deploying."
+              FOUND=1
+            fi
+          done
+          [ "$FOUND" = "1" ] && exit 1
           echo "✅ No secrets found"
 
   # ── Production: main → site root ──────────────────────────
