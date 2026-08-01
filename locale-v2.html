@@ -1104,11 +1104,33 @@ async function cloudGetUser(){
     return null;
   }catch(e){ return null; }
 }
+// P0b · sign-in sends a 6-DIGIT CODE, not a clickable link.
+// Why: Outlook/Hotmail Safe Links pre-fetches every URL in an email to scan it,
+// which spends the single-use magic-link token before the human ever clicks —
+// the crew then sees "Email link is invalid or has expired" (403, "One-time token
+// not found" in the auth logs). A scanner cannot type a code, so the code path is
+// immune. `emailRedirectTo` is deliberately omitted: it is meaningless for a typed
+// code, and passing it keeps the link shape alive.
+// NOTE: Magic Link and OTP share ONE Supabase email template. Whatever the template
+// renders is what users receive: {{ .Token }} => code, {{ .ConfirmationURL }} => link.
+// This client accepts BOTH, so it is safe to deploy before the template is switched.
 async function cloudSignIn(email){
   const c=sb(); if(!c) throw new Error('Sync is unavailable right now.');
-  const redirect = window.location.href.split('#')[0];
-  const { error } = await c.auth.signInWithOtp({ email, options:{ emailRedirectTo: redirect } });
+  const { error } = await c.auth.signInWithOtp({ email });
   if(error) throw error;
+}
+// Verify a typed code. Returns the session on success; throws a human message.
+async function cloudVerifyCode(email, token){
+  const c=sb(); if(!c) throw new Error('Sync is unavailable right now.');
+  const code=String(token||'').replace(/\D/g,'');
+  if(code.length!==6) throw new Error('Enter the 6-digit code from your email.');
+  const { data, error } = await c.auth.verifyOtp({ email, token:code, type:'email' });
+  if(error){
+    const m=(error.message||'').toLowerCase();
+    if(/expired|invalid/.test(m)) throw new Error('That code is wrong or expired · request a new one.');
+    throw error;
+  }
+  return data?.session||null;
 }
 async function cloudSignOut(){ try{ const c=sb(); if(c) await c.auth.signOut(); }catch(e){} }
 // The guarded member RPCs raise SEAT_REMOVED when a membership outlives the
@@ -7260,8 +7282,22 @@ function SyncButton({user, onChange}){
   const [email,setEmail]=React.useState('');
   const [sent,setSent]=React.useState(false);
   const [busy,setBusy]=React.useState(false);
+  const [code,setCode]=React.useState(''); // P0b · 6-digit sign-in code
   const dlgRef=React.useRef(null);
   useModalA11y(dlgRef, ()=>setOpen(false), open);
+  // Verify the typed code. onAuthStateChange drives the actual sync, so on success
+  // we just close and let syncIn() take over.
+  const verify=async()=>{
+    setBusy(true);
+    try{
+      await cloudVerifyCode(email.trim(), code);
+      track('sync_signin_verified');
+      setOpen(false); setSent(false); setCode('');
+      showToast('Signed in · syncing your trips ✓','info',4000);
+    }catch(err){
+      showToast((err&&err.message)||'That code did not work · try again.','error',5000);
+    }finally{ setBusy(false); }
+  };
   if(user){
     return (
       <button className="btn btn-ghost btn-sm" title={user.email}
@@ -7280,7 +7316,7 @@ function SyncButton({user, onChange}){
             {!sent ? (
               <span style={{display:'contents'}}>
                 <h2 style={{fontFamily:'var(--font-display)',fontSize:'1.5rem',marginBottom:6}}>Sync across devices</h2>
-                <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',marginBottom:16,lineHeight:1.5}}>Enter your email and we'll send a one-tap sign-in link · no password. Open it on any device to access the same trips everywhere.</p>
+                <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',marginBottom:16,lineHeight:1.5}}>Enter your email and we'll send a 6-digit sign-in code · no password. Works on any device, and can't be broken by email security scanners.</p>
                 <input className="input" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)} style={{marginBottom:12}}/>
                 <div style={{display:'flex',gap:8}}>
                   <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setOpen(false)}>Cancel</button>
@@ -7288,17 +7324,39 @@ function SyncButton({user, onChange}){
                     const em=email.trim();
                     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ showToast('Enter a valid email address.','warn'); return; }
                     setBusy(true);
-                    try{ await cloudSignIn(em); setSent(true); track('sync_signin_requested'); }
-                    catch(err){ showToast('Could not send the link · try again.','error'); }
+                    try{ await cloudSignIn(em); setSent(true); setCode(''); track('sync_signin_requested'); }
+                    catch(err){ showToast('Could not send the code · try again.','error'); }
                     finally{ setBusy(false); }
-                  }}>{busy?'Sending…':'Send link'}</button>
+                  }}>{busy?'Sending…':'Send code'}</button>
                 </div>
               </span>
             ) : (
               <span style={{display:'contents'}}>
                 <h2 style={{fontFamily:'var(--font-display)',fontSize:'1.5rem',marginBottom:6}}>Check your email</h2>
-                <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',marginBottom:16,lineHeight:1.5}}>We sent a sign-in link to <strong>{email}</strong>. Open it on this device · or any other · to start syncing your trips.</p>
-                <button className="btn btn-primary" style={{width:'100%'}} onClick={()=>setOpen(false)}>Done</button>
+                <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',marginBottom:14,lineHeight:1.5}}>We sent a 6-digit code to <strong>{email}</strong>. Enter it below · it expires in an hour.</p>
+                {/* inputMode numeric + one-time-code autocomplete lets iOS offer the
+                    code straight from the notification. 16px font avoids iOS zoom. */}
+                <input className="input" type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus
+                  maxLength={6} placeholder="123456" aria-label="6-digit sign-in code" value={code}
+                  onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,6))}
+                  onKeyDown={e=>{ if(e.key==='Enter' && code.length===6) verify(); }}
+                  style={{marginBottom:12,fontSize:'1.4rem',letterSpacing:'.35em',textAlign:'center',fontFamily:'var(--font-mono)'}}/>
+                <button className="btn btn-primary" style={{width:'100%',marginBottom:10}} disabled={busy||code.length!==6}
+                  onClick={verify}>{busy?'Verifying…':'Sign in'}</button>
+                <div style={{display:'flex',gap:8}}>
+                  <button className="btn btn-ghost btn-sm" style={{flex:1}} disabled={busy} onClick={async()=>{
+                    setBusy(true);
+                    try{ await cloudSignIn(email.trim()); setCode(''); showToast('New code sent ✓','info'); }
+                    catch(err){ showToast('Could not resend · wait a minute and try again.','error'); }
+                    finally{ setBusy(false); }
+                  }}>Resend code</button>
+                  <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>{ setSent(false); setCode(''); }}>Use a different email</button>
+                </div>
+                {/* Transitional: until the Supabase template renders {{ .Token }}, the
+                    email may still contain a link. Say so rather than leaving people stuck. */}
+                <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',marginTop:12,lineHeight:1.5,textAlign:'center'}}>
+                  Got a link instead of a code? Tapping it still works.
+                </p>
               </span>
             )}
           </div>
@@ -7805,16 +7863,16 @@ function App() {
     finally{ setInviteBusy(false); }
   };
 
-  // The magic link redirect drops the hash, so stash the invite and resume after
-  // sign-in (see the pending-invite resume effect below).
+  // Stash the invite so the join resumes after sign-in. Still needed with codes:
+  // a code entered in a fresh tab (or an old-style link redirect) drops the hash.
   const handleInviteSignIn = async (email, trip) => {
     setInviteBusy(true);
     try{
       try{ localStorage.setItem('locale_pending_invite', JSON.stringify({tripId:trip.id, t:Date.now()})); }catch(e){}
       await cloudSignIn(email);
-      showToast('Check your email for the sign-in link, then you will land right here.','info',7000);
+      showToast('Check your email for the 6-digit code, then sign in with ☁ Sync to land right here.','info',8000);
     }catch(e){
-      showToast('Could not send the link · try again.','error');
+      showToast('Could not send the code · try again.','error');
     }
     finally{ setInviteBusy(false); }
   };
@@ -8368,6 +8426,15 @@ class ErrorBoundary extends React.Component {
   assert('linkifyParts leaves plain text alone', (()=>{ const p=linkifyParts('just a note'); return p.length===1 && p[0].type==='text'; })());
   assert('linkifyParts drops trailing sentence punctuation from the href', (()=>{ const p=linkifyParts('go to https://a.com/b.'); return p[1].href==='https://a.com/b'; })());
   assert('linkifyParts is null-safe', linkifyParts(null).length===0 && linkifyParts('').length===0 && linkifyParts(undefined).length===0);
+  // P0b · OTP code normalisation (the field strips non-digits and caps at 6)
+  (function(){
+    const norm=(v)=>String(v||'').replace(/\D/g,'').slice(0,6);
+    assert('OTP field strips spaces and dashes', norm('12 34-56')==='123456');
+    assert('OTP field caps at 6 digits', norm('1234567890')==='123456');
+    assert('OTP field rejects letters', norm('abc123')==='123');
+    assert('OTP field is null-safe', norm(null)==='' && norm(undefined)==='');
+    assert('cloudVerifyCode exists and validates length', typeof cloudVerifyCode==='function');
+  })();
   // Flight date sanity (Andy date validation + the 2026-07-25 corrupted-date bug)
   (function(){
     const t={startDate:'2026-09-16',endDate:'2026-09-25'};
