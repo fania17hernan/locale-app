@@ -2485,7 +2485,14 @@ If this is a HOTEL/LODGING confirmation, return:
 If this is a FLIGHT confirmation, return:
 {"type":"flights","flights":[{"direction":"outbound|return|connecting","airline":"airline name","flightNumber":"e.g. DL204","departureAirport":"airport code or name","arrivalAirport":"airport code or name","departureTime":"YYYY-MM-DDTHH:MM:00","arrivalTime":"YYYY-MM-DDTHH:MM:00","confirmationNumber":"conf number or null","seatNumber":"seat or null","notes":"baggage info, terminal, gate if available"}]}
 
-Only include fields you can actually read from the document. Use null for anything missing.`;
+If this is a TRAIN, BUS, FERRY or other ground/sea transport booking (Eurostar, Amtrak, Trenitalia, SNCF, National Rail, coach, ferry), return:
+{"type":"transport","mode":"train|bus|ferry|car","operator":"e.g. Eurostar","legs":[{"direction":"outbound|return|connecting","operator":"e.g. Eurostar","trainNumber":"e.g. ES9108","departureStation":"e.g. London St Pancras International","arrivalStation":"e.g. Paris Gare du Nord","departureTime":"YYYY-MM-DDTHH:MM:00","arrivalTime":"YYYY-MM-DDTHH:MM:00","confirmationNumber":"booking ref or null","seatNumber":"coach/seat or null","notes":"platform, class, baggage, how early to arrive"}]}
+
+If this is a TICKET for an EVENT or ACTIVITY (concert, match, museum timed entry, tour, show), return:
+{"type":"activity","name":"event name","venue":"venue name","address":"full address","date":"YYYY-MM-DD","startTime":"YYYY-MM-DDTHH:MM:00","confirmationNumber":"booking ref or null","seat":"section/row/seat or null","bookingUrl":"official ticket or venue URL if printed","notes":"doors open, gate, collection instructions"}
+
+Only include fields you can actually read from the document. Use null for anything missing.
+Pick the single best-fitting type. A rail ticket is "transport", never "flights".`;
 
 async function parseConfirmationFile(file){
   const base64 = await new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result.split(',')[1]); r.onerror=reject; r.readAsDataURL(file); });
@@ -2497,13 +2504,101 @@ async function parseConfirmationFile(file){
   if(!m) throw new Error('Could not read that document. Try a clearer screenshot or PDF.');
   return JSON.parse(m[0]);
 }
+// Attaching a booking must NEVER regenerate or drop the itinerary. It adds:
+//  · transport (flight/train/bus/ferry) → trip.flights, which drives the hero pills,
+//    and a stop on the departure day so it sits in the timeline
+//  · lodging → trip.lodging + a Check in stop on the arrival day and Check out on the
+//    departure day
+//  · activity/event (concert, match, tour) → a stop on its own date
+// The user then drags it into the order they want in the Days tab.
+// Pure: returns a new days array. Never removes anything.
+function addBookingStop(days, dateISO, stop){
+  const list=Array.isArray(days)?days:[];
+  if(!dateISO) return list;
+  const day=list.find(d=>d && String(d.date||'').slice(0,10)===String(dateISO).slice(0,10));
+  if(!day) return list; // outside the trip window · the pills still show it
+  const already=(day.activities||[]).some(a=>a && a._bookingKey && a._bookingKey===stop._bookingKey);
+  if(already) return list;
+  const maxOrder=Math.max(-1,...(day.activities||[]).map(s=>s.sortOrder??0),...(day.restaurants||[]).map(s=>s.sortOrder??0));
+  return list.map(d=> d===day ? {...d, activities:[...(d.activities||[]), {...stop, id:uuid(), sortOrder:maxOrder+1}]} : d);
+}
 function mergeBookingIntoTrip(trip, p){
+  // Transport that isn't a flight (train, bus, ferry) rides the same `flights`
+  // array so it appears in the hero pills and the boards. `mode` distinguishes it.
+  if(p && (p.type==='transport' || p.type==='train')){
+    const legs=(p.legs||p.flights||[p]).filter(Boolean);
+    const newFlights=[...(trip.flights||[])];
+    let days=trip.days||[];
+    const labels=[];
+    legs.forEach(f=>{
+      const num=f.trainNumber||f.flightNumber||f.number||'';
+      const ex=newFlights.findIndex(x=>x.flightNumber===num && x.departureTime===f.departureTime);
+      const entry={
+        id: ex>=0?newFlights[ex].id:uuid(),
+        direction: f.direction||'connecting',
+        mode: f.mode||p.mode||'train',
+        airline: f.operator||f.airline||p.operator||'',
+        flightNumber: num,
+        departureAirport: f.departureStation||f.departureAirport||'',
+        arrivalAirport: f.arrivalStation||f.arrivalAirport||'',
+        departureTime: f.departureTime||'', arrivalTime: f.arrivalTime||'',
+        confirmationNumber: f.confirmationNumber||p.confirmationNumber||null,
+        notes: f.notes||p.notes||'',
+      };
+      if(ex>=0) newFlights[ex]=entry; else newFlights.push(entry);
+      labels.push(num||entry.airline);
+      const info = typeof carrierInfo==='function' ? carrierInfo(entry) : null;
+      days = addBookingStop(days, (entry.departureTime||'').slice(0,10), {
+        _bookingKey:'transport:'+(num||'')+':'+(entry.departureTime||''),
+        name:`${entry.airline||'Transport'}${num?' '+num:''} · ${entry.departureAirport||''} → ${entry.arrivalAirport||''}`.trim(),
+        emoji: (entry.mode==='train'?'🚄':entry.mode==='ferry'?'⛴️':entry.mode==='car'?'🚗':entry.mode==='bus'?'🚌':'✈️'),
+        address: entry.departureAirport||'', bucket:'must-do', category:'transport',
+        bookingRequired:false, bookingUrl:(info&&info.url)||'',
+        time:(entry.departureTime||'').slice(11,16),
+        notes:[entry.arrivalTime?('Arrives '+entry.arrivalTime.slice(11,16)):'', entry.confirmationNumber?('Conf: '+entry.confirmationNumber):''].filter(Boolean).join(' · '),
+        thingsToConsider:[],
+      });
+    });
+    return {trip:{...trip, flights:newFlights, days}, kind:'transport', label:labels.filter(Boolean).join(', ')};
+  }
+  // A ticketed event: concert, match, tour, timed entry.
+  if(p && (p.type==='activity' || p.type==='event')){
+    const dateISO=(p.date||p.startTime||'').slice(0,10);
+    const days = addBookingStop(trip.days||[], dateISO, {
+      _bookingKey:'event:'+(p.name||'')+':'+dateISO,
+      name:p.name||'Booked event', emoji:p.emoji||'🎟️', address:p.address||p.venue||'',
+      bucket:'must-do', category:'entertainment', bookingRequired:false,
+      bookingUrl:/^https?:\/\//i.test(p.bookingUrl||'')?p.bookingUrl:'',
+      time:(p.startTime||'').slice(11,16),
+      notes:[p.confirmationNumber?('Conf: '+p.confirmationNumber):'', p.seat?('Seat '+p.seat):'', p.notes||''].filter(Boolean).join(' · '),
+      thingsToConsider:[],
+    });
+    return {trip:{...trip, days}, kind:'activity', label:p.name||'event'};
+  }
   if(p && p.type==='lodging'){
     const newLodging=[...(trip.lodging||[])];
     const ex=newLodging.findIndex(l=>l.name===p.name);
     const entry={id:ex>=0?newLodging[ex].id:uuid(),name:p.name||'',address:p.address||'',checkIn:p.checkIn||'',checkOut:p.checkOut||'',checkInTime:p.checkInTime||'',checkOutTime:p.checkOutTime||'',confirmationNumber:p.confirmationNumber||'',roomType:p.roomType||'',notes:p.notes||''};
     if(ex>=0)newLodging[ex]=entry; else newLodging.push(entry);
-    return {trip:{...trip, lodging:newLodging}, kind:'lodging', label:entry.name};
+    // Put check-in and check-out on the right days so the stay lives in the timeline,
+    // not just in a lodging list the traveler has to remember to look at.
+    const link = typeof lodgingLink==='function' ? lodgingLink(entry) : null;
+    let days = addBookingStop(trip.days||[], entry.checkIn, {
+      _bookingKey:'lodging-in:'+entry.name+':'+entry.checkIn,
+      name:'Check in at '+(entry.name||'your stay'), emoji:'🏨', address:entry.address||'',
+      bucket:'must-do', category:'other', bookingRequired:false,
+      bookingUrl:(link&&link.url)||'', time:(entry.checkInTime||''),
+      notes:[entry.confirmationNumber?('Conf: '+entry.confirmationNumber):'', entry.roomType||''].filter(Boolean).join(' · '),
+      thingsToConsider:[],
+    });
+    days = addBookingStop(days, entry.checkOut, {
+      _bookingKey:'lodging-out:'+entry.name+':'+entry.checkOut,
+      name:'Check out of '+(entry.name||'your stay'), emoji:'🧳', address:entry.address||'',
+      bucket:'must-do', category:'other', bookingRequired:false,
+      bookingUrl:(link&&link.url)||'', time:(entry.checkOutTime||''),
+      notes:'', thingsToConsider:[],
+    });
+    return {trip:{...trip, lodging:newLodging, days}, kind:'lodging', label:entry.name};
   } else if(p && p.type==='flights'){
     const newFlights=[...(trip.flights||[])];
     (p.flights||[]).forEach(f=>{ const ex=newFlights.findIndex(x=>x.flightNumber===f.flightNumber&&x.departureTime===f.departureTime); const entry={...f,id:ex>=0?newFlights[ex].id:uuid()}; if(ex>=0)newFlights[ex]=entry; else newFlights.push(entry); });
@@ -7217,21 +7312,20 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
         {activeTab==='days' && (
           <div>
             {showRegenModal && (
-              <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,.5)',zIndex:9000,display:'flex',alignItems:'flex-end',justifyContent:'center',backdropFilter:'blur(4px)'}}>
-                <div style={{background:'var(--color-surface)',borderRadius:'20px 20px 0 0',padding:'28px 24px 40px',width:'100%',maxWidth:480}}>
-                  <div style={{width:40,height:4,background:'var(--color-border)',borderRadius:2,margin:'0 auto 20px'}}/>
-                  <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600,marginBottom:8}}>Update your itinerary</h3>
-                  <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',marginBottom:14}}>Tell us what changed · and be specific. Name exact days, who's doing what if the group splits up, and any travel between cities (those become fixed events we won't drop).</p>
-                  <textarea
-                    className="input"
-                    rows={5}
-                    placeholder={`e.g. "On Saturday the guys do the ASU vs Kansas State game at Wembley while the women + toddler do a park + museum. Monday we check out of London and take the Eurostar to Paris · add a reminder to book the train tickets. Swap Knott's for a beach day in Laguna."`}
-                    value={regenPrompt}
-                    onChange={e=>setRegenPrompt(e.target.value)}
-                    style={{marginBottom:12,resize:'vertical',minHeight:120,lineHeight:1.55}}
-                  />
-                  <label style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'10px',border:'1px dashed var(--color-border)',borderRadius:10,cursor:regenUploading?'default':'pointer',marginBottom:10,color:'var(--color-ink-light)',fontSize:'.85rem',textAlign:'center'}}>
-                    {regenUploading ? 'Reading your confirmations…' : '📎 Attach flight/hotel confirmations (optional · multiple OK)'}
+              /* Centred and scrollable · the old sheet was bottom-anchored with a fixed
+                 pad, so on short viewports the buttons fell off the bottom edge. */
+              <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)',padding:16,overflowY:'auto'}}
+                onClick={e=>{ if(e.target===e.currentTarget){ setShowRegenModal(false); setRegenUploadMsg(''); } }}>
+                <div style={{background:'var(--color-surface)',borderRadius:20,padding:'24px 22px',width:'100%',maxWidth:480,maxHeight:'88vh',overflowY:'auto',margin:'auto'}}>
+                  <h3 style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',fontWeight:600,marginBottom:4}}>Add to this trip</h3>
+                  <p style={{fontSize:'.82rem',color:'var(--color-ink-light)',marginBottom:16,lineHeight:1.5}}>Attach a booking and we'll slot it into the right day. Your existing plan stays exactly as it is.</p>
+
+                  {/* ATTACH · the safe, default path. Applies immediately, no regeneration. */}
+                  <label style={{display:'block',padding:'14px 12px',border:'1px dashed var(--color-accent)',borderRadius:12,cursor:regenUploading?'default':'pointer',marginBottom:8,color:'var(--color-ink)',fontSize:'.86rem',textAlign:'center',background:'var(--color-accent-soft)'}}>
+                    <span style={{fontWeight:600}}>{regenUploading ? 'Reading your bookings…' : '📎 Attach a booking'}</span>
+                    <span style={{display:'block',fontSize:'.74rem',color:'var(--color-ink-light)',marginTop:4,lineHeight:1.45}}>
+                      Flight · train · hotel · event tickets. PDF or screenshot, multiple OK.
+                    </span>
                     <input type="file" accept="image/*,application/pdf" multiple style={{display:'none'}} disabled={regenUploading}
                       onChange={async e=>{ const files=Array.from(e.target.files||[]); e.target.value=''; if(!files.length) return;
                         setRegenUploading(true); setRegenUploadMsg('');
@@ -7240,20 +7334,42 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
                           try{
                             const parsed = await parseConfirmationFile(f);
                             const {trip:updated, kind, label} = mergeBookingIntoTrip(cur, parsed);
-                            if(kind){ cur = updated; saved.push((kind==='lodging'?'lodging':'flight')+(label?(' · '+label):'')); }
+                            if(kind){ cur = updated; saved.push(kind+(label?(' · '+label):'')); }
                             else failed++;
                           }catch(err){ failed++; }
                         }
                         if(saved.length) onUpdateTrip(cur);
-                        setRegenUploadMsg(saved.length ? ('Saved '+saved.length+': '+saved.join('; ')+' ✓ · regenerate to plan around them.'+(failed?(' ('+failed+" couldn't be read)"):'')) : "Couldn't read those · try clearer flight/hotel confirmations.");
+                        setRegenUploadMsg(saved.length
+                          ? ('Added '+saved.length+': '+saved.join('; ')+' ✓ · find it on the day, drag to reorder.'+(failed?(' ('+failed+" couldn't be read)"):''))
+                          : "Couldn't read those · try a clearer confirmation.");
                         setRegenUploading(false);
                       }}/>
                   </label>
-                  {regenUploadMsg && <p style={{fontSize:'.78rem',color:regenUploadMsg.startsWith('Saved')?'var(--color-success)':'var(--color-flag)',marginBottom:12,lineHeight:1.4}}>{regenUploadMsg}</p>}
-                  <div style={{display:'flex',gap:8}}>
-                    <button className="btn btn-secondary" style={{flex:1}} onClick={()=>{ setShowRegenModal(false); setRegenUploadMsg(''); }}>Cancel</button>
-                    <button className="btn btn-primary" style={{flex:2}} onClick={()=>{ setShowRegenModal(false); onUpdateTrip({...trip,days:[],_regenPrompt:regenPrompt}); setRegenPrompt(''); }}>Regenerate</button>
-                  </div>
+                  {regenUploadMsg && <p style={{fontSize:'.78rem',color:regenUploadMsg.startsWith('Added')?'var(--color-success)':'var(--color-flag)',marginBottom:10,lineHeight:1.45}}>{regenUploadMsg}</p>}
+                  <button className="btn btn-secondary" style={{width:'100%',marginBottom:20}} onClick={()=>{ setShowRegenModal(false); setRegenUploadMsg(''); }}>Done</button>
+
+                  {/* REGENERATE · destructive, so it is collapsed, labelled, and confirmed.
+                      This used to be the primary button and it wiped a committed week. */}
+                  <details>
+                    <summary style={{cursor:'pointer',fontSize:'.8rem',color:'var(--color-ink-muted)',listStyle:'none',padding:'8px 0',borderTop:'1px solid var(--color-border)'}}>
+                      ↻ Rewrite the whole itinerary with AI
+                    </summary>
+                    <div style={{marginTop:10}}>
+                      <p style={{fontSize:'.78rem',color:'var(--color-flag)',marginBottom:10,lineHeight:1.5}}>
+                        ⚠️ This <strong>replaces every day</strong> of your current plan. Anything you've added or reordered by hand is lost. Your flights, lodging and crew are kept.
+                      </p>
+                      <textarea className="input" rows={4}
+                        placeholder={`e.g. "Saturday the guys do the game at Wembley while the women + toddler do a park. Monday we take the Eurostar to Paris."`}
+                        value={regenPrompt} onChange={e=>setRegenPrompt(e.target.value)}
+                        style={{marginBottom:10,resize:'vertical',minHeight:96,lineHeight:1.55}}/>
+                      <button className="btn btn-ghost" style={{width:'100%',color:'var(--color-flag)',borderColor:'var(--color-flag)'}}
+                        onClick={()=>{
+                          const n=(trip.days||[]).reduce((a,d)=>a+(d.activities||[]).length+(d.restaurants||[]).length,0);
+                          if(n>0 && !window.confirm(`Rewrite the whole itinerary?\n\nThis deletes ${n} stop${n===1?'':'s'} across ${(trip.days||[]).length} days and plans the trip again from scratch.\n\nTo add a booking without touching your plan, close this and use "Attach a booking" instead.`)) return;
+                          setShowRegenModal(false); onUpdateTrip({...trip,days:[],_regenPrompt:regenPrompt}); setRegenPrompt('');
+                        }}>Rewrite everything</button>
+                    </div>
+                  </details>
                 </div>
               </div>
             )}
@@ -8516,6 +8632,35 @@ class ErrorBoundary extends React.Component {
     assert('OTP field rejects letters', norm('abc123')==='123');
     assert('OTP field is null-safe', norm(null)==='' && norm(undefined)==='');
     assert('OTP submit gate accepts >=6 digits', ('33444353'.length>=OTP_MIN_LEN) && !('12345'.length>=OTP_MIN_LEN));
+  })();
+  // Attaching a booking must ADD, never wipe (a train upload once erased a whole week)
+  (function(){
+    const base={ startDate:'2026-09-16', endDate:'2026-09-21',
+      days:[{id:'d1',date:'2026-09-16',activities:[{id:'keep1',name:'Borough Market',sortOrder:0}],restaurants:[]},
+            {id:'d2',date:'2026-09-21',activities:[],restaurants:[]}],
+      flights:[], lodging:[] };
+    // transport
+    const t=mergeBookingIntoTrip(base,{type:'transport',mode:'train',operator:'Eurostar',
+      legs:[{operator:'Eurostar',trainNumber:'ES9108',departureStation:'London St Pancras',arrivalStation:'Paris Gare du Nord',departureTime:'2026-09-21T09:24:00',arrivalTime:'2026-09-21T13:02:00',confirmationNumber:'ABC123'}]});
+    assert('attach transport keeps every existing stop', t.trip.days[0].activities.some(a=>a.id==='keep1'));
+    assert('attach transport adds it to flights so the hero pills show it', t.trip.flights.length===1 && t.trip.flights[0].flightNumber==='ES9108');
+    assert('attach transport records the mode', t.trip.flights[0].mode==='train');
+    assert('attach transport places a stop on the departure day', t.trip.days[1].activities.some(a=>/ES9108/.test(a.name)));
+    assert('attach transport deep-links the operator', /eurostar/i.test(t.trip.days[1].activities.find(a=>/ES9108/.test(a.name)).bookingUrl||''));
+    assert('attach transport is idempotent', mergeBookingIntoTrip(t.trip,{type:'transport',mode:'train',operator:'Eurostar',legs:[{operator:'Eurostar',trainNumber:'ES9108',departureStation:'London St Pancras',arrivalStation:'Paris Gare du Nord',departureTime:'2026-09-21T09:24:00'}]}).trip.days[1].activities.filter(a=>/ES9108/.test(a.name)).length===1);
+    // lodging
+    const l=mergeBookingIntoTrip(base,{type:'lodging',name:'The Hoxton',address:'81 Great Eastern St',checkIn:'2026-09-16',checkOut:'2026-09-21'});
+    assert('attach lodging adds a check-in stop on the arrival day', l.trip.days[0].activities.some(a=>/Check in at The Hoxton/.test(a.name)));
+    assert('attach lodging adds a check-out stop on the departure day', l.trip.days[1].activities.some(a=>/Check out of The Hoxton/.test(a.name)));
+    assert('attach lodging still records the stay', l.trip.lodging.length===1);
+    assert('attach lodging keeps existing stops', l.trip.days[0].activities.some(a=>a.id==='keep1'));
+    // event
+    const e=mergeBookingIntoTrip(base,{type:'activity',name:'Arsenal v Spurs',venue:'Emirates',date:'2026-09-16',startTime:'2026-09-16T17:30:00',bookingUrl:'https://www.arsenal.com'});
+    assert('attach event adds a stop on its date', e.trip.days[0].activities.some(a=>a.name==='Arsenal v Spurs'));
+    assert('attach event keeps its ticket link', e.trip.days[0].activities.find(a=>a.name==='Arsenal v Spurs').bookingUrl==='https://www.arsenal.com');
+    // never destructive
+    assert('no attach path ever empties days', t.trip.days.length===2 && l.trip.days.length===2 && e.trip.days.length===2);
+    assert('a booking dated outside the trip does not crash', mergeBookingIntoTrip(base,{type:'activity',name:'X',date:'2030-01-01'}).trip.days.length===2);
   })();
   // AI quality (Emily rated the itinerary a D) · restaurant links used to be dropped
   (function(){
