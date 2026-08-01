@@ -1104,7 +1104,10 @@ async function cloudGetUser(){
     return null;
   }catch(e){ return null; }
 }
-// P0b · sign-in sends a 6-DIGIT CODE, not a clickable link.
+// OTP length is a Supabase project setting, not a constant we control from here.
+// Accept a range so a settings change can never lock everyone out again.
+const OTP_MIN_LEN = 6, OTP_MAX_LEN = 10;
+// P0b · sign-in sends a NUMERIC CODE, not a clickable link.
 // Why: Outlook/Hotmail Safe Links pre-fetches every URL in an email to scan it,
 // which spends the single-use magic-link token before the human ever clicks —
 // the crew then sees "Email link is invalid or has expired" (403, "One-time token
@@ -1122,8 +1125,12 @@ async function cloudSignIn(email){
 // Verify a typed code. Returns the session on success; throws a human message.
 async function cloudVerifyCode(email, token){
   const c=sb(); if(!c) throw new Error('Sync is unavailable right now.');
+  // Supabase's OTP length is a project setting (6 by default, this project sends 8),
+  // and it can change without a code deploy. Hard-coding 6 meant a valid 8-digit code
+  // was truncated by the input and always rejected. Accept any plausible length and
+  // let the server be the authority on correctness.
   const code=String(token||'').replace(/\D/g,'');
-  if(code.length!==6) throw new Error('Enter the 6-digit code from your email.');
+  if(code.length<OTP_MIN_LEN) throw new Error(`Enter the ${OTP_MIN_LEN}-digit code from your email.`);
   const { data, error } = await c.auth.verifyOtp({ email, token:code, type:'email' });
   if(error){
     const m=(error.message||'').toLowerCase();
@@ -7353,7 +7360,7 @@ function SyncButton({user, onChange}){
   const [email,setEmail]=React.useState('');
   const [sent,setSent]=React.useState(false);
   const [busy,setBusy]=React.useState(false);
-  const [code,setCode]=React.useState(''); // P0b · 6-digit sign-in code
+  const [code,setCode]=React.useState(''); // P0b · numeric sign-in code (length set by Supabase)
   const dlgRef=React.useRef(null);
   useModalA11y(dlgRef, ()=>setOpen(false), open);
   // Verify the typed code. onAuthStateChange drives the actual sync, so on success
@@ -7387,7 +7394,7 @@ function SyncButton({user, onChange}){
             {!sent ? (
               <span style={{display:'contents'}}>
                 <h2 style={{fontFamily:'var(--font-display)',fontSize:'1.5rem',marginBottom:6}}>Sync across devices</h2>
-                <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',marginBottom:16,lineHeight:1.5}}>Enter your email and we'll send a 6-digit sign-in code · no password. Works on any device, and can't be broken by email security scanners.</p>
+                <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',marginBottom:16,lineHeight:1.5}}>Enter your email and we'll send a sign-in code · no password. Works on any device, and can't be broken by email security scanners.</p>
                 <input className="input" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)} style={{marginBottom:12}}/>
                 <div style={{display:'flex',gap:8}}>
                   <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setOpen(false)}>Cancel</button>
@@ -7404,15 +7411,15 @@ function SyncButton({user, onChange}){
             ) : (
               <span style={{display:'contents'}}>
                 <h2 style={{fontFamily:'var(--font-display)',fontSize:'1.5rem',marginBottom:6}}>Check your email</h2>
-                <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',marginBottom:14,lineHeight:1.5}}>We sent a 6-digit code to <strong>{email}</strong>. Enter it below · it expires in an hour.</p>
+                <p style={{color:'var(--color-ink-light)',fontSize:'.9rem',marginBottom:14,lineHeight:1.5}}>We sent a sign-in code to <strong>{email}</strong>. Enter it below · it expires in an hour.</p>
                 {/* inputMode numeric + one-time-code autocomplete lets iOS offer the
                     code straight from the notification. 16px font avoids iOS zoom. */}
                 <input className="input" type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus
-                  maxLength={6} placeholder="123456" aria-label="6-digit sign-in code" value={code}
-                  onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,6))}
-                  onKeyDown={e=>{ if(e.key==='Enter' && code.length===6) verify(); }}
+                  maxLength={OTP_MAX_LEN} placeholder="123456" aria-label="Sign-in code from your email" value={code}
+                  onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,OTP_MAX_LEN))}
+                  onKeyDown={e=>{ if(e.key==='Enter' && code.length>=OTP_MIN_LEN) verify(); }}
                   style={{marginBottom:12,fontSize:'1.4rem',letterSpacing:'.35em',textAlign:'center',fontFamily:'var(--font-mono)'}}/>
-                <button className="btn btn-primary" style={{width:'100%',marginBottom:10}} disabled={busy||code.length!==6}
+                <button className="btn btn-primary" style={{width:'100%',marginBottom:10}} disabled={busy||code.length<OTP_MIN_LEN}
                   onClick={verify}>{busy?'Verifying…':'Sign in'}</button>
                 <div style={{display:'flex',gap:8}}>
                   <button className="btn btn-ghost btn-sm" style={{flex:1}} disabled={busy} onClick={async()=>{
@@ -7941,7 +7948,7 @@ function App() {
     try{
       try{ localStorage.setItem('locale_pending_invite', JSON.stringify({tripId:trip.id, t:Date.now()})); }catch(e){}
       await cloudSignIn(email);
-      showToast('Check your email for the 6-digit code, then sign in with ☁ Sync to land right here.','info',8000);
+      showToast('Check your email for the sign-in code, then sign in with ☁ Sync to land right here.','info',8000);
     }catch(e){
       showToast('Could not send the code · try again.','error');
     }
@@ -8499,12 +8506,16 @@ class ErrorBoundary extends React.Component {
   assert('linkifyParts is null-safe', linkifyParts(null).length===0 && linkifyParts('').length===0 && linkifyParts(undefined).length===0);
   // P0b · OTP code normalisation (the field strips non-digits and caps at 6)
   (function(){
-    const norm=(v)=>String(v||'').replace(/\D/g,'').slice(0,6);
+    const norm=(v)=>String(v||'').replace(/\D/g,'').slice(0,OTP_MAX_LEN);
     assert('OTP field strips spaces and dashes', norm('12 34-56')==='123456');
-    assert('OTP field caps at 6 digits', norm('1234567890')==='123456');
+    // Regression: Supabase sends 8 digits on this project. A hard 6-cap truncated
+    // the real code, so every sign-in failed with "wrong or expired".
+    assert('OTP field accepts an 8-digit code', norm('33444353')==='33444353');
+    assert('OTP field accepts a 6-digit code', norm('334443')==='334443');
+    assert('OTP field caps at OTP_MAX_LEN', norm('123456789012').length===OTP_MAX_LEN);
     assert('OTP field rejects letters', norm('abc123')==='123');
     assert('OTP field is null-safe', norm(null)==='' && norm(undefined)==='');
-    assert('cloudVerifyCode exists and validates length', typeof cloudVerifyCode==='function');
+    assert('OTP submit gate accepts >=6 digits', ('33444353'.length>=OTP_MIN_LEN) && !('12345'.length>=OTP_MIN_LEN));
   })();
   // AI quality (Emily rated the itinerary a D) · restaurant links used to be dropped
   (function(){
