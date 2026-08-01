@@ -1543,7 +1543,16 @@ function buildDayRouteUrl(trip, day){
   if(!stops.length) return null;
   const anchor=lodging&&lodging.address?lodging.address:(lodging&&lodging.name?lodging.name+(cityFallback?', '+cityFallback:''):null);
   const chain=anchor?[anchor,...stops,anchor]:stops;
-  return 'https://www.google.com/maps/dir/'+chain.map(s=>encodeURIComponent(s)).join('/');
+  // Emily: Maps opened in DRIVING mode, which is wrong for a city day — people walk
+  // or take transit, and driving directions imply parking that isn't there. Use
+  // Google's documented Maps URLs API so travelmode is explicit and stable (the
+  // older /dir/a/b/c path form has no supported way to set a mode). Google still
+  // offers a one-tap switch to transit or driving once the route opens.
+  const origin=chain[0], destination=chain[chain.length-1];
+  const waypoints=chain.slice(1,-1);
+  const p=new URLSearchParams({api:'1', origin, destination, travelmode:'walking'});
+  if(waypoints.length) p.set('waypoints', waypoints.join('|'));
+  return 'https://www.google.com/maps/dir/?'+p.toString();
 }
 
 // ── .ics calendar export (PRD 2.4) ──────────────────────────────────────────────
@@ -4162,6 +4171,24 @@ function DayView({trip,day,onUpdateTrip}){
         <ActivityForm type={addingType}
           onSave={f=>handleSaveActivity(f,addingType)} onCancel={()=>setAddingType(null)}/>
       )}
+      {/* Badge legend (Emily) · "what do the star and the pin mean?" was a real
+          question in review. Only renders when this day actually uses a badge, so
+          it teaches in context instead of adding permanent chrome. */}
+      {(() => {
+        const items=[...(day.activities||[]),...(day.restaurants||[])];
+        const hasMust=items.some(i=>i&&i.bucket==='must-do');
+        const hasNice=items.some(i=>i&&i.bucket==='nice-to-have');
+        const hasBook=items.some(i=>i&&(i.bookingRequired||i.reservationRequired));
+        if(!hasMust&&!hasNice&&!hasBook) return null;
+        return (
+          <div style={{display:'flex',gap:14,flexWrap:'wrap',alignItems:'center',marginBottom:12,
+            fontSize:'.72rem',color:'var(--color-ink-muted)'}}>
+            {hasMust&&<span style={{display:'inline-flex',alignItems:'center',gap:5}}><span className="badge-must">★</span> must-do</span>}
+            {hasNice&&<span style={{display:'inline-flex',alignItems:'center',gap:5}}><span className="badge-nice">✨</span> nice to have</span>}
+            {hasBook&&<span style={{display:'inline-flex',alignItems:'center',gap:5}}><span className="pill pill-flag" style={{padding:'1px 6px',fontSize:'.68rem'}}>Booking</span> needs reserving</span>}
+          </div>
+        );
+      })()}
       {/* Timeline card · drag the ⠿ handle to reorder (only when unfiltered) */}
       <div className="card" ref={listRef} style={{padding:'18px 16px 4px',marginBottom:16}}>
         {merged.length===0 ? (
@@ -8607,8 +8634,11 @@ class ErrorBoundary extends React.Component {
   const routeDay = {destinationId:'d1',activities:[{name:'Cafe Cluny',address:'284 W 12th St, New York, NY',sortOrder:0}],restaurants:[{name:'Dante',address:'',sortOrder:1}]};
   const url = buildDayRouteUrl(routeTrip, routeDay);
   assert('day route URL is a Google Maps dir link', url && url.startsWith('https://www.google.com/maps/dir/'));
-  assert('day route starts and ends at lodging', url.indexOf('848%20Washington') !== -1 && url.indexOf('848%20Washington') !== url.lastIndexOf('848%20Washington'));
-  assert('day route falls back to name + city for missing address', url.includes('Dante%2C%20New%20York'));
+  // Emily: Maps used to open in driving mode on city days.
+  assert('day route defaults to walking, not driving', /[?&]travelmode=walking\b/.test(url) && !/travelmode=driving/.test(url));
+  assert('day route uses the documented Maps URLs API', /[?&]api=1\b/.test(url) && /[?&]origin=/.test(url) && /[?&]destination=/.test(url));
+  assert('day route starts and ends at lodging', url.indexOf('848+Washington') !== -1 && url.indexOf('848+Washington') !== url.lastIndexOf('848+Washington'));
+  assert('day route falls back to name + city for missing address', url.includes('Dante%2C+New+York'));
   assert('day route returns null with no stops', buildDayRouteUrl(routeTrip, {destinationId:'d1',activities:[],restaurants:[]}) === null);
 
   // ── NEW v0.9: taste profile prompt ─
