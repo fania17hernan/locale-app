@@ -2311,6 +2311,14 @@ const RAW_MOCK_LISBON={
     tips:['Book Pena Palace tickets online before you go','Wear real shoes · the calçada cobbles are slippery','Dinner starts late; 8pm is early']
   }
 };
+// Sample trips are chosen to mirror the four journeys in persona-journeys.html, so a
+// new user can open one and immediately feel the features that matter to them.
+// Keyed by demo trip id; a trip with no entry simply shows no badge.
+const DEMO_PERSONA={
+  'mock-lp':          { label:'The Organizer', blurb:'Booked trip, crew to herd · arrivals board, crew RSVP, shared itinerary, calendar export' },
+  'mock-lisbon':      { label:'The Dreamer',   blurb:'No dates yet · pin ideas, collect crew reactions, then make it real' },
+  'mock-cali-disney': { label:'The First-timer', blurb:'Family trip, unfamiliar city · generated days, packing, budget split' },
+};
 const MOCK_TRIPS=[...RAW_MOCK_TRIPS, RAW_MOCK_LISBON].map(t=>normalizeTrip(t));
 
 // ── STORAGE ────────────────────────────────────────────────────────────────────
@@ -4620,6 +4628,13 @@ function TripCard({trip, onClick, animDelay=0}) {
             {formatDateShort(startDate)} – {formatDateShort(endDate)}
             {nightCount ? ` · ${nightCount} ${nightCount===1?'night':'nights'}` : ''}
           </div>
+          {/* Sample trips say what they demonstrate, so a new user knows which
+              features each one shows off (personas: Organizer / Dreamer / First-timer). */}
+          {trip.isDemo && DEMO_PERSONA[trip.id] && (
+            <div style={{marginTop:6,fontSize:'.68rem',fontWeight:600,letterSpacing:'.04em',textTransform:'uppercase',opacity:.9}}>
+              Sample · {DEMO_PERSONA[trip.id].label}
+            </div>
+          )}
           <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:8,marginTop:10}}>
             <div className="trip-card-dest-strip">
               {destinations.map(d=>(
