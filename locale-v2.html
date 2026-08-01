@@ -1245,6 +1245,25 @@ function cloudPushDebounced(trips){ clearTimeout(_cloudPushTimer); _cloudPushTim
 function unsyncedLocalTrips(trips){
   return (trips||[]).filter(t=> t && !t.isDemo && t.id && !t._ownerId);
 }
+// Date sanity for flights (Andy's "date validation" + the 2026-07-25 data bug where
+// a real trip stored 2024/2025 flight dates and a return leg dated 2024-01-16, so
+// the hero pills showed nonsense). Returns a human message, or null when plausible.
+// Advisory only — travel is messy (red-eyes, pre-trip positioning), so the UI warns
+// and lets the user confirm rather than blocking the save.
+function flightDateWarning(trip, departureTime, arrivalTime){
+  if(!departureTime) return null;
+  const day=(s)=>String(s||'').slice(0,10);
+  const dep=day(departureTime), arr=day(arrivalTime);
+  if(arr && arr<dep) return 'The arrival is before the departure. Check the dates.';
+  const start=trip&&trip.startDate, end=trip&&trip.endDate;
+  if(!start||!end) return null;
+  const pad=(iso,days)=>{ const d=new Date(iso+'T12:00:00'); if(isNaN(d)) return null; d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); };
+  const lo=pad(start,-2), hi=pad(end,2); // small cushion for overnight/positioning legs
+  if(lo&&hi&&(dep<lo||dep>hi)){
+    return `That flight is dated ${dep}, outside this trip (${start} – ${end}). Double-check the year and date.`;
+  }
+  return null;
+}
 // UAT #3 · notes and descriptions are plain text, so a pasted link was dead. Split
 // text into plain/link segments so React can render real anchors — no innerHTML,
 // no dangerouslySetInnerHTML, so there is no XSS surface. Only http(s) and bare
@@ -3573,6 +3592,10 @@ function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDele
   const toggleTraveler=(id)=>setTravelerIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);
   const save=()=>{
     if(!fromAp.trim()||!toAp.trim()||!dep){ showToast('Add at least from, to, and a departure time.','warn'); return; }
+    // Advisory date check · warn on out-of-window/backwards dates, but let the
+    // traveler confirm (positioning flights and red-eyes are legitimate).
+    const warn=flightDateWarning(trip, dep.length===16?dep+':00':dep, arr?(arr.length===16?arr+':00':arr):'');
+    if(warn && !window.confirm(warn+'\n\nSave it anyway?')) return;
     onSave({
       id: flight?.id||uuid(),
       direction: flight?.direction||'outbound',
@@ -4444,6 +4467,17 @@ function NextThreeThings({trip, isOwner, onGoTab, onShare, onUpdateTrip, onCompl
     if(noTravel.length) items.push({emoji:'',title:noTravel.length===1?(noTravel[0].name+" hasn't added travel yet"):(noTravel.length+" crew haven't added travel yet"),sub:'Everyone adds their own flight; arrivals line up on Day 1',tab:'crew'});
   }
   if(!(trip.lodging||[]).length) items.push({emoji:'',title:"Add where you're staying",sub:'Upload the booking confirmation',tab:'days'});
+  // UAT #7 · packing is the other half of "am I prepared?" — surface it here as the
+  // trip closes in, so Next-3 reflects checklist AND packing, not checklist alone.
+  // Derived on every render, so ticking items off in Get Ready updates this reactively.
+  const packItems=Array.isArray(trip.packingList)?trip.packingList:[];
+  const unpacked=packItems.filter(i=>i&&!(i.packed||i.completed));
+  if(packItems.length && unpacked.length && daysToGo<=10){
+    items.push({emoji:'',title:`${unpacked.length} thing${unpacked.length===1?'':'s'} left to pack`,
+      sub:unpacked.slice(0,3).map(i=>i.label||i.name).filter(Boolean).join(', ')+(unpacked.length>3?' …':'')+' · tap to open Get Ready',tab:'getready'});
+  } else if(!packItems.length && daysToGo<=14){
+    items.push({emoji:'',title:'Build your packing list',sub:'Locale drafts one from your destinations and forecast',tab:'getready'});
+  }
   if(items.length===0) items.push({emoji:'',title:"You're in great shape",sub:'Nothing urgent. Browse your days or fine-tune the plan',tab:'days'});
   return (
     <div style={{margin:'0 0 24px',display:'flex',flexDirection:'column',gap:12}}>
@@ -8319,6 +8353,17 @@ class ErrorBoundary extends React.Component {
   assert('linkifyParts leaves plain text alone', (()=>{ const p=linkifyParts('just a note'); return p.length===1 && p[0].type==='text'; })());
   assert('linkifyParts drops trailing sentence punctuation from the href', (()=>{ const p=linkifyParts('go to https://a.com/b.'); return p[1].href==='https://a.com/b'; })());
   assert('linkifyParts is null-safe', linkifyParts(null).length===0 && linkifyParts('').length===0 && linkifyParts(undefined).length===0);
+  // Flight date sanity (Andy date validation + the 2026-07-25 corrupted-date bug)
+  (function(){
+    const t={startDate:'2026-09-16',endDate:'2026-09-25'};
+    assert('flightDateWarning accepts a flight inside the trip window', flightDateWarning(t,'2026-09-16T15:50:00','2026-09-16T21:00:00')===null);
+    assert('flightDateWarning allows an overnight arrival next day', flightDateWarning(t,'2026-09-17T23:40:00','2026-09-18T12:05:00')===null);
+    assert('flightDateWarning catches the wrong-year bug', /outside this trip/.test(flightDateWarning(t,'2024-09-16T15:50:00','2024-09-16T21:00:00')||''));
+    assert('flightDateWarning catches the Jan 2024 return-leg bug', /outside this trip/.test(flightDateWarning(t,'2024-01-16T16:10:00','2024-01-16T17:30:00')||''));
+    assert('flightDateWarning catches arrival before departure', /arrival is before/.test(flightDateWarning(t,'2026-09-20T10:00:00','2026-09-19T10:00:00')||''));
+    assert('flightDateWarning tolerates a day-early positioning flight', flightDateWarning(t,'2026-09-15T08:00:00','2026-09-15T11:00:00')===null);
+    assert('flightDateWarning is null-safe without dates', flightDateWarning(t,'',null)===null && flightDateWarning({},'2026-09-16T10:00:00','')===null && flightDateWarning(null,'2026-09-16T10:00:00','')===null);
+  })();
 
   // ── NEW Round 16: feedback batch ─
   assert('fmtBoardTime is 12-hour, padded, uppercase meridiem', fmtBoardTime('2026-09-16T15:50:00')===' 3:50 PM' && fmtBoardTime('2026-09-17T12:05:00')==='12:05 PM');
