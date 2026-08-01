@@ -1245,6 +1245,45 @@ function cloudPushDebounced(trips){ clearTimeout(_cloudPushTimer); _cloudPushTim
 function unsyncedLocalTrips(trips){
   return (trips||[]).filter(t=> t && !t.isDemo && t.id && !t._ownerId);
 }
+// UAT #3 · notes and descriptions are plain text, so a pasted link was dead. Split
+// text into plain/link segments so React can render real anchors — no innerHTML,
+// no dangerouslySetInnerHTML, so there is no XSS surface. Only http(s) and bare
+// www. are linkified; anything else stays text (javascript:/data: can never match).
+function linkifyParts(text){
+  const s=(text==null?'':String(text));
+  if(!s) return [];
+  const re=/((?:https?:\/\/|www\.)[^\s<>()]+[^\s<>().,;:!?'"])/gi;
+  const out=[]; let last=0, m;
+  while((m=re.exec(s))!==null){
+    if(m.index>last) out.push({type:'text',value:s.slice(last,m.index)});
+    const raw=m[0];
+    out.push({type:'link',value:raw,href:/^www\./i.test(raw)?('https://'+raw):raw});
+    last=m.index+raw.length;
+  }
+  if(last<s.length) out.push({type:'text',value:s.slice(last)});
+  return out;
+}
+// UAT #2 · move a stop from one day to another. Pure: returns a new days array.
+// The stop is removed from every list on the source day and appended to the end
+// of the target day's matching list (sortOrder continues that day's timeline).
+// Additive — no schema change, no deletes beyond the moved item.
+function moveStopBetweenDays(days, fromDayId, toDayId, itemId){
+  const list=Array.isArray(days)?days:[];
+  if(!fromDayId||!toDayId||fromDayId===toDayId||!itemId) return list;
+  const src=list.find(d=>d.id===fromDayId), dst=list.find(d=>d.id===toDayId);
+  if(!src||!dst) return list;
+  const key=(src.activities||[]).some(a=>a&&a.id===itemId) ? 'activities'
+          : (src.restaurants||[]).some(r=>r&&r.id===itemId) ? 'restaurants' : null;
+  if(!key) return list;
+  const moved=(src[key]||[]).find(x=>x&&x.id===itemId);
+  if(!moved) return list;
+  const maxOrder=Math.max(-1,...(dst.activities||[]).map(s=>s.sortOrder??0),...(dst.restaurants||[]).map(s=>s.sortOrder??0));
+  return list.map(d=>{
+    if(d.id===fromDayId) return {...d,[key]:(d[key]||[]).filter(x=>!(x&&x.id===itemId))};
+    if(d.id===toDayId)   return {...d,[key]:[...(d[key]||[]),{...moved,sortOrder:maxOrder+1}]};
+    return d;
+  });
+}
 
 // Calls the server-side AI proxy. Streams when the server streams (itinerary),
 // returns the full text either way. onDelta(textSoFar) fires during streaming.
@@ -3681,10 +3720,19 @@ function StopMiniMap({query}){
 }
 
 // ── TIMELINE STOP · one row in the day plan (prototype style) ────────────────────
-function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDeleteComment, draggable}){
+// UAT #3 · renders text with tappable links. Anchors only; never innerHTML.
+function LinkedText({text, style}){
+  const parts=linkifyParts(text);
+  if(!parts.length) return null;
+  return <>{parts.map((p,i)=> p.type==='link'
+    ? <a key={i} href={p.href} target="_blank" rel="noopener noreferrer" style={{color:'var(--color-accent)',textDecoration:'underline',wordBreak:'break-word',...(style||{})}}>{p.value}</a>
+    : <React.Fragment key={i}>{p.value}</React.Fragment>)}</>;
+}
+function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDeleteComment, onMoveToDay, currentDayId, draggable}){
   const [open,setOpen]=useState(false);
   const [draft,setDraft]=useState('');
   const [showMap,setShowMap]=useState(false);
+  const [moving,setMoving]=useState(false); // UAT #2 · move this stop to another day
   const author=resolveStopAuthor(trip,item);
   const accent = author ? author.color : (type==='restaurant'?'#E8A13A':'var(--color-accent)');
   const time=fmtStopTime(item.time);
@@ -3717,13 +3765,13 @@ function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDelet
           <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--color-border)'}}>
             {item.neighborhood&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginBottom:4}}>📍 {item.neighborhood}</p>}
             {item.address&&<p style={{fontSize:'.8rem',color:'var(--color-ink-light)',marginBottom:4}}>{item.address}</p>}
-            {item.notes&&<p style={{fontSize:'.85rem',lineHeight:1.55,margin:'6px 0'}}>{item.notes}</p>}
+            {item.notes&&<p style={{fontSize:'.85rem',lineHeight:1.55,margin:'6px 0'}}><LinkedText text={item.notes}/></p>}
             {comments.map(c=>(
               <div key={c.id} style={{display:'flex',gap:8,alignItems:'flex-start',margin:'8px 0'}}>
                 <Avatar22 initial={(c.author||'?').charAt(0).toUpperCase()} color={c.color||AVATAR_COLORS[0]}/>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:'.78rem'}}><strong>{c.author}</strong> <span style={{color:'var(--color-ink-muted)'}}>{c.ts?'· '+relativeAgo(c.ts):''}</span></div>
-                  <div style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{c.text}</div>
+                  <div style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}><LinkedText text={c.text}/></div>
                 </div>
                 {onDeleteComment&&<button aria-label="Delete note" onClick={()=>onDeleteComment(item,c.id)} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'0 6px'}}>✕</button>}
               </div>
@@ -3736,8 +3784,24 @@ function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDelet
               <button className="btn btn-secondary btn-sm" aria-expanded={showMap} onClick={()=>setShowMap(s=>!s)}>🗺️ {showMap?'Hide map':'Map'}</button>
               {(item.bookingUrl||item.reservationUrl)&&<a href={item.bookingUrl||item.reservationUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">Book →</a>}
               {onEdit&&<button className="btn btn-ghost btn-sm" onClick={()=>onEdit(item)}>✏️ Edit</button>}
+              {onMoveToDay&&(trip.days||[]).length>1&&<button className="btn btn-ghost btn-sm" aria-expanded={moving} onClick={()=>setMoving(m=>!m)}>📅 Move to day</button>}
               {onDelete&&<button className="btn btn-ghost btn-sm" aria-label="Remove item" style={{color:'var(--color-flag)'}} onClick={()=>{if(window.confirm('Remove this item?'))onDelete(item.id);}}>🗑</button>}
             </div>
+            {/* UAT #2 · cross-day move. Same additive write path as reorder: the stop
+                is removed from this day's list and appended to the target day's. */}
+            {moving&&onMoveToDay&&(
+              <div style={{marginTop:10,background:'var(--color-accent-soft)',border:'1px solid var(--color-border)',borderRadius:8,padding:'10px 12px'}}>
+                <p style={{fontSize:'.75rem',fontWeight:600,color:'var(--color-accent)',marginBottom:6}}>Move “{item.name}” to…</p>
+                <div style={{display:'flex',flexDirection:'column',gap:4,maxHeight:180,overflowY:'auto'}}>
+                  {(trip.days||[]).filter(d=>d.id!==currentDayId).map(d=>(
+                    <button key={d.id} className="btn btn-secondary btn-sm" style={{justifyContent:'flex-start',textAlign:'left'}}
+                      onClick={()=>{ setMoving(false); setOpen(false); onMoveToDay(item, d.id); }}>
+                      {d.label && !/^Day\s*\d+$/i.test(String(d.label).trim()) ? (d.label+' · ') : ''}{formatDateDow(d.date)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {showMap && <StopMiniMap query={item.address?`${item.address}`:`${item.name}${item.neighborhood?', '+item.neighborhood:''}`}/>}
           </div>
         )}
@@ -3787,6 +3851,15 @@ function DayView({trip,day,onUpdateTrip}){
 
   const handleDelete=(id,listKey)=>{
     updateDay({...day,[listKey]:(day[listKey]||[]).filter(x=>x.id!==id)});
+  };
+  // UAT #2 · cross-day move. Writes the whole days array (both days change), so it
+  // goes through onUpdateTrip rather than updateDay.
+  const handleMoveToDay=(item,toDayId)=>{
+    const next=moveStopBetweenDays(trip.days||[], day.id, toDayId, item.id);
+    onUpdateTrip({...trip, days:next});
+    const d=(trip.days||[]).find(x=>x.id===toDayId);
+    const where=d ? (d.label && !/^Day\s*\d+$/i.test(String(d.label).trim()) ? d.label : formatDateDow(d.date)) : 'another day';
+    showToast(`Moved “${item.name}” to ${where} ✓`,'info',3000);
   };
   const listKeyOf=(item)=> (day.activities||[]).some(a=>a.id===item.id) ? 'activities' : 'restaurants';
   // Crew/Viewer members don't have write access to the trip document (owner-only
@@ -4047,6 +4120,7 @@ function DayView({trip,day,onUpdateTrip}){
             onEdit={isOwner?(it=>{setAddingType(null);setEditingItem({item:it,type});}):null}
             onDelete={isOwner?(id=>handleDelete(id,type==='restaurant'?'restaurants':'activities')):null}
             onAddComment={addStopComment} onDeleteComment={isOwner?deleteStopComment:null}
+            onMoveToDay={isOwner?handleMoveToDay:null} currentDayId={day.id}
             draggable={isOwner&&canReorder}/>
         ))}
       </div>
@@ -4059,7 +4133,7 @@ function DayView({trip,day,onUpdateTrip}){
             <Avatar22 initial={(c.author||'?').charAt(0).toUpperCase()} color={c.color||AVATAR_COLORS[0]}/>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:'.8rem'}}><strong>{c.author}</strong> <span style={{color:'var(--color-ink-muted)'}}>{c.ts?'· '+relativeAgo(c.ts):''}</span></div>
-              <div style={{fontSize:'.9rem',color:'var(--color-ink)',lineHeight:1.45}}>{c.text}</div>
+              <div style={{fontSize:'.9rem',color:'var(--color-ink)',lineHeight:1.45}}><LinkedText text={c.text}/></div>
             </div>
             {isOwner && <button aria-label="Delete note" onClick={()=>deleteDayComment(c.id)} className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)',padding:'0 6px'}}>✕</button>}
           </div>
@@ -8223,6 +8297,28 @@ class ErrorBoundary extends React.Component {
   assert('unsyncedLocalTrips excludes demos and already-owned trips', unsyncedLocalTrips([{id:'d',isDemo:true},{id:'e',_ownerId:'u2'}]).length===0);
   assert('unsyncedLocalTrips excludes rows without an id', unsyncedLocalTrips([{_ownerId:null}]).length===0);
   assert('unsyncedLocalTrips is null-safe', unsyncedLocalTrips(null).length===0 && unsyncedLocalTrips(undefined).length===0);
+  // UAT #2 · move a stop between days
+  (function(){
+    const days=[{id:'d1',activities:[{id:'a1',name:'Louvre',sortOrder:0},{id:'a2',name:'Seine',sortOrder:1}],restaurants:[{id:'r1',name:'Cafe',sortOrder:2}]},
+                {id:'d2',activities:[{id:'a3',name:'Eiffel',sortOrder:0}],restaurants:[]}];
+    const moved=moveStopBetweenDays(days,'d1','d2','a1');
+    assert('moveStopBetweenDays removes the stop from the source day', !moved[0].activities.some(a=>a.id==='a1'));
+    assert('moveStopBetweenDays appends it to the target day', moved[1].activities.some(a=>a.id==='a1'));
+    assert('moveStopBetweenDays appends at the end of the target timeline', moved[1].activities.find(a=>a.id==='a1').sortOrder===1);
+    assert('moveStopBetweenDays keeps other stops untouched', moved[0].activities.length===1 && moved[0].restaurants.length===1 && moved[1].activities.length===2);
+    const r=moveStopBetweenDays(days,'d1','d2','r1');
+    assert('moveStopBetweenDays moves restaurants into the restaurants list', r[1].restaurants.some(x=>x.id==='r1') && !r[0].restaurants.length);
+    assert('moveStopBetweenDays is a no-op for same/unknown day or missing item',
+      moveStopBetweenDays(days,'d1','d1','a1')===days && moveStopBetweenDays(days,'d1','nope','a1')===days && moveStopBetweenDays(days,'d1','d2','zzz')===days);
+    assert('moveStopBetweenDays is null-safe', Array.isArray(moveStopBetweenDays(null,'a','b','c')));
+  })();
+  // UAT #3 · linkify notes
+  assert('linkifyParts finds an https link', (()=>{ const p=linkifyParts('book at https://opentable.com/x now'); return p.length===3 && p[1].type==='link' && p[1].href==='https://opentable.com/x'; })());
+  assert('linkifyParts upgrades bare www. to https', (()=>{ const p=linkifyParts('see www.eurostar.com'); return p[1].type==='link' && p[1].href==='https://www.eurostar.com'; })());
+  assert('linkifyParts does NOT linkify javascript: or data: URIs', linkifyParts('javascript:alert(1) data:text/html,x').every(p=>p.type==='text'));
+  assert('linkifyParts leaves plain text alone', (()=>{ const p=linkifyParts('just a note'); return p.length===1 && p[0].type==='text'; })());
+  assert('linkifyParts drops trailing sentence punctuation from the href', (()=>{ const p=linkifyParts('go to https://a.com/b.'); return p[1].href==='https://a.com/b'; })());
+  assert('linkifyParts is null-safe', linkifyParts(null).length===0 && linkifyParts('').length===0 && linkifyParts(undefined).length===0);
 
   // ── NEW Round 16: feedback batch ─
   assert('fmtBoardTime is 12-hour, padded, uppercase meridiem', fmtBoardTime('2026-09-16T15:50:00')===' 3:50 PM' && fmtBoardTime('2026-09-17T12:05:00')==='12:05 PM');
