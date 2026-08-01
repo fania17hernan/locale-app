@@ -1401,11 +1401,20 @@ function validateAIDays(days){
       bucket:BUCKETS.includes(r?.bucket)?r.bucket:'nice-to-have',
       cuisine:str(r?.cuisine,60), mealType:str(r?.mealType,20),
       reservationRequired:bool(r?.reservationRequired), priceRange:str(r?.priceRange,6),
+      // Restaurants dropped their link here, so even when the model returned a
+      // booking URL the UI had nothing to render (part of Emily's "no links to
+      // detail"). Same http(s)-only guard as activities · no javascript:/data:.
+      bookingUrl:/^https?:\/\//i.test(r?.bookingUrl||'')?str(r.bookingUrl,300):'',
       notes:str(r?.notes,300), thingsToConsider:tips(r?.thingsToConsider),
     })).filter(r=>r.name),
   })).filter(d=>d.activities.length||d.restaurants.length||d.label);
 }
 
+// Interests offered by the taste quiz. Module-level so it is testable and so the
+// AI prompt and the quiz can never drift apart. Emily flagged the absence of a
+// sports option (she was planning a trip around a game); wellness and travelling
+// with kids cover two more common trip shapes the planner was blind to.
+const TASTE_INTERESTS = ['Food & restaurants','Fashion & boutiques','Art & museums','History','Nightlife','Outdoors','Shopping','Live music','Sports & games','Architecture','Coffee & cafés','Wellness & spa','Travelling with kids'];
 // ── TASTE PROFILE · captured once, flavors every AI call ──────────────────────
 // localStorage is the fast synchronous cache every prompt-builder reads from.
 // When signed in (real account), it also syncs to public.profiles so quiz
@@ -5233,7 +5242,7 @@ function ProfileQuiz({initial, onDone}) {
   const toggleInterest = (i) => setP(prev=>({...prev, interests: prev.interests.includes(i) ? prev.interests.filter(x=>x!==i) : [...prev.interests, i]}));
   const STYLE_OPTS = ['Live like a local', 'Classic must-sees', 'A mix of both'];
   const PACE_OPTS = ['Packed days', 'Balanced', 'Slow mornings, easy days'];
-  const INTERESTS = ['Food & restaurants','Fashion & boutiques','Art & museums','History','Nightlife','Outdoors','Shopping','Live music','Architecture','Coffee & cafés'];
+  const INTERESTS = TASTE_INTERESTS;
   const Chip = ({label, active, onClick}) => (
     <button type="button" onClick={onClick} className={`pill ${active?'pill-accent':'pill-muted'}`} style={{cursor:'pointer',fontSize:'.8rem',padding:'6px 14px'}}>{label}</button>
   );
@@ -5561,6 +5570,33 @@ GEOGRAPHY & LOGISTICS RULES (critical · plan each day as an efficient route tha
 5. Anything more than ~45 minutes away does NOT belong in a day plan. Instead, mention it in that day's "notes" as a possible day trip (e.g. "Consider a day trip to Versailles").
 6. In each day's "notes", state the neighborhood the day is centered on and that stops are walkable (e.g. "Centered on Le Marais · all stops within a ~15-min walk").
 
+SPECIFICITY RULES (a reviewer graded an earlier version a "D" for being generic · this is the bar):
+A. NEVER output a placeholder or category as a stop. Banned: "Explore the old town", "Local restaurant",
+   "Traditional dinner", "Visit a museum", "Free time", "Optional activity", "Lunch nearby", "Dinner in
+   the area", "Popular cafe". Every stop must name a REAL, SPECIFIC, currently-operating venue that a
+   local would name. If you are not confident a venue exists, choose a different one you ARE sure of.
+B. Be PRESCRIPTIVE, not descriptive. Do not describe what a place is; tell the traveler what to DO.
+   Weak: "A famous market with lots of food stalls."
+   Strong: "Go straight to Kappacasein for the raclette, then loop back for a doughnut at Bread Ahead."
+   Every activity's "notes" must contain at least one concrete, actionable specific: an exact dish,
+   room, exhibit, viewpoint, platform, stall, or the single thing worth doing there.
+C. Say WHEN and WHY, in one line. Give the time of day that is actually best and the reason
+   ("before 9am · the queue doubles by 10", "Tuesday: most galleries here shut on Monday",
+   "last entry 16:30", "sunset side of the bridge"). If it needs booking ahead, say how far ahead.
+D. Restaurants: name the dish to order and the realistic price band. Never "great atmosphere, book ahead"
+   on its own · that is filler and reads as generic.
+E. LINK EVERY STOP. Set "bookingUrl" to the venue's own official website (or its official booking or
+   ticketing page). Use the real domain you are confident about. Leave it "" only if you genuinely do
+   not know the site · never invent a URL and never link to a search-results page.
+F. Vary the shape of the trip. Do not give every day the same rhythm of sight, lunch, sight, dinner.
+   Mix in a market morning, a neighbourhood wander, a long lunch, an evening view, a day trip.
+G. If the traveler's interests include Sports & games, actively look for what is ON during their exact
+   dates (league fixtures, matches, races, tournaments) and place it as a real, named fixed event with
+   a booking link. If nothing is confirmable, say so in that day's notes and suggest the venue tour
+   instead. Same approach for Live music: name the venue, and note where to check listings.
+H. Match effort to the group. ${trip.travelerCount||2} travelers, occasion "${trip.occasion}". A trip with a
+   toddler is not the same trip as a bachelor party. Reflect that in pace, timing and venue choice.
+
 CRITICAL RULES about the user's request:
 - Never use em dashes in any text you write (names, notes, tips). Use commas, periods, or a middle dot instead.
 1. The user's message contains their NON-NEGOTIABLE activities, restaurants, and plans. You MUST include every specific place, activity, or event they mention · do not skip or replace them. Treat every concrete detail (a named venue, a dated event, a specific time, "we need tickets") as a hard constraint, not a suggestion.
@@ -5593,9 +5629,9 @@ Each day object must follow this exact shape:
       "bucket": "must-do",
       "category": "entertainment",
       "bookingRequired": true,
-      "bookingUrl": "",
-      "notes": "Example note.",
-      "thingsToConsider": ["Tip 1", "Tip 2"],
+      "bookingUrl": "https://www.the-venues-real-site.com",
+      "notes": "One prescriptive sentence: what to do here, and when or why (see rules B and C).",
+      "thingsToConsider": ["A concrete, non-obvious tip", "A timing or booking warning"],
       "sortOrder": 0
     }
   ],
@@ -5610,9 +5646,10 @@ Each day object must follow this exact shape:
       "cuisine": "American",
       "mealType": "dinner",
       "reservationRequired": true,
+      "bookingUrl": "https://www.the-restaurants-real-site.com",
       "priceRange": "$$$",
-      "notes": "Great atmosphere, book ahead.",
-      "thingsToConsider": [],
+      "notes": "Name the dish to order and one reason to come here (see rule D). Not 'great atmosphere'.",
+      "thingsToConsider": ["How far ahead to book, or when to walk in"],
       "sortOrder": 0
     }
   ]
@@ -5625,12 +5662,19 @@ Rules:
 - For trips 15+ nights: include 2 activities and 1 restaurant per day
 - Spread activities logically by geography · cluster nearby things on the same day
 - First day: arrival + light activities. Last day: checkout + departure-friendly spots.
-- Use real, specific venue names and addresses
+- Use real, specific venue names and addresses. A stop a local would not recognise by name is a failure.
+- Fill "bookingUrl" with the venue's own official site wherever you are confident of it (rule E)
 - Emojis should match the activity type
 - bucket is "must-do", "nice-to-have", or "if-time"
 - category is one of: sightseeing, food, outdoor, shopping, entertainment, culture, tour, other
 - mealType is one of: breakfast, lunch, dinner, cafe, drinks
-- Keep notes and thingsToConsider brief (1 sentence max) to stay within token limits`;
+- Keep notes and thingsToConsider brief (1 sentence max) to stay within token limits, but a short
+  sentence must still be SPECIFIC. "Book ahead" is not a note. "Book 3 weeks out, they release
+  tables at 9am" is a note.
+
+Before you return the JSON, re-read your own output once and fix anything that fails this test:
+could this exact line have been written about almost any city? If yes, it is too generic · replace it
+with a named venue and a concrete, prescriptive detail.`;
   };
 
   const [generated, setGenerated] = React.useState(false);
@@ -8462,6 +8506,18 @@ class ErrorBoundary extends React.Component {
     assert('OTP field is null-safe', norm(null)==='' && norm(undefined)==='');
     assert('cloudVerifyCode exists and validates length', typeof cloudVerifyCode==='function');
   })();
+  // AI quality (Emily rated the itinerary a D) · restaurant links used to be dropped
+  (function(){
+    const day=validateAIDays([{date:'2026-09-17',label:'x',restaurants:[
+      {name:'Dishoom',bookingUrl:'https://www.dishoom.com/'},
+      {name:'Sketchy',bookingUrl:'javascript:alert(1)'},
+      {name:'NoSite'}]}])[0];
+    assert('restaurant bookingUrl now survives sanitising', day.restaurants[0].bookingUrl==='https://www.dishoom.com/');
+    assert('restaurant bookingUrl rejects javascript: URIs', day.restaurants[1].bookingUrl==='');
+    assert('restaurant bookingUrl defaults to empty string', day.restaurants[2].bookingUrl==='');
+  })();
+  assert('taste profile offers a sports interest (Emily)', TASTE_INTERESTS.includes('Sports & games'));
+  assert('taste interests stay a reasonable chip count', TASTE_INTERESTS.length>=10 && TASTE_INTERESTS.length<=16);
   // Flight date sanity (Andy date validation + the 2026-07-25 corrupted-date bug)
   (function(){
     const t={startDate:'2026-09-16',endDate:'2026-09-25'};
