@@ -2783,10 +2783,9 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
         const intlData=CITY_DATA[dest.countryCode];
         const sections=[];
 
-        // Nearby · not in your plans
-        if(localData?.nearby?.length) sections.push({icon:'🗺️',label:'Nearby · Worth a Detour',type:'places',items:localData.nearby});
-        // Local food picks
-        if(localData?.food?.length) sections.push({icon:'🍴',label:'Local Food Picks',type:'places',items:localData.food});
+        // 'Nearby · Worth a Detour' and 'Local Food Picks' removed 2026-08-01:
+        // "Near today's plan" already makes the same point better, and three
+        // overlapping recommendation lists made every day feel padded.
         // Insider tips
         if(localData?.tips?.length) sections.push({icon:'💡',label:'Insider Tips',type:'tips',items:localData.tips});
         // International sections
@@ -3675,10 +3674,14 @@ function ArrivalsBoard({trip, date, mode}){
   const arrivalsMode = mode!=='departures';
   const key = arrivalsMode?'arrivalTime':'departureTime';
   const portKey = arrivalsMode?'arrivalAirport':'departureAirport';
+  // Chronological, always. The old comparator never returned 0 and compared raw
+  // strings, so a leg stored in a different shape (the Eurostar) could sort ahead
+  // of flights days earlier — the whole-trip board came out visibly out of order.
+  const ts=(f)=>{ const v=Date.parse(f&&f[key]); return isNaN(v)?Infinity:v; };
   const flights=(trip.flights||[]).filter(f=>{
     if(!f[key]) return false;
     return date ? ((f[key]||'').slice(0,10))===date : true;
-  }).sort((a,b)=>(a[key]||'')<(b[key]||'')?-1:1);
+  }).sort((a,b)=>ts(a)-ts(b));
   if(!flights.length) return null;
   const rows=flights.map(f=>({f, who:flightTravelers(trip,f)}));
   const times=flights.map(f=>minutesOfISO(f[key])).filter(t=>t!=null);
@@ -3704,7 +3707,10 @@ function ArrivalsBoard({trip, date, mode}){
   const t24=(iso)=>fmtBoardTime(iso);
   return (
     <div style={{background:'#16130F',borderRadius:'var(--radius-card)',padding:'18px 20px',marginBottom:16,boxShadow:'var(--shadow-card)'}}>
-      <p style={{fontFamily:'var(--font-mono)',fontSize:'.62rem',fontWeight:500,letterSpacing:'.18em',textTransform:'uppercase',color:'#8C857A',marginBottom:12}}>{arrivalsMode?'Arrivals':'Departures'} · {(trip.destinations||[])[0]?.city||''}{date?(' · '+formatDateShort(date)):' · whole trip'}</p>
+      {/* The header used to hard-code trip.destinations[0].city, so a domestic
+          connection into JFK was labelled "ARRIVALS · LONDON". Name the airports
+          the flights on THIS board actually use. */}
+      <p style={{fontFamily:'var(--font-mono)',fontSize:'.62rem',fontWeight:500,letterSpacing:'.18em',textTransform:'uppercase',color:'#8C857A',marginBottom:12}}>{arrivalsMode?'Arrivals':'Departures'}{ports.length?(' · '+ports.slice(0,3).join(' / ')):''}{date?(' · '+formatDateShort(date)):' · whole trip'}</p>
       {rows.map(({f,who})=>(
         <div key={f.id} style={{display:'grid',gridTemplateColumns:'88px 1fr auto',gap:12,alignItems:'baseline',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
           <span style={{fontFamily:'var(--font-mono)',fontWeight:600,fontSize:'.95rem',color:'#FFD9A8',fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap'}}>{t24(f[key])}</span>
@@ -3737,6 +3743,8 @@ function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDele
   // flight-number field and "Connection in JFK, 2.40 hour layover" in notes.
   const [via,setVia]=React.useState(flight?.via||'');
   const [travelerIds,setTravelerIds]=React.useState(flight?(flight.travelerIds||[]):(member?[member.id]:[]));
+  const [parsing,setParsing]=React.useState(false);   // confirmation upload → prefill
+  const [parseMsg,setParseMsg]=React.useState('');
   const dlgRef=React.useRef(null);
   useModalA11y(dlgRef, onClose, true);
   const toggleTraveler=(id)=>setTravelerIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);
@@ -3769,6 +3777,35 @@ function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDele
           <button className="btn btn-ghost" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div style={{padding:'20px 24px 32px',display:'flex',flexDirection:'column',gap:6}}>
+          {/* Typing a flight in by hand after already having the confirmation is
+              busywork. Read the document and prefill; every field stays editable
+              so a bad capture is a quick correction, not a dead end. */}
+          <label style={{display:'block',padding:'12px',border:'1px dashed var(--color-accent)',borderRadius:10,
+            cursor:parsing?'default':'pointer',marginBottom:10,textAlign:'center',background:'var(--color-accent-soft)'}}>
+            <span style={{fontWeight:600,fontSize:'.85rem'}}>{parsing?'Reading your confirmation…':'📎 Upload the confirmation instead'}</span>
+            <span style={{display:'block',fontSize:'.72rem',color:'var(--color-ink-light)',marginTop:3,lineHeight:1.45}}>PDF or screenshot · we fill this in for you</span>
+            <input type="file" accept="image/*,application/pdf" style={{display:'none'}} disabled={parsing}
+              onChange={async e=>{ const f=e.target.files?.[0]; e.target.value=''; if(!f) return;
+                setParsing(true); setParseMsg('');
+                try{
+                  const p=await parseConfirmationFile(f);
+                  const leg=(p&&(p.flights||p.legs)||[])[0]||(p&&(p.type==='transport')?p:null);
+                  if(!leg){ setParseMsg("Couldn't find a flight in that file · fill it in below."); }
+                  else{
+                    if(leg.airline||leg.operator) setAirline(leg.airline||leg.operator);
+                    if(leg.flightNumber||leg.trainNumber) setFlightNumber(leg.flightNumber||leg.trainNumber);
+                    if(leg.departureAirport||leg.departureStation) setFromAp(leg.departureAirport||leg.departureStation);
+                    if(leg.arrivalAirport||leg.arrivalStation) setToAp(leg.arrivalAirport||leg.arrivalStation);
+                    if(leg.departureTime) setDep(String(leg.departureTime).slice(0,16));
+                    if(leg.arrivalTime) setArr(String(leg.arrivalTime).slice(0,16));
+                    if(leg.notes) setNotes(leg.notes);
+                    setParseMsg('Filled in from your confirmation · check it and save.');
+                  }
+                }catch(err){ setParseMsg("Couldn't read that file · fill it in below."); }
+                finally{ setParsing(false); }
+              }}/>
+          </label>
+          {parseMsg && <p style={{fontSize:'.76rem',marginBottom:8,lineHeight:1.45,color:parseMsg.startsWith('Filled')?'var(--color-success)':'var(--color-flag)'}}>{parseMsg}</p>}
           <div style={{display:'flex',gap:8}}>
             <input className="input" style={{flex:1,minWidth:0}} placeholder="Airline" value={airline} onChange={e=>setAirline(e.target.value)}/>
             <input className="input" style={{flex:1,minWidth:0}} placeholder="Flight # (AA123)" value={flightNumber} onChange={e=>setFlightNumber(e.target.value)}/>
@@ -4260,9 +4297,12 @@ function DayView({trip,day,onUpdateTrip}){
       })()}
       {/* Filters + add */}
       <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
-        {['all','must-do','nice-to-have'].map(f=>(
+        {/* A bucket only earns a chip if this day actually uses it · an "If time" tab
+            that always filters to nothing is noise. Replaces the separate legend:
+            the chips themselves now name what each badge means. */}
+        {['all','must-do','nice-to-have','if-time'].filter(f=>f==='all'||[...(day.activities||[]),...(day.restaurants||[])].some(i=>i&&i.bucket===f)).map(f=>(
           <button key={f} className={`pill ${filter===f?'pill-accent':'pill-neutral'}`} style={{cursor:'pointer',border:'none'}} onClick={()=>setFilter(f)}>
-            {f==='all'?'All':f==='must-do'?'★ Must Do':'✨ Nice'}
+            {f==='all'?'All':f==='must-do'?'★ Must do':f==='nice-to-have'?'✨ Nice to have':'🕓 If time'}
           </button>
         ))}
         <span style={{flex:1}}/>
@@ -4282,24 +4322,6 @@ function DayView({trip,day,onUpdateTrip}){
         <ActivityForm type={addingType}
           onSave={f=>handleSaveActivity(f,addingType)} onCancel={()=>setAddingType(null)}/>
       )}
-      {/* Badge legend (Emily) · "what do the star and the pin mean?" was a real
-          question in review. Only renders when this day actually uses a badge, so
-          it teaches in context instead of adding permanent chrome. */}
-      {(() => {
-        const items=[...(day.activities||[]),...(day.restaurants||[])];
-        const hasMust=items.some(i=>i&&i.bucket==='must-do');
-        const hasNice=items.some(i=>i&&i.bucket==='nice-to-have');
-        const hasBook=items.some(i=>i&&(i.bookingRequired||i.reservationRequired));
-        if(!hasMust&&!hasNice&&!hasBook) return null;
-        return (
-          <div style={{display:'flex',gap:14,flexWrap:'wrap',alignItems:'center',marginBottom:12,
-            fontSize:'.72rem',color:'var(--color-ink-muted)'}}>
-            {hasMust&&<span style={{display:'inline-flex',alignItems:'center',gap:5}}><span className="badge-must">★</span> must-do</span>}
-            {hasNice&&<span style={{display:'inline-flex',alignItems:'center',gap:5}}><span className="badge-nice">✨</span> nice to have</span>}
-            {hasBook&&<span style={{display:'inline-flex',alignItems:'center',gap:5}}><span className="pill pill-flag" style={{padding:'1px 6px',fontSize:'.68rem'}}>Booking</span> needs reserving</span>}
-          </div>
-        );
-      })()}
       {/* Timeline card · drag the ⠿ handle to reorder (only when unfiltered) */}
       <div className="card" ref={listRef} style={{padding:'18px 16px 4px',marginBottom:16}}>
         {merged.length===0 ? (
