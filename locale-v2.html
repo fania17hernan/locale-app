@@ -3524,38 +3524,24 @@ function ActivityForm({initial,type,onSave,onCancel}){
 }
 
 // ── DAY VIEW ───────────────────────────────────────────────────────────────────
+// ── MAPS · Google Maps Embed API ─────────────────────────────────────────────
+// This key is PUBLIC BY DESIGN. The Embed API is an iframe, so the key ships in
+// page source and cannot be hidden — that is how Google intends it to work.
+// Safety comes from the restrictions on the key, not from secrecy:
+//   · HTTP referrers: localetrips.app/* and *.localetrips.app/*
+//   · API restriction: Maps Embed API ONLY (1 of 35 — the other 34 are billable)
+//   · No billing account on the project. Embed API is free with unlimited usage.
+// A lifted key therefore buys an attacker nothing: wrong domain, free API, no card.
+// NOT A LEAK — do not "fix" this by moving it to a secret. Rotate in Cloud Console
+// if it ever needs changing. CI's secret scan ignores it (no sk-ant-/re_/service_role).
+const GMAPS_EMBED_KEY = 'AIzaSyA0B9xYDqvX9AlK5peLfQNZIOSFS3v-cO0';
+const gmapsEmbed = (mode, params) =>
+  `https://www.google.com/maps/embed/v1/${mode}?key=${GMAPS_EMBED_KEY}&${params}`;
 // ── DAY ROUTE MAP · Leaflet (lazy CDN) + OSM Nominatim geocoding, all free ────
 const GEO_SK='locale_geo_v1';
 function geoCache(){try{return JSON.parse(localStorage.getItem(GEO_SK))||{};}catch(e){return{};}}
 function geoCacheSet(k,v){try{const c=geoCache();c[k]=v;localStorage.setItem(GEO_SK,JSON.stringify(c));}catch(e){}}
-let _leafletLoading=null;
-function loadLeaflet(){
-  if(window.L) return Promise.resolve();
-  if(_leafletLoading) return _leafletLoading;
-  _leafletLoading=new Promise((resolve,reject)=>{
-    const css=document.createElement('link');css.rel='stylesheet';
-    css.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
-    document.head.appendChild(css);
-    const js=document.createElement('script');
-    js.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
-    js.onload=resolve; js.onerror=()=>reject(new Error('Map library failed to load.'));
-    document.head.appendChild(js);
-  });
-  return _leafletLoading;
-}
-async function geocodeStop(query){
-  const key=query.toLowerCase().trim();
-  const cached=geoCache()[key];
-  if(cached!==undefined) return cached; // null = known miss, don't re-ask
-  try{
-    const res=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(query));
-    if(!res.ok) return null;
-    const data=await res.json();
-    const hit=data?.[0]?{lat:parseFloat(data[0].lat),lon:parseFloat(data[0].lon)}:null;
-    geoCacheSet(key,hit);
-    return hit;
-  }catch(e){return null;}
-}
+// Leaflet loader removed 2026-08-02 · Google Maps Embed needs no JS library.
 function dayStopsForRoute(trip,day){
   const lodging=(trip.lodging||[])[0];
   const city=(trip.destinations||[]).find(d=>d.id===day.destinationId)?.city||(trip.destinations||[])[0]?.city||'';
@@ -3566,65 +3552,32 @@ function dayStopsForRoute(trip,day){
   if(lodging&&(lodging.address||lodging.name)) stops.unshift({label:'🏨 '+(lodging.name||'Hotel'),query:lodging.address||lodging.name+(city?', '+city:'')});
   return stops.slice(0,10);
 }
+// Day route · Google's directions embed draws the real walking path between
+// stops. Replaces the Leaflet build, which needed a CDN library, a Nominatim
+// geocode per stop (rate-limited, often missing), and drew straight lines
+// between guessed points — the "dated and not helpful" look. Same stop order and
+// lodging anchor as the Open-in-Maps link, so the two always agree.
 function DayRouteMap({trip,day}){
-  const mapRef=React.useRef(null);
-  const mapObj=React.useRef(null);
-  const [status,setStatus]=React.useState('loading'); // loading | ready | empty | error
-  const [progress,setProgress]=React.useState('');
-  React.useEffect(()=>{
-    let cancelled=false;
-    setStatus('loading'); setProgress('');
-    (async()=>{
-      try{
-        await loadLeaflet();
-        if(cancelled)return;
-        const stops=dayStopsForRoute(trip,day);
-        if(!stops.length){setStatus('empty');return;}
-        const L=window.L;
-        if(mapObj.current){mapObj.current.remove();mapObj.current=null;}
-        const m=L.map(mapRef.current,{scrollWheelZoom:false});
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(m);
-        mapObj.current=m;
-        // Geocode one stop at a time (Nominatim's free tier requires max 1 req/sec ·
-        // can't be parallelized without switching to a paid/keyed provider). To avoid
-        // a long blank wait, the map appears and gets its first marker the moment the
-        // FIRST stop resolves, instead of waiting for every stop to finish.
-        const points=[];
-        let shown=false;
-        for(let i=0;i<stops.length;i++){
-          if(cancelled)return;
-          setProgress(`Locating ${i+1} of ${stops.length}…`);
-          const isCached=geoCache()[stops[i].query.toLowerCase().trim()]!==undefined;
-          const pt=await geocodeStop(stops[i].query);
-          if(cancelled)return;
-          if(pt){
-            points.push({...pt,label:stops[i].label});
-            L.marker([pt.lat,pt.lon]).addTo(m).bindPopup(`<strong>${points.length}.</strong> ${stops[i].label.replace(/</g,'&lt;')}`);
-            if(!shown){
-              shown=true; setStatus('ready');
-              // container was display:none until 'ready' · Leaflet needs a size
-              // recalculation once it's actually visible, or tiles render wrong.
-              setTimeout(()=>{ if(!cancelled){ m.invalidateSize(); m.setView([pt.lat,pt.lon],13); } },50);
-            } else if(points.length>1){
-              m.fitBounds(points.map(p=>[p.lat,p.lon]),{padding:[28,28]});
-            }
-          }
-          if(!isCached&&i<stops.length-1)await new Promise(r=>setTimeout(r,1100)); // Nominatim: max 1 req/sec
-        }
-        if(cancelled)return;
-        if(points.length<1){setStatus('empty');return;}
-        if(points.length>1) L.polyline(points.map(p=>[p.lat,p.lon]),{color:'#FF5A4D',weight:3,opacity:.75,dashArray:'6 8'}).addTo(m);
-      }catch(e){if(!cancelled)setStatus('error');}
-    })();
-    return()=>{cancelled=true;if(mapObj.current){mapObj.current.remove();mapObj.current=null;}};
-  },[day.id]);
-  return(
-    <div style={{marginBottom:16}}>
-      <div ref={mapRef} style={{height:260,borderRadius:12,border:'1px solid var(--color-border)',background:'var(--color-cream-dark)',display:status==='ready'?'block':'none'}}/>
-      {status==='loading'&&<div style={{height:120,borderRadius:12,border:'1px solid var(--color-border)',background:'var(--color-surface)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.8rem',color:'var(--color-ink-muted)'}}>🗺 {progress||'Loading map…'}</div>}
-      {status==='empty'&&<div style={{padding:'12px 14px',borderRadius:12,border:'1px solid var(--color-border)',background:'var(--color-surface)',fontSize:'.8rem',color:'var(--color-ink-muted)'}}>Couldn't place this day's stops on the map · addresses may be missing. The Google Maps link below still works.</div>}
-      {status==='error'&&<div style={{padding:'12px 14px',borderRadius:12,border:'1px solid var(--color-border)',background:'var(--color-surface)',fontSize:'.8rem',color:'var(--color-ink-muted)'}}>Map couldn't load. Check your connection, or use the Google Maps link below.</div>}
-      <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)',marginTop:6}}>Route is approximate · venue locations come from AI-suggested addresses. Always double-check before heading out.</p>
+  const stops=dayStopsForRoute(trip,day);
+  if(!stops.length){
+    return <div style={{marginTop:10,padding:'12px 14px',border:'1px solid var(--color-border)',borderRadius:10,fontSize:'.8rem',color:'var(--color-ink-muted)'}}>Add a stop with an address to map this day.</div>;
+  }
+  const names=stops.map(s=>s.query||'').filter(Boolean);
+  const origin=names[0], destination=names[names.length-1];
+  const waypoints=names.slice(1,-1).slice(0,8); // Embed API caps waypoints
+  const params=['origin='+encodeURIComponent(origin),
+                'destination='+encodeURIComponent(destination),
+                'mode=walking'];
+  if(waypoints.length) params.push('waypoints='+encodeURIComponent(waypoints.join('|')));
+  const single = names.length===1;
+  const src = single
+    ? gmapsEmbed('place','q='+encodeURIComponent(origin))
+    : gmapsEmbed('directions', params.join('&'));
+  return (
+    <div style={{marginTop:10}}>
+      <iframe title={'Route for '+(day.label||day.date||'this day')} loading="lazy" referrerPolicy="no-referrer-when-downgrade"
+        src={src} style={{width:'100%',height:280,border:'1px solid var(--color-border)',borderRadius:10,display:'block'}}/>
+      <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)',marginTop:6}}>Walking route · venue locations come from AI-suggested addresses. Always double-check before heading out.</p>
     </div>
   );
 }
@@ -3935,19 +3888,16 @@ function FlightsStrip({flights}){
 }
 
 // ── STOP MINI MAP · inline OpenStreetMap embed (no API key) + Google fallback ─────
+// Single stop · Google's place embed resolves the address itself, so the
+// Nominatim geocode round-trip (and its failure mode) disappears entirely.
 function StopMiniMap({query}){
-  const [coords,setCoords]=React.useState(undefined); // undefined=loading, null=miss
-  React.useEffect(()=>{ let on=true; geocodeStop(query).then(c=>{ if(on) setCoords(c||null); }).catch(()=>on&&setCoords(null)); return ()=>{on=false;}; },[query]);
   const gmaps=`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-  const fallback=(msg)=>(<div style={{padding:'10px 12px',border:'1px solid var(--color-border)',borderRadius:10,background:'var(--color-surface)',fontSize:'.8rem',color:'var(--color-ink-muted)'}}>{msg} <a href={gmaps} target="_blank" rel="noopener noreferrer" style={{color:'var(--color-accent)'}}>Open in Google Maps ↗</a></div>);
-  if(coords===undefined) return <div style={{marginTop:10}}>{fallback('Locating…')}</div>;
-  if(coords===null) return <div style={{marginTop:10}}>{fallback("Couldn't place this address on the map.")}</div>;
-  const d=0.006;
-  const bbox=`${coords.lon-d},${coords.lat-d},${coords.lon+d},${coords.lat+d}`;
-  const src=`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${coords.lat},${coords.lon}`;
+  if(!query) return null;
   return (
     <div style={{marginTop:10}}>
-      <iframe title={`Map of ${query}`} src={src} loading="lazy" style={{width:'100%',height:200,border:'1px solid var(--color-border)',borderRadius:10,display:'block'}}/>
+      <iframe title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade"
+        src={gmapsEmbed('place', 'q='+encodeURIComponent(query))}
+        style={{width:'100%',height:200,border:'1px solid var(--color-border)',borderRadius:10,display:'block'}}/>
       <div style={{display:'flex',justifyContent:'flex-end',marginTop:6}}>
         <a href={gmaps} target="_blank" rel="noopener noreferrer" style={{fontSize:'.75rem',color:'var(--color-accent)'}}>Open full map in Google Maps ↗</a>
       </div>
