@@ -1699,7 +1699,10 @@ function getCountryFlag(code){
 function carrierInfo(flight){
   const f = (typeof flight==='string') ? {flightNumber:flight} : (flight||{});
   const fn = (f.flightNumber||'').replace(/\s+/g,'').toUpperCase();
-  const name = (f.airline||'').toLowerCase();
+  // On a codeshare you check in with the carrier that OPERATES the aircraft, not
+  // the one that sold the ticket. DL5988 JFK→LHR is a Delta number flown by Virgin
+  // Atlantic; sending the traveler to delta.com is a dead end at the airport.
+  const name = ((f.operatedBy || f.airline) || '').toLowerCase();
   const code = fn.slice(0,2);
   const track = fn ? `https://www.flightaware.com/live/flight/${fn}` : null;
   // Rail / non-airline carriers, matched by name (no IATA code)
@@ -2483,7 +2486,15 @@ If this is a HOTEL/LODGING confirmation, return:
 {"type":"lodging","name":"hotel name","address":"full address","checkIn":"YYYY-MM-DD","checkOut":"YYYY-MM-DD","checkInTime":"HH:MM","checkOutTime":"HH:MM","confirmationNumber":"conf number or null","roomType":"room type or null","notes":"any useful info like parking, amenities, check-in instructions"}
 
 If this is a FLIGHT confirmation, return:
-{"type":"flights","flights":[{"direction":"outbound|return|connecting","airline":"airline name","flightNumber":"e.g. DL204","departureAirport":"airport code or name","arrivalAirport":"airport code or name","departureTime":"YYYY-MM-DDTHH:MM:00","arrivalTime":"YYYY-MM-DDTHH:MM:00","confirmationNumber":"conf number or null","seatNumber":"seat or null","notes":"baggage info, terminal, gate if available"}]}
+{"type":"flights","flights":[{"direction":"outbound|return|connecting","airline":"airline name","operatedBy":"operating carrier if different from the ticketing airline, else null","flightNumber":"e.g. DL204","departureAirport":"airport code or name","arrivalAirport":"airport code or name","departureTime":"YYYY-MM-DDTHH:MM:00","arrivalTime":"YYYY-MM-DDTHH:MM:00","confirmationNumber":"conf number or null","seatNumber":"seat or null","notes":"baggage info, terminal, gate if available"}]}
+
+FLIGHT RULES · read carefully, these are the ones that go wrong:
+1. MULTI-LEG: a confirmation often holds several legs ("Flight 1 of 4", "Flight 2 of 4"). Return EVERY leg as its own object, in the order printed. Never merge two legs into one, and never invent a leg that isn't there.
+2. AIRLINE: use the airline the document actually names. NEVER guess from the route. If the document is ambiguous, take the airline from the flight number prefix (DL = Delta, VS = Virgin Atlantic, AA = American, UA = United, BA = British Airways, LH = Lufthansa, AF = Air France, KL = KLM, IB = Iberia, EK = Emirates, QR = Qatar, AC = Air Canada, WN = Southwest, B6 = JetBlue, AS = Alaska, NK = Spirit, F9 = Frontier).
+3. CODESHARE: if a leg is ticketed by one airline but operated by another ("operated by Virgin Atlantic", "operated by SkyWest as Delta Connection"), put the TICKETING airline in "airline" and the OPERATING carrier in "operatedBy". The traveler checks in with the operating carrier.
+4. DATES: a leg departing late evening and arriving the following day is normal. Use the exact printed date for each of departure and arrival · do not shift either by a day. The arrival date must never be earlier than the departure date.
+5. CONFIRMATION: one booking reference usually covers every leg. Repeat it on each leg. Do not mistake a flight number for a confirmation number.
+6. Convert every time to 24-hour ISO ("3:50 PM" on Sep 16 2026 becomes "2026-09-16T15:50:00"). Times are local to their own airport · do not convert between timezones.
 
 If this is a TRAIN, BUS, FERRY or other ground/sea transport booking (Eurostar, Amtrak, Trenitalia, SNCF, National Rail, coach, ferry), return:
 {"type":"transport","mode":"train|bus|ferry|car","operator":"e.g. Eurostar","legs":[{"direction":"outbound|return|connecting","operator":"e.g. Eurostar","trainNumber":"e.g. ES9108","departureStation":"e.g. London St Pancras International","arrivalStation":"e.g. Paris Gare du Nord","departureTime":"YYYY-MM-DDTHH:MM:00","arrivalTime":"YYYY-MM-DDTHH:MM:00","confirmationNumber":"booking ref or null","seatNumber":"coach/seat or null","notes":"platform, class, baggage, how early to arrive"}]}
@@ -2494,14 +2505,29 @@ If this is a TICKET for an EVENT or ACTIVITY (concert, match, museum timed entry
 Only include fields you can actually read from the document. Use null for anything missing.
 Pick the single best-fitting type. A rail ticket is "transport", never "flights".`;
 
+// Text confirmations (.txt, .eml, pasted itineraries) were previously base64'd and
+// sent as an IMAGE, so the model was shown noise and hallucinated — a Delta/Virgin
+// itinerary came back as "Lufthansa". Send text as text.
+function isTextConfirmation(file){
+  const t=(file&&file.type)||'', n=((file&&file.name)||'').toLowerCase();
+  return /^text\//.test(t) || t==='message/rfc822' || /\.(txt|eml|md|csv|ics)$/.test(n);
+}
 async function parseConfirmationFile(file){
-  const base64 = await new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result.split(',')[1]); r.onerror=reject; r.readAsDataURL(file); });
-  const isPdf = file.type==='application/pdf';
-  const mediaType = isPdf ? 'application/pdf' : (file.type||'image/jpeg');
-  const messages = [{ role:'user', content:[ {type:isPdf?'document':'image', source:{type:'base64', media_type:mediaType, data:base64}}, {type:'text', text:CONFIRMATION_EXTRACT_PROMPT} ] }];
-  const text = await callAIProxy({ feature:'extract', messages, max_tokens:1024 });
+  let content;
+  if(isTextConfirmation(file)){
+    const raw = await new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(String(r.result||'')); r.onerror=reject; r.readAsText(file); });
+    if(!raw.trim()) throw new Error('That file looks empty.');
+    content = [{type:'text', text:'CONFIRMATION DOCUMENT:\n\n'+raw.slice(0,12000)}, {type:'text', text:CONFIRMATION_EXTRACT_PROMPT}];
+  } else {
+    const base64 = await new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result.split(',')[1]); r.onerror=reject; r.readAsDataURL(file); });
+    const isPdf = file.type==='application/pdf';
+    const mediaType = isPdf ? 'application/pdf' : (file.type||'image/jpeg');
+    content = [{type:isPdf?'document':'image', source:{type:'base64', media_type:mediaType, data:base64}}, {type:'text', text:CONFIRMATION_EXTRACT_PROMPT}];
+  }
+  // Multi-leg itineraries need room · 4 legs of detail overflowed 1024 tokens.
+  const text = await callAIProxy({ feature:'extract', messages:[{role:'user', content}], max_tokens:3000 });
   const m = (text||'').match(/\{[\s\S]*\}/);
-  if(!m) throw new Error('Could not read that document. Try a clearer screenshot or PDF.');
+  if(!m) throw new Error('Could not read that document. Try a clearer screenshot, PDF, or text file.');
   return JSON.parse(m[0]);
 }
 // Attaching a booking must NEVER regenerate or drop the itinerary. It adds:
@@ -3001,7 +3027,7 @@ function ChecklistView({trip,onUpdate,onUpdateTrip}){
                       <div style={{marginTop:6}} onClick={e=>e.stopPropagation()}>
                         <label className="btn btn-secondary btn-sm" style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:'.75rem',padding:'4px 10px',borderRadius:20,cursor:uploadingId===item.id?'default':'pointer'}}>
                           {uploadingId===item.id ? 'Reading…' : '📎 Upload confirmation'}
-                          <input type="file" accept="image/*,application/pdf" style={{display:'none'}} disabled={uploadingId===item.id}
+                          <input type="file" accept="image/*,application/pdf,text/plain,.txt,.eml" style={{display:'none'}} disabled={uploadingId===item.id}
                             onChange={e=>{ const f=e.target.files?.[0]; e.target.value=''; if(f) handleBookingUpload(item, f); }}/>
                         </label>
                       </div>
@@ -3784,7 +3810,7 @@ function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDele
             cursor:parsing?'default':'pointer',marginBottom:10,textAlign:'center',background:'var(--color-accent-soft)'}}>
             <span style={{fontWeight:600,fontSize:'.85rem'}}>{parsing?'Reading your confirmation…':'📎 Upload the confirmation instead'}</span>
             <span style={{display:'block',fontSize:'.72rem',color:'var(--color-ink-light)',marginTop:3,lineHeight:1.45}}>PDF or screenshot · we fill this in for you</span>
-            <input type="file" accept="image/*,application/pdf" style={{display:'none'}} disabled={parsing}
+            <input type="file" accept="image/*,application/pdf,text/plain,.txt,.eml" style={{display:'none'}} disabled={parsing}
               onChange={async e=>{ const f=e.target.files?.[0]; e.target.value=''; if(!f) return;
                 setParsing(true); setParseMsg('');
                 try{
@@ -3930,9 +3956,24 @@ function StopMiniMap({query}){
 }
 
 // ── TIMELINE STOP · one row in the day plan (prototype style) ────────────────────
+// Notes written by the AI (and pasted by travelers) come back in 24-hour time
+// — "departure 15:50", "arrive 23:40". Stephanie's standing call: no military
+// time anywhere in Locale. Rewrite it at render so existing trips are fixed too,
+// not just newly generated ones. Deliberately conservative: only a bare H:MM or
+// HH:MM, never inside a date (2026-09-16), a range with a dash, or a URL.
+function humanize24h(s){
+  return String(s==null?'':s).replace(/(^|[^\d:\-\/])([01]?\d|2[0-3]):([0-5]\d)(?!\s*[ap]\.?m|\d|:|-)/gi,
+    (m, pre, h, mi)=>{
+      const H=parseInt(h,10);
+      // 09:30 and 15:50 are clearly clock times; 9:30 alone is already fine as-is.
+      if(H<13 && !/^0/.test(h)) return m;
+      const h12 = H%12===0 ? 12 : H%12;
+      return pre + h12 + ':' + mi + (H<12 ? ' AM' : ' PM');
+    });
+}
 // UAT #3 · renders text with tappable links. Anchors only; never innerHTML.
 function LinkedText({text, style}){
-  const parts=linkifyParts(text);
+  const parts=linkifyParts(humanize24h(text));
   if(!parts.length) return null;
   return <>{parts.map((p,i)=> p.type==='link'
     ? <a key={i} href={p.href} target="_blank" rel="noopener noreferrer" style={{color:'var(--color-accent)',textDecoration:'underline',wordBreak:'break-word',...(style||{})}}>{p.value}</a>
@@ -4195,8 +4236,10 @@ function DayView({trip,day,onUpdateTrip}){
       </div>
       {/* Renders on whatever day the flight lands or leaves · returns null when the
           day has none, so no gating is needed here. */}
-      <ArrivalsBoard trip={trip} date={day.date} mode="arrivals"/>
+      {/* Departures first: on a travel day you leave before you land, so the
+          departing city has to read before the arriving one. */}
       <ArrivalsBoard trip={trip} date={day.date} mode="departures"/>
+      <ArrivalsBoard trip={trip} date={day.date} mode="arrivals"/>
       {(() => {
         const dayItems = (trip.budget?.items||[]).filter(i=>i.day===day.id);
         if(!dayItems.length) return null;
@@ -4817,11 +4860,15 @@ function TripCard({trip, onClick, animDelay=0}) {
               Sample · {DEMO_PERSONA[trip.id].label}
             </div>
           )}
-          <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:8,marginTop:10}}>
-            <div className="trip-card-dest-strip">
-              {destinations.map(d=>(
-                <span key={d.id} className="trip-card-dest-chip">{getCountryFlag(d.countryCode)} {d.city}</span>
-              ))}
+          {/* Cities used to stack as one chip each, so a two-city trip pushed the
+              card tall and wrapped the dates. The route already reads as a single
+              line ("London → Paris"), which is the thing you actually scan for. */}
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginTop:8}}>
+            <div style={{minWidth:0,display:'flex',alignItems:'center',gap:6,overflow:'hidden'}}>
+              <span style={{flexShrink:0}}>{destinations.map(d=>getCountryFlag(d.countryCode)).join(' ')}</span>
+              <span style={{fontSize:'.78rem',color:'rgba(255,255,255,.92)',fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                {destinations.map(d=>d.city).join(' → ')}
+              </span>
             </div>
             <AvatarStack collaborators={collaborators}/>
           </div>
@@ -6136,7 +6183,7 @@ Only include fields you can actually read from the document. Use null for anythi
           <label className="section-label" style={{marginBottom:0}}>📎 Upload confirmations</label>
           <span style={{fontSize:'.72rem',color:'var(--color-ink-muted)'}}>Hotel · Flight · Optional</span>
         </div>
-        <input ref={fileInputRef} type="file" accept="image/*,application/pdf" style={{display:'none'}}
+        <input ref={fileInputRef} type="file" accept="image/*,application/pdf,text/plain,.txt,.eml" style={{display:'none'}}
           onChange={e=>{ const f=e.target.files?.[0]; if(f) extractFromConfirmation(f); e.target.value=''; }}
         />
         <button className="btn btn-secondary" style={{width:'100%',gap:8,justifyContent:'center'}} onClick={()=>fileInputRef.current?.click()} disabled={uploading}>
@@ -7348,7 +7395,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
                     <span style={{display:'block',fontSize:'.74rem',color:'var(--color-ink-light)',marginTop:4,lineHeight:1.45}}>
                       Flight · train · hotel · event tickets. PDF or screenshot, multiple OK.
                     </span>
-                    <input type="file" accept="image/*,application/pdf" multiple style={{display:'none'}} disabled={regenUploading}
+                    <input type="file" accept="image/*,application/pdf,text/plain,.txt,.eml" multiple style={{display:'none'}} disabled={regenUploading}
                       onChange={async e=>{ const files=Array.from(e.target.files||[]); e.target.value=''; if(!files.length) return;
                         setRegenUploading(true); setRegenUploadMsg('');
                         let cur = trip; const saved=[]; let failed=0;
