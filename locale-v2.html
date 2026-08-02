@@ -2742,6 +2742,23 @@ function mergeBookingIntoTrip(trip, p){
   }
   return {trip, kind:null, label:''};
 }
+// Removing a transport record must leave the trip consistent: drop it from
+// trip.flights (which drives the hero pills and boards) AND remove the day stop
+// mergeBookingIntoTrip created for it, keyed by its stable _bookingKey. Otherwise a
+// delete left an orphaned stop, and a re-add was skipped by the dedup guard — the
+// pills and the day fell out of sync. Pure · returns a new trip. Only touches the
+// matching stop, so a hand-entered flight (which never made a stop) is unaffected.
+function removeTransport(trip, flightId){
+  const flights=(trip.flights||[]);
+  const f=flights.find(x=>x&&x.id===flightId);
+  const newFlights=flights.filter(x=>x&&x.id!==flightId);
+  let days=trip.days||[];
+  if(f){
+    const key='transport:'+(f.flightNumber||'')+':'+(f.departureTime||'');
+    days=days.map(d=>({...d, activities:(d.activities||[]).filter(a=>!(a&&a._bookingKey===key))}));
+  }
+  return {...trip, flights:newFlights, days};
+}
 
 function AvatarStack({collaborators,max=4}){
   const shown=collaborators.slice(0,max),extra=collaborators.length-max;
@@ -6591,7 +6608,7 @@ function CrewSection({trip, onUpdateTrip}){
     setFlightSheet(null); showToast('Flight saved ✓','info',2500);
   };
   const deleteFlight=(f)=>{
-    onUpdateTrip({...trip, flights:(trip.flights||[]).filter(x=>x.id!==f.id)});
+    onUpdateTrip(removeTransport(trip, f.id));
     if(!isOwner){
       const c=sb();
       if(c) (async()=>{ try{ const {error}=await c.rpc('delete_my_flight',{p_trip_id:trip.id,p_flight_id:String(f.id)}); if(error) throw error; }catch(e){ showToast("Couldn't remove the flight · try again.",'error'); } })();
@@ -8809,6 +8826,18 @@ class ErrorBoundary extends React.Component {
     assert('attach transport places a stop on the departure day', t.trip.days[1].activities.some(a=>/ES9108/.test(a.name)));
     assert('attach transport deep-links the operator', /eurostar/i.test(t.trip.days[1].activities.find(a=>/ES9108/.test(a.name)).bookingUrl||''));
     assert('attach transport is idempotent', mergeBookingIntoTrip(t.trip,{type:'transport',mode:'train',operator:'Eurostar',legs:[{operator:'Eurostar',trainNumber:'ES9108',departureStation:'London St Pancras',arrivalStation:'Paris Gare du Nord',departureTime:'2026-09-21T09:24:00'}]}).trip.days[1].activities.filter(a=>/ES9108/.test(a.name)).length===1);
+    // delete + re-add · the hero pills (trip.flights) and the day stop must stay in sync
+    (function(){
+      const addedId=t.trip.flights[0].id;
+      const del=removeTransport(t.trip, addedId);
+      assert('removeTransport drops it from flights so the pills clear', del.flights.length===0);
+      assert('removeTransport also removes the orphaned day stop', !del.days[1].activities.some(a=>/ES9108/.test(a.name)));
+      assert('removeTransport keeps unrelated stops', del.days[0].activities.some(a=>a.id==='keep1'));
+      const readd=mergeBookingIntoTrip(del,{type:'transport',mode:'train',operator:'Eurostar',legs:[{operator:'Eurostar',trainNumber:'ES9108',departureStation:'London St Pancras',arrivalStation:'Paris Gare du Nord',departureTime:'2026-09-21T09:24:00',arrivalTime:'2026-09-21T13:02:00'}]});
+      assert('re-add restores the pill', readd.trip.flights.length===1 && readd.trip.flights[0].flightNumber==='ES9108');
+      assert('re-add restores exactly one day stop (no dup, not skipped)', readd.trip.days[1].activities.filter(a=>/ES9108/.test(a.name)).length===1);
+      assert('removeTransport leaves a hand-entered flight (no _bookingKey stop) untouched elsewhere', removeTransport({flights:[{id:'m1',flightNumber:'AA1'}],days:[{id:'d1',activities:[{id:'x',name:'keep'}]}]},'m1').days[0].activities.length===1);
+    })();
     // lodging
     const l=mergeBookingIntoTrip(base,{type:'lodging',name:'The Hoxton',address:'81 Great Eastern St',checkIn:'2026-09-16',checkOut:'2026-09-21'});
     assert('attach lodging adds a check-in stop on the arrival day', l.trip.days[0].activities.some(a=>/Check in at The Hoxton/.test(a.name)));
