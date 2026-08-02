@@ -3533,7 +3533,9 @@ function ActivityForm({initial,type,onSave,onCancel}){
 //   · No billing account on the project. Embed API is free with unlimited usage.
 // A lifted key therefore buys an attacker nothing: wrong domain, free API, no card.
 // NOT A LEAK — do not "fix" this by moving it to a secret. Rotate in Cloud Console
-// if it ever needs changing. CI's secret scan ignores it (no sk-ant-/re_/service_role).
+// if it ever needs changing. CI's secret scan does not match this key's shape.
+// (Do not name the scanned token patterns here · writing them literally makes the
+//  scanner flag its own documentation. That mistake failed run #155.)
 const GMAPS_EMBED_KEY = 'AIzaSyA0B9xYDqvX9AlK5peLfQNZIOSFS3v-cO0';
 const gmapsEmbed = (mode, params) =>
   `https://www.google.com/maps/embed/v1/${mode}?key=${GMAPS_EMBED_KEY}&${params}`;
