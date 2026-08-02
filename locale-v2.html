@@ -2051,10 +2051,9 @@ function getIntlFlags(trip){
     .map(d=>d.countryCode).filter(Boolean))];
 
   countryCodes.forEach(cc=>{
-    if(SCHENGEN.includes(cc)&&passport==='US'&&!isDone('EES pre-registration'))
-      push({severity:'critical',emoji:'🚨',cc,kind:'registration',label:'EES Registration Required',
-        desc:'Required for all non-EU nationals entering the Schengen Area. Register before travel.',
-        url:'https://eu-entry.europa.eu'});
+    // EES is NOT a red entry alert · it duplicated the visa rows and there is nothing
+    // to pre-register or pay for (it's a biometric check done at the border). The
+    // guidance now lives in each Schengen city's local tips, with the official EU link.
     if(cc==='GB'&&passport==='US'&&!isDone('UK ETA'))
       push({severity:'critical',emoji:'🚨',cc,kind:'visa',label:'UK ETA Required',
         desc:'US passport holders must obtain a UK Electronic Travel Authorisation (ETA) before travel. Apply at least 72 hours before departure.',
@@ -2742,6 +2741,23 @@ function mergeBookingIntoTrip(trip, p){
   }
   return {trip, kind:null, label:''};
 }
+// Removing a transport record must leave the trip consistent: drop it from
+// trip.flights (which drives the hero pills and boards) AND remove the day stop
+// mergeBookingIntoTrip created for it, keyed by its stable _bookingKey. Otherwise a
+// delete left an orphaned stop, and a re-add was skipped by the dedup guard — the
+// pills and the day fell out of sync. Pure · returns a new trip. Only touches the
+// matching stop, so a hand-entered flight (which never made a stop) is unaffected.
+function removeTransport(trip, flightId){
+  const flights=(trip.flights||[]);
+  const f=flights.find(x=>x&&x.id===flightId);
+  const newFlights=flights.filter(x=>x&&x.id!==flightId);
+  let days=trip.days||[];
+  if(f){
+    const key='transport:'+(f.flightNumber||'')+':'+(f.departureTime||'');
+    days=days.map(d=>({...d, activities:(d.activities||[]).filter(a=>!(a&&a._bookingKey===key))}));
+  }
+  return {...trip, flights:newFlights, days};
+}
 
 function AvatarStack({collaborators,max=4}){
   const shown=collaborators.slice(0,max),extra=collaborators.length-max;
@@ -2934,6 +2950,14 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
           if(intlData.phrases?.length) sections.push({icon:'💬',label:'Key Phrases',type:'phrases',items:intlData.phrases});
           sections.push({icon:'🆘',label:'Emergency Numbers',type:'body',body:intlData.emergency});
         }
+        // EES · moved here from the old red banner. It's a border formality, not a
+        // to-do: a quick biometric check at your first Schengen entry, no fee or
+        // pre-registration for tourists. Dates have slipped before, hence the live link.
+        if(typeof SCHENGEN!=='undefined' && SCHENGEN.includes(dest.countryCode)){
+          sections.push({icon:'🛂',label:'Entry · EES biometric border',type:'body',
+            body:"The EU's Entry/Exit System (EES) replaces the passport stamp with a quick biometric check — fingerprints and a photo — at your first Schengen border. There's no online pre-registration and no fee for a short tourist stay; it's done at the border on arrival. Roll-out dates have shifted before, so check the official EU page close to your travel date.",
+            link:{url:'https://travel-europe.europa.eu/ees_en', label:'Official EU EES information'}});
+        }
 
         return(
           <div key={dest.id}>
@@ -3004,7 +3028,10 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
                         </div>
                         );
                       })()}
-                      {s.type==='body'&&<p style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.65,paddingTop:10}}>{s.body}</p>}
+                      {s.type==='body'&&(<>
+                        <p style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.65,paddingTop:10}}>{s.body}</p>
+                        {s.link&&<a href={s.link.url} target="_blank" rel="noopener noreferrer" style={{display:'inline-block',marginTop:8,fontSize:'.8rem',color:'var(--color-accent)',fontWeight:600,textDecoration:'underline'}}>{s.link.label} ↗</a>}
+                      </>)}
                       {s.type==='tips'&&s.items.map((t,j)=>(
                         <p key={j} style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.55,marginTop:8,paddingLeft:4,borderLeft:'2px solid var(--color-accent-warm)'}}>  {t}</p>
                       ))}
@@ -3821,6 +3848,97 @@ function ArrivalsBoard({trip, date, mode}){
   );
 }
 
+// Two legs belong to the same journey if they share at least one traveler. A
+// whole-group leg (no travelerIds) connects to anything · legacy flights applied
+// to everyone.
+function sameTravelers(a,b){
+  const ta=(a&&a.travelerIds)||[], tb=(b&&b.travelerIds)||[];
+  if(!ta.length||!tb.length) return true;
+  return ta.some(id=>tb.includes(id));
+}
+// The layover AFTER this leg, if the traveler connects onward from the airport they
+// just landed at. A missed connection is the failure mode that ruins a travel day, so
+// this is the one detail we surface on the day card itself ("2h 40m at JFK"). Pure.
+function layoverForLeg(leg, allLegs){
+  if(!leg||!leg.arrivalTime||!leg.arrivalAirport) {
+    return (leg&&leg.via) ? {airport:String(leg.via).trim().toUpperCase(), label:null} : null;
+  }
+  const arrAp=String(leg.arrivalAirport).trim().toUpperCase();
+  const arrMs=Date.parse(leg.arrivalTime);
+  if(isNaN(arrMs)) return leg.via ? {airport:String(leg.via).trim().toUpperCase(), label:null} : null;
+  let best=null;
+  for(const x of (allLegs||[])){
+    if(!x || x===leg || x.id===leg.id) continue;
+    if(String(x.departureAirport||'').trim().toUpperCase()!==arrAp) continue;
+    if(!sameTravelers(leg,x)) continue;
+    const dMs=Date.parse(x.departureTime); if(isNaN(dMs)) continue;
+    const gap=dMs-arrMs;
+    if(gap>0 && gap<=24*3600*1000 && (best==null||dMs<best.dMs)) best={dMs,gap};
+  }
+  if(best) return {airport:arrAp, label:gapLabel(Math.round(best.gap/60000))};
+  if(leg.via) return {airport:String(leg.via).trim().toUpperCase(), label:null};
+  return null;
+}
+
+// ── JOURNEY CARD (Days · read-only) ──────────────────────────────────────────────
+// Replaces the dual arrivals/departures boards on a day. A traveler in a new city
+// wants "what's planned today", not two boards to reconcile: this shows what MOVES
+// today (each departing leg, with its connection inline) and who LANDS today (legs
+// that left earlier and touch down now). Read-only · tapping jumps to Crew, the one
+// place transport is managed. Seat / terminal / confirmation stay behind that tap.
+function JourneyCard({trip, date, onGoToCrew}){
+  const legs=(trip.flights||[]);
+  const onDay=(iso)=> (String(iso||'').slice(0,10))===date;
+  const dep=(f)=>Date.parse(f.departureTime||0)||0;
+  const departures=legs.filter(f=>onDay(f.departureTime)).sort((a,b)=>dep(a)-dep(b));
+  const arrivals=legs.filter(f=>onDay(f.arrivalTime) && !onDay(f.departureTime))
+                     .sort((a,b)=>(Date.parse(a.arrivalTime||0)||0)-(Date.parse(b.arrivalTime||0)||0));
+  if(!departures.length && !arrivals.length) return null;
+  const bt=(iso)=>fmtBoardTime(iso).trim();
+  const nextDay=(a,b)=> a&&b&&((String(b).slice(0,10))>(String(a).slice(0,10)));
+  const whoLabel=(f)=> (f.travelerIds||[]).length ? flightTravelers(trip,f).map(m=>m.name).join(', ') : 'Whole group';
+  const line=(f,i,kind)=>{
+    const mode=transportMode(f);
+    const lay=kind==='dep'?layoverForLeg(f,legs):null;
+    const arrLabel = kind==='dep'
+      ? (f.arrivalAirport?('→ '+f.arrivalAirport):'')
+      : ('lands '+(f.arrivalAirport||'?'));
+    const timeStr = kind==='dep' ? bt(f.departureTime) : bt(f.arrivalTime);
+    return (
+      <div key={(f.id||'')+kind+i} style={{display:'grid',gridTemplateColumns:'78px 1fr',gap:12,alignItems:'baseline',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
+        <span style={{fontFamily:'var(--font-mono)',fontWeight:600,fontSize:'.9rem',color:'#FFD9A8',fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap'}}>{timeStr||'—'}</span>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:'.85rem',fontWeight:500,color:'#F5F1E9',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+            {modeEmoji(mode)} {f.flightNumber||f.airline||modeNoun(mode)}{kind==='dep'?(' · '+(f.departureAirport||'?')+' '+arrLabel):(' · '+arrLabel)}
+            <span style={{color:'#8C857A'}}>{' · '+whoLabel(f)}</span>
+          </div>
+          {kind==='dep' && f.arrivalTime && (
+            <div style={{fontFamily:'var(--font-mono)',fontSize:'.66rem',color:'#8C857A',marginTop:2}}>
+              lands {bt(f.arrivalTime)}{nextDay(f.departureTime,f.arrivalTime)?' +1':''}
+              {lay?(<span style={{color:'#FF9D8F'}}>{'  ·  '+(lay.label?(lay.label+' at '+lay.airport):('via '+lay.airport))}</span>):''}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+  return (
+    <button type="button" onClick={()=>onGoToCrew&&onGoToCrew()} aria-label="Today's journeys · tap to manage in Crew"
+      style={{display:'block',width:'100%',textAlign:'left',background:'#16130F',borderRadius:'var(--radius-card)',border:'none',padding:'18px 20px',marginBottom:16,boxShadow:'var(--shadow-card)',cursor:'pointer'}}>
+      <p style={{fontFamily:'var(--font-mono)',fontSize:'.62rem',fontWeight:500,letterSpacing:'.18em',textTransform:'uppercase',color:'#8C857A',marginBottom:10}}>Today's journeys{date?(' · '+formatDateShort(date)):''}</p>
+      {departures.length>0 && (<>
+        <p style={{fontFamily:'var(--font-mono)',fontSize:'.58rem',letterSpacing:'.14em',textTransform:'uppercase',color:'#6E675C',margin:'2px 0 2px'}}>Moving today</p>
+        {departures.map((f,i)=>line(f,i,'dep'))}
+      </>)}
+      {arrivals.length>0 && (<>
+        <p style={{fontFamily:'var(--font-mono)',fontSize:'.58rem',letterSpacing:'.14em',textTransform:'uppercase',color:'#6E675C',margin:'10px 0 2px'}}>Landing today</p>
+        {arrivals.map((f,i)=>line(f,i,'arr'))}
+      </>)}
+      <p style={{fontFamily:'var(--font-mono)',fontSize:'.62rem',letterSpacing:'.04em',marginTop:12,color:'#5ED0B8'}}>Manage travel in Crew ›</p>
+    </button>
+  );
+}
+
 // Add/edit one flight for one (or more) travelers. Owner can tag anyone; a crew/viewer
 // member is locked to themselves · their save goes through the guarded set_my_flight RPC.
 function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDelete}){
@@ -4126,7 +4244,7 @@ function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDelet
   );
 }
 
-function DayView({trip,day,onUpdateTrip}){
+function DayView({trip,day,onUpdateTrip,onGoTab}){
   const isOwner = trip._myRole==='owner' || !trip._myRole; // untagged (never-synced) trips are always mine
   const myRole = trip._myRole || 'owner';
   const [notes,setNotes]=useState(day.notes||'');
@@ -4298,12 +4416,10 @@ function DayView({trip,day,onUpdateTrip}){
           <p style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>{hasCustomLabel?(formatDateDow(day.date)+' · '):''}{totalStops} {totalStops===1?'stop':'stops'}</p>
         </div>
       </div>
-      {/* Renders on whatever day the flight lands or leaves · returns null when the
-          day has none, so no gating is needed here. */}
-      {/* Departures first: on a travel day you leave before you land, so the
-          departing city has to read before the arriving one. */}
-      <ArrivalsBoard trip={trip} date={day.date} mode="departures"/>
-      <ArrivalsBoard trip={trip} date={day.date} mode="arrivals"/>
+      {/* One read-only journey card · what moves today + who lands today, with the
+          connection inline. Returns null when the day has no transport, so no gating
+          is needed here. Tapping it jumps to Crew, where travel is actually managed. */}
+      <JourneyCard trip={trip} date={day.date} onGoToCrew={()=>onGoTab&&onGoTab('crew')}/>
       {(() => {
         const dayItems = (trip.budget?.items||[]).filter(i=>i.day===day.id);
         if(!dayItems.length) return null;
@@ -6502,7 +6618,7 @@ function CrewSection({trip, onUpdateTrip}){
     setFlightSheet(null); showToast('Flight saved ✓','info',2500);
   };
   const deleteFlight=(f)=>{
-    onUpdateTrip({...trip, flights:(trip.flights||[]).filter(x=>x.id!==f.id)});
+    onUpdateTrip(removeTransport(trip, f.id));
     if(!isOwner){
       const c=sb();
       if(c) (async()=>{ try{ const {error}=await c.rpc('delete_my_flight',{p_trip_id:trip.id,p_flight_id:String(f.id)}); if(error) throw error; }catch(e){ showToast("Couldn't remove the flight · try again.",'error'); } })();
@@ -7462,7 +7578,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
                     <button className="btn btn-primary" onClick={()=>{ setActiveDay(null); onUpdateTrip({...trip, days:[]}); }}>✨ Plan these days with AI</button>
                   </div>
                 )}
-                {activeDay && <DayView key={activeDay} trip={trip} day={(trip.days||[]).find(d=>d.id===activeDay)} onUpdateTrip={onUpdateTrip}/>}
+                {activeDay && <DayView key={activeDay} trip={trip} day={(trip.days||[]).find(d=>d.id===activeDay)} onUpdateTrip={onUpdateTrip} onGoTab={(t)=>{setActiveTab(t);track('tab_view',{tab:t,via:'journey-card'});window.scrollTo({top:0});}}/>}
               </>
             ) : isOwner ? (
               <ItineraryAIPlanner trip={trip} onUpdateTrip={(updated)=>{ onUpdateTrip({...updated,_regenPrompt:undefined}); setActiveDay(updated.days?.[0]?.id||null); }}/>
@@ -8720,6 +8836,18 @@ class ErrorBoundary extends React.Component {
     assert('attach transport places a stop on the departure day', t.trip.days[1].activities.some(a=>/ES9108/.test(a.name)));
     assert('attach transport deep-links the operator', /eurostar/i.test(t.trip.days[1].activities.find(a=>/ES9108/.test(a.name)).bookingUrl||''));
     assert('attach transport is idempotent', mergeBookingIntoTrip(t.trip,{type:'transport',mode:'train',operator:'Eurostar',legs:[{operator:'Eurostar',trainNumber:'ES9108',departureStation:'London St Pancras',arrivalStation:'Paris Gare du Nord',departureTime:'2026-09-21T09:24:00'}]}).trip.days[1].activities.filter(a=>/ES9108/.test(a.name)).length===1);
+    // delete + re-add · the hero pills (trip.flights) and the day stop must stay in sync
+    (function(){
+      const addedId=t.trip.flights[0].id;
+      const del=removeTransport(t.trip, addedId);
+      assert('removeTransport drops it from flights so the pills clear', del.flights.length===0);
+      assert('removeTransport also removes the orphaned day stop', !del.days[1].activities.some(a=>/ES9108/.test(a.name)));
+      assert('removeTransport keeps unrelated stops', del.days[0].activities.some(a=>a.id==='keep1'));
+      const readd=mergeBookingIntoTrip(del,{type:'transport',mode:'train',operator:'Eurostar',legs:[{operator:'Eurostar',trainNumber:'ES9108',departureStation:'London St Pancras',arrivalStation:'Paris Gare du Nord',departureTime:'2026-09-21T09:24:00',arrivalTime:'2026-09-21T13:02:00'}]});
+      assert('re-add restores the pill', readd.trip.flights.length===1 && readd.trip.flights[0].flightNumber==='ES9108');
+      assert('re-add restores exactly one day stop (no dup, not skipped)', readd.trip.days[1].activities.filter(a=>/ES9108/.test(a.name)).length===1);
+      assert('removeTransport leaves a hand-entered flight (no _bookingKey stop) untouched elsewhere', removeTransport({flights:[{id:'m1',flightNumber:'AA1'}],days:[{id:'d1',activities:[{id:'x',name:'keep'}]}]},'m1').days[0].activities.length===1);
+    })();
     // lodging
     const l=mergeBookingIntoTrip(base,{type:'lodging',name:'The Hoxton',address:'81 Great Eastern St',checkIn:'2026-09-16',checkOut:'2026-09-21'});
     assert('attach lodging adds a check-in stop on the arrival day', l.trip.days[0].activities.some(a=>/Check in at The Hoxton/.test(a.name)));
@@ -8799,11 +8927,10 @@ class ErrorBoundary extends React.Component {
     const trip=normalizeTrip({title:'x',travelerPassportCountry:'US',destinations:[{id:'d1',city:'London',countryCode:'GB',isInternational:true}]});
     return visibleEntryFlags(trip,[{cc:'GB',req:null}],[]).some(f=>f.label==='UK ETA Required');
   })());
-  assert('visibleEntryFlags: registration rule needs live registration data to be hidden', (()=>{
+  assert('EES is no longer a red entry flag · it moved to local tips (dupe of the visa rows)', (()=>{
     const trip=normalizeTrip({title:'x',travelerPassportCountry:'US',destinations:[{id:'d1',city:'Paris',countryCode:'FR',isInternational:true}]});
-    const visaOnly=visibleEntryFlags(trip,[{cc:'FR',req:{visa_rules:{primary_rule:{name:'Visa not required'}}}}],[]);
-    const withReg=visibleEntryFlags(trip,[{cc:'FR',req:{mandatory_registration:{name:'EES'}}}],[]);
-    return visaOnly.some(f=>f.kind==='registration') && !withReg.some(f=>f.kind==='registration');
+    const flags=visibleEntryFlags(trip,[],[]);
+    return !flags.some(f=>/EES/i.test(f.label||'')) && !flags.some(f=>f.kind==='registration');
   })());
   assert('visibleEntryFlags still honours dismissals', (()=>{
     const trip=normalizeTrip({title:'x',travelerPassportCountry:'US',destinations:[{id:'d1',city:'London',countryCode:'GB',isInternational:true}]});
@@ -9066,6 +9193,20 @@ class ErrorBoundary extends React.Component {
   assert('modeEmoji maps every mode', modeEmoji('train')==='🚄' && modeEmoji('ferry')==='⛴️' && modeEmoji('car')==='🚗' && modeEmoji('bus')==='🚌' && modeEmoji('air')==='✈️');
   assert('modeNoun maps every mode', modeNoun('train')==='Train' && modeNoun('ferry')==='Ferry' && modeNoun('car')==='Drive' && modeNoun('air')==='Flight');
   assert('normalizeTrip backfills mode onto flights', (()=>{const n=normalizeTrip({title:'x',flights:[{airline:'Eurostar',flightNumber:'ES9108',departureTime:'2026-09-20T09:00:00'},{airline:'Delta',flightNumber:'DL83',departureTime:'2026-09-16T15:50:00'}]});return n.flights[0].mode==='train'&&n.flights[1].mode==='air';})());
+
+  // Journey card · the layover is the one connection detail we show on the day (a
+  // missed connection ruins a travel day). "2h 40m at JFK" from two consecutive legs.
+  (function(){
+    const l1={id:'a',departureAirport:'AUS',arrivalAirport:'JFK',departureTime:'2026-09-16T08:00:00',arrivalTime:'2026-09-16T12:20:00',travelerIds:['t1']};
+    const l2={id:'b',departureAirport:'JFK',arrivalAirport:'LHR',departureTime:'2026-09-16T15:00:00',arrivalTime:'2026-09-17T03:00:00',travelerIds:['t1']};
+    const lay=layoverForLeg(l1,[l1,l2]);
+    assert('layoverForLeg finds the connection airport', lay && lay.airport==='JFK');
+    assert('layoverForLeg computes the gap', lay && lay.label==='2h 40m');
+    assert('layoverForLeg is null for the final leg', layoverForLeg(l2,[l1,l2])===null);
+    assert('layoverForLeg ignores a different traveler', layoverForLeg(l1,[l1,{...l2,travelerIds:['t9']}])===null);
+    assert('layoverForLeg falls back to an explicit via', (()=>{const v=layoverForLeg({id:'c',departureAirport:'AUS',arrivalAirport:'LHR',arrivalTime:'2026-09-16T20:00:00',via:'jfk'},[]);return v&&v.airport==='JFK'&&v.label===null;})());
+    assert('sameTravelers: whole-group legs connect to anyone', sameTravelers({travelerIds:[]},{travelerIds:['t1']}) && sameTravelers({travelerIds:['t1']},{travelerIds:['t1','t2']}) && !sameTravelers({travelerIds:['t1']},{travelerIds:['t9']}));
+  })();
 
   // Summary
   if (failed === 0) {
