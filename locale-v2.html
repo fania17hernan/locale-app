@@ -2051,10 +2051,9 @@ function getIntlFlags(trip){
     .map(d=>d.countryCode).filter(Boolean))];
 
   countryCodes.forEach(cc=>{
-    if(SCHENGEN.includes(cc)&&passport==='US'&&!isDone('EES pre-registration'))
-      push({severity:'critical',emoji:'🚨',cc,kind:'registration',label:'EES Registration Required',
-        desc:'Required for all non-EU nationals entering the Schengen Area. Register before travel.',
-        url:'https://eu-entry.europa.eu'});
+    // EES is NOT a red entry alert · it duplicated the visa rows and there is nothing
+    // to pre-register or pay for (it's a biometric check done at the border). The
+    // guidance now lives in each Schengen city's local tips, with the official EU link.
     if(cc==='GB'&&passport==='US'&&!isDone('UK ETA'))
       push({severity:'critical',emoji:'🚨',cc,kind:'visa',label:'UK ETA Required',
         desc:'US passport holders must obtain a UK Electronic Travel Authorisation (ETA) before travel. Apply at least 72 hours before departure.',
@@ -2951,6 +2950,14 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
           if(intlData.phrases?.length) sections.push({icon:'💬',label:'Key Phrases',type:'phrases',items:intlData.phrases});
           sections.push({icon:'🆘',label:'Emergency Numbers',type:'body',body:intlData.emergency});
         }
+        // EES · moved here from the old red banner. It's a border formality, not a
+        // to-do: a quick biometric check at your first Schengen entry, no fee or
+        // pre-registration for tourists. Dates have slipped before, hence the live link.
+        if(typeof SCHENGEN!=='undefined' && SCHENGEN.includes(dest.countryCode)){
+          sections.push({icon:'🛂',label:'Entry · EES biometric border',type:'body',
+            body:"The EU's Entry/Exit System (EES) replaces the passport stamp with a quick biometric check — fingerprints and a photo — at your first Schengen border. There's no online pre-registration and no fee for a short tourist stay; it's done at the border on arrival. Roll-out dates have shifted before, so check the official EU page close to your travel date.",
+            link:{url:'https://travel-europe.europa.eu/ees_en', label:'Official EU EES information'}});
+        }
 
         return(
           <div key={dest.id}>
@@ -3021,7 +3028,10 @@ function CityTidbits({destinations, trip, onUpdateTrip}){
                         </div>
                         );
                       })()}
-                      {s.type==='body'&&<p style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.65,paddingTop:10}}>{s.body}</p>}
+                      {s.type==='body'&&(<>
+                        <p style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.65,paddingTop:10}}>{s.body}</p>
+                        {s.link&&<a href={s.link.url} target="_blank" rel="noopener noreferrer" style={{display:'inline-block',marginTop:8,fontSize:'.8rem',color:'var(--color-accent)',fontWeight:600,textDecoration:'underline'}}>{s.link.label} ↗</a>}
+                      </>)}
                       {s.type==='tips'&&s.items.map((t,j)=>(
                         <p key={j} style={{fontSize:'.875rem',color:'var(--color-ink-light)',lineHeight:1.55,marginTop:8,paddingLeft:4,borderLeft:'2px solid var(--color-accent-warm)'}}>  {t}</p>
                       ))}
@@ -8917,11 +8927,10 @@ class ErrorBoundary extends React.Component {
     const trip=normalizeTrip({title:'x',travelerPassportCountry:'US',destinations:[{id:'d1',city:'London',countryCode:'GB',isInternational:true}]});
     return visibleEntryFlags(trip,[{cc:'GB',req:null}],[]).some(f=>f.label==='UK ETA Required');
   })());
-  assert('visibleEntryFlags: registration rule needs live registration data to be hidden', (()=>{
+  assert('EES is no longer a red entry flag · it moved to local tips (dupe of the visa rows)', (()=>{
     const trip=normalizeTrip({title:'x',travelerPassportCountry:'US',destinations:[{id:'d1',city:'Paris',countryCode:'FR',isInternational:true}]});
-    const visaOnly=visibleEntryFlags(trip,[{cc:'FR',req:{visa_rules:{primary_rule:{name:'Visa not required'}}}}],[]);
-    const withReg=visibleEntryFlags(trip,[{cc:'FR',req:{mandatory_registration:{name:'EES'}}}],[]);
-    return visaOnly.some(f=>f.kind==='registration') && !withReg.some(f=>f.kind==='registration');
+    const flags=visibleEntryFlags(trip,[],[]);
+    return !flags.some(f=>/EES/i.test(f.label||'')) && !flags.some(f=>f.kind==='registration');
   })());
   assert('visibleEntryFlags still honours dismissals', (()=>{
     const trip=normalizeTrip({title:'x',travelerPassportCountry:'US',destinations:[{id:'d1',city:'London',countryCode:'GB',isInternational:true}]});
