@@ -1706,7 +1706,7 @@ function buildTripICS(trip){
     const start=icsDateFromISO(f.departureTime); if(!start) return;
     const end=icsDateFromISO(f.arrivalTime)||addMinutesToICS(start,120);
     push({uid:f.id, allDay:false, start, end,
-      summary:`✈️ ${f.airline||'Flight'} ${f.flightNumber||''}`.trim(),
+      summary:`${modeEmoji(transportMode(f))} ${f.airline||modeNoun(transportMode(f))} ${f.flightNumber||''}`.trim(),
       location:[f.departureAirport,f.arrivalAirport].filter(Boolean).join(' → '),
       desc:[(f.travelerIds||[]).length?('Travelers: '+flightTravelers(trip,f).map(m=>m.name).join(', ')):null, f.confirmationNumber&&('Confirmation: '+f.confirmationNumber), f.seatNumber&&('Seat '+f.seatNumber), f.notes].filter(Boolean).join('\n')});
   });
@@ -1833,6 +1833,22 @@ function carrierInfo(flight){
 }
 // Back-compat wrapper (older callers passed just a flight number)
 function getAirlineCheckinUrl(fn){ return carrierInfo(fn).url; }
+// trip.flights is really "transport" · each record can be a flight, train, ferry, car
+// or coach. This is the single source of truth for which. Prefer the explicit `mode`
+// the extractor/attach flow stamped on the record; fall back to the carrier-name
+// detection in carrierInfo so older data (and manual flights with no mode) still work.
+// Before this, everything rendered as ✈️ — Stephanie's Eurostar showed as a flight.
+function transportMode(f){
+  const m=String((f&&f.mode)||'').toLowerCase();
+  if(/^(air|flight|plane|fly)/.test(m)) return 'air';
+  if(/^(train|rail)/.test(m))           return 'train';
+  if(/^(ferry|boat|sea)/.test(m))       return 'ferry';
+  if(/^(car|drive|road)/.test(m))       return 'car';
+  if(/^(bus|coach)/.test(m))            return 'bus';
+  return (typeof carrierInfo==='function' && carrierInfo(f).train) ? 'train' : 'air';
+}
+function modeEmoji(mode){ return mode==='train'?'🚄':mode==='ferry'?'⛴️':mode==='car'?'🚗':mode==='bus'?'🚌':'✈️'; }
+function modeNoun(mode){ return mode==='train'?'Train':mode==='ferry'?'Ferry':mode==='car'?'Drive':mode==='bus'?'Bus':'Flight'; }
 function getCountdownInfo(d){
   if(!d)return{label:'',cls:'',days:9999,urgent:false};
   const today=new Date();today.setHours(0,0,0,0);
@@ -2386,7 +2402,9 @@ function normalizeTrip(t){
   const packingList = (Array.isArray(t.packingList) && t.packingList.length > 0) ? t.packingList : null;
   const lodging = t.lodging || [];
   // Phase 2c (additive): per-flight travelers. Empty travelerIds = whole-group flight (legacy).
-  const flights = (t.flights||[]).map(f=>({...f, travelerIds: Array.isArray(f.travelerIds)?f.travelerIds:[], addedBy: f.addedBy||null, via: f.via||''}));
+  // Backfill `mode` onto every transport record so the pills, boards and day cards
+  // read one consistent field · older data and manual flights had no mode at all.
+  const flights = (t.flights||[]).map(f=>({...f, travelerIds: Array.isArray(f.travelerIds)?f.travelerIds:[], addedBy: f.addedBy||null, via: f.via||'', mode: transportMode(f)}));
   // v3→v4 (additive, v0.9): planningStage ('idea'|'booked') + ideation results
   const planningStage = t.planningStage === 'idea' ? 'idea' : 'booked';
   const ideation = t.ideation ?? null;
@@ -3790,7 +3808,7 @@ function ArrivalsBoard({trip, date, mode}){
         <div key={f.id} style={{display:'grid',gridTemplateColumns:'88px 1fr auto',gap:12,alignItems:'baseline',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
           <span style={{fontFamily:'var(--font-mono)',fontWeight:600,fontSize:'.95rem',color:'#FFD9A8',fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap'}}>{t24(f[key])}</span>
           <div style={{minWidth:0}}>
-            <div style={{fontSize:'.85rem',fontWeight:500,color:'#F5F1E9',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{f.flightNumber||f.airline||'Flight'} · {(arrivalsMode?(f.departureAirport||'?'):(f.arrivalAirport||'?'))}{f.via?(' via '+f.via):''}<span style={{color:'#8C857A'}}>{(f.travelerIds||[]).length? ' · '+who.map(m=>m.name).join(', ') : ' · Whole group'}</span></div>
+            <div style={{fontSize:'.85rem',fontWeight:500,color:'#F5F1E9',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{modeEmoji(transportMode(f))} {f.flightNumber||f.airline||modeNoun(transportMode(f))} · {(arrivalsMode?(f.departureAirport||'?'):(f.arrivalAirport||'?'))}{f.via?(' via '+f.via):''}<span style={{color:'#8C857A'}}>{(f.travelerIds||[]).length? ' · '+who.map(m=>m.name).join(', ') : ' · Whole group'}</span></div>
             {!sameDay && <div style={{fontFamily:'var(--font-mono)',fontSize:'.65rem',color:'#8C857A',marginTop:2}}>{formatDateShort((f[key]||'').slice(0,10))}</div>}
           </div>
           <span style={{display:'flex',flexShrink:0}}>{who.slice(0,4).map(m=>(
@@ -3932,7 +3950,7 @@ function FlightsStrip({flights}){
         {flights.map(fl=>(
           <button key={fl.id} onClick={()=>setSel(fl)} aria-label={`Flight ${fl.flightNumber||''} details`}
             style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:10,padding:'8px 12px',color:'#fff',fontSize:'.78rem',whiteSpace:'nowrap',backdropFilter:'blur(4px)',flexShrink:0,cursor:'pointer'}}>
-            ✈ {fl.flightNumber||'Flight'}{dep(fl)||arr(fl)?` · ${dep(fl)}→${arr(fl)}`:''}{dateOf(fl)?` · ${formatDateShort(dateOf(fl))}`:''} <span style={{opacity:.8}}>›</span>
+            {modeEmoji(transportMode(fl))} {fl.flightNumber||modeNoun(transportMode(fl))}{dep(fl)||arr(fl)?` · ${dep(fl)}→${arr(fl)}`:''}{dateOf(fl)?` · ${formatDateShort(dateOf(fl))}`:''} <span style={{opacity:.8}}>›</span>
           </button>
         ))}
       </div>
@@ -3946,7 +3964,7 @@ function FlightsStrip({flights}){
               <div style={{padding:'8px 22px 26px'}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12,marginBottom:14}}>
                   <div style={{minWidth:0}}>
-                    <p style={{fontFamily:'var(--font-display)',fontSize:'1.25rem',fontWeight:600}}>{info.train?'🚆':'✈️'} {sel.airline||'Flight'} {sel.flightNumber||''}</p>
+                    <p style={{fontFamily:'var(--font-display)',fontSize:'1.25rem',fontWeight:600}}>{modeEmoji(transportMode(sel))} {sel.airline||modeNoun(transportMode(sel))} {sel.flightNumber||''}</p>
                     {sel.direction&&<p style={{fontSize:'.78rem',color:'var(--color-ink-muted)',textTransform:'capitalize'}}>{sel.direction}</p>}
                   </div>
                   <button aria-label="Close" onClick={close} className="btn btn-ghost" style={{flexShrink:0}}>✕</button>
@@ -3956,7 +3974,7 @@ function FlightsStrip({flights}){
                     <div style={{fontFamily:'var(--font-mono)',fontWeight:700,fontSize:'1.05rem'}}>{dep(sel)||'—'}</div>
                     <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)'}}>{fmtT(sel.departureTime)}</div>
                   </div>
-                  <div style={{flex:1,height:1,background:'var(--color-border)',position:'relative'}}><span style={{position:'absolute',top:-9,left:'50%',transform:'translateX(-50%)'}}>{info.train?'🚆':'✈️'}</span></div>
+                  <div style={{flex:1,height:1,background:'var(--color-border)',position:'relative'}}><span style={{position:'absolute',top:-9,left:'50%',transform:'translateX(-50%)'}}>{modeEmoji(transportMode(sel))}</span></div>
                   <div style={{textAlign:'center',minWidth:0}}>
                     <div style={{fontFamily:'var(--font-mono)',fontWeight:700,fontSize:'1.05rem'}}>{arr(sel)||'—'}</div>
                     <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)'}}>{fmtT(sel.arrivalTime)}</div>
@@ -9039,6 +9057,15 @@ class ErrorBoundary extends React.Component {
   assert('carrierInfo: name fallback when code unknown', /united\.com/.test(carrierInfo({airline:'United Airlines',flightNumber:'X1'}).url));
   assert('carrierInfo: flights get a FlightAware track link', !!carrierInfo({airline:'Delta',flightNumber:'DL83'}).track);
   assert('getAirlineCheckinUrl back-compat still returns a url', typeof getAirlineCheckinUrl('DL83')==='string');
+
+  // Mode-aware transport · a Eurostar must never render as ✈️ again
+  assert('transportMode reads an explicit train mode', transportMode({mode:'train',airline:'Eurostar'})==='train');
+  assert('transportMode reads ferry and car modes', transportMode({mode:'ferry'})==='ferry' && transportMode({mode:'car'})==='car' && transportMode({mode:'bus'})==='bus');
+  assert('transportMode falls back to carrier detection when no mode', transportMode({airline:'Eurostar',flightNumber:'ES9108'})==='train');
+  assert('transportMode defaults a plain flight to air', transportMode({airline:'Delta',flightNumber:'DL83'})==='air' && transportMode({mode:'air'})==='air');
+  assert('modeEmoji maps every mode', modeEmoji('train')==='🚄' && modeEmoji('ferry')==='⛴️' && modeEmoji('car')==='🚗' && modeEmoji('bus')==='🚌' && modeEmoji('air')==='✈️');
+  assert('modeNoun maps every mode', modeNoun('train')==='Train' && modeNoun('ferry')==='Ferry' && modeNoun('car')==='Drive' && modeNoun('air')==='Flight');
+  assert('normalizeTrip backfills mode onto flights', (()=>{const n=normalizeTrip({title:'x',flights:[{airline:'Eurostar',flightNumber:'ES9108',departureTime:'2026-09-20T09:00:00'},{airline:'Delta',flightNumber:'DL83',departureTime:'2026-09-16T15:50:00'}]});return n.flights[0].mode==='train'&&n.flights[1].mode==='air';})());
 
   // Summary
   if (failed === 0) {
