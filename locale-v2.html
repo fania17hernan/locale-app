@@ -1293,6 +1293,103 @@ function flightDateWarning(trip, departureTime, arrivalTime){
   }
   return null;
 }
+// ── LEG SEQUENCING · the "return flight on day one" bug ──────────────────────────
+// A round-trip confirmation prints the outbound and return legs in one document, and
+// the model routinely stamps a connecting return leg with the OUTBOUND date: the real
+// trip had ATL→AUS dated Sep 16 16:10 when the CDG→ATL leg it connects from lands
+// Sep 25 13:05. That put the return flight on Day 1. Chronology, not the printed date,
+// is the reliable signal: a leg departing from the airport the previous leg arrived at
+// must depart AFTER that arrival. Pure · returns a new array, never mutates.
+function repairFlightLegs(flights){
+  const legs=(flights||[]).filter(Boolean).map(f=>({...f}));
+  if(legs.length<2) return legs;
+  const ap=(v)=>String(v||'').trim().toUpperCase();
+  const ms=(v)=>{ const t=Date.parse(v); return isNaN(t)?null:t; };
+  const shiftTo=(iso,dayISO)=>{ const s=String(iso||''); return /^\d{4}-\d\d-\d\d/.test(s)&&/^\d{4}-\d\d-\d\d$/.test(dayISO) ? (dayISO+s.slice(10)) : s; };
+  // Work in printed order; a confirmation lists legs in travel order.
+  for(let i=1;i<legs.length;i++){
+    const prev=legs[i-1], cur=legs[i];
+    if(!prev||!cur) continue;
+    // Only repair a genuine connection: this leg leaves where the previous one landed.
+    if(!ap(cur.departureAirport) || ap(cur.departureAirport)!==ap(prev.arrivalAirport)) continue;
+    if(!sameTravelers(prev,cur)) continue;
+    const prevArr=ms(prev.arrivalTime), curDep=ms(cur.departureTime);
+    if(prevArr==null||curDep==null) continue;
+    if(curDep>=prevArr) continue;                       // already in order · nothing to fix
+    // Re-date the connection onto the day it actually connects, keeping its clock time.
+    // If its clock time is earlier than the landing time, it rolls to the next day.
+    const arrDay=new Date(prevArr), pad=(n)=>String(n).padStart(2,'0');
+    const dayISO=`${arrDay.getFullYear()}-${pad(arrDay.getMonth()+1)}-${pad(arrDay.getDate())}`;
+    let newDep=shiftTo(cur.departureTime, dayISO);
+    if(ms(newDep)!=null && ms(newDep)<prevArr){
+      const nxt=new Date(prevArr+86400000);
+      const nDay=`${nxt.getFullYear()}-${pad(nxt.getMonth()+1)}-${pad(nxt.getDate())}`;
+      newDep=shiftTo(cur.departureTime, nDay);
+    }
+    const delta=ms(newDep)-curDep;
+    cur.departureTime=newDep;
+    if(ms(cur.arrivalTime)!=null && isFinite(delta)){
+      const a=new Date(ms(cur.arrivalTime)+delta);
+      cur.arrivalTime=`${a.getFullYear()}-${pad(a.getMonth()+1)}-${pad(a.getDate())}T${pad(a.getHours())}:${pad(a.getMinutes())}:00`;
+    }
+    cur._dateRepaired=true; // surfaced in the UI so the traveler can sanity-check it
+  }
+  // Direction is what the traveler reads on the pill, and every extracted leg came back
+  // "outbound". Infer it from chronology: legs in the first half of the journey that move
+  // away from the origin are outbound, legs heading back to it are return.
+  const timed=legs.filter(f=>ms(f.departureTime)!=null).sort((a,b)=>ms(a.departureTime)-ms(b.departureTime));
+  if(timed.length>=2){
+    const origin=ap(timed[0].departureAirport);
+    const lastArr=ap(timed[timed.length-1].arrivalAirport);
+    const roundTrip = origin && lastArr && origin===lastArr;
+    if(roundTrip){
+      // The turnaround is the last leg that still departs before the midpoint of the trip.
+      const first=ms(timed[0].departureTime), last=ms(timed[timed.length-1].departureTime);
+      const mid=first+(last-first)/2;
+      timed.forEach(f=>{
+        const t=ms(f.departureTime);
+        const isRet = t>mid;
+        const target = legs.find(x=>x.id===f.id) || f;
+        // Preserve a hand-set 'connecting' where it's the second leg of a same-direction pair.
+        target.direction = isRet ? 'return' : 'outbound';
+      });
+      // Mark true connections (leg departing where the previous landed, same day-ish).
+      for(let i=1;i<timed.length;i++){
+        if(ap(timed[i].departureAirport)===ap(timed[i-1].arrivalAirport)){
+          const gap=ms(timed[i].departureTime)-ms(timed[i-1].arrivalTime);
+          if(gap!=null && gap>0 && gap<=24*3600*1000){
+            const target=legs.find(x=>x.id===timed[i].id) || timed[i];
+            target.direction='connecting';
+          }
+        }
+      }
+    }
+  }
+  return legs;
+}
+// What shape is this itinerary? Drives how we label and group legs in the UI, and
+// lets the flight sheet show the right number of inputs. Pure.
+function itineraryShape(flights){
+  const ap=(v)=>String(v||'').trim().toUpperCase();
+  const legs=(flights||[]).filter(f=>f&&f.departureTime).slice()
+    .sort((a,b)=>Date.parse(a.departureTime)-Date.parse(b.departureTime));
+  if(!legs.length) return 'none';
+  if(legs.length===1) return 'one-way';
+  const origin=ap(legs[0].departureAirport), finalArr=ap(legs[legs.length-1].arrivalAirport);
+  if(origin && finalArr && origin===finalArr){
+    // Round trip if every intermediate stop is a connection; multi-city if the traveler
+    // sleeps somewhere between legs (a gap over 24h that isn't a layover).
+    const cities=new Set();
+    legs.forEach(l=>{ if(ap(l.arrivalAirport)) cities.add(ap(l.arrivalAirport)); });
+    let stayed=0;
+    for(let i=1;i<legs.length;i++){
+      const gap=Date.parse(legs[i].departureTime)-Date.parse(legs[i-1].arrivalTime||legs[i-1].departureTime);
+      if(isFinite(gap) && gap>24*3600*1000) stayed++;
+    }
+    return stayed>1 ? 'multi-city' : 'round-trip';
+  }
+  return 'multi-city';
+}
 // Ingest guard · EVERY date the model extracts is checked against the trip window
 // before we save it — for flights, trains, lodging and events alike. Confirmations
 // routinely print "Wednesday, Sep 16" with no year, so the model can guess wrong;
@@ -1773,6 +1870,25 @@ function dateCityScaffold(trip){
   }
   return out;
 }
+// What does travel actually consume on each day? The generator used to be handed a flat
+// list of flights and would plan a full sightseeing day on top of a 09:25 departure or an
+// overnight landing. This turns the legs into per-day constraints keyed by date, so the
+// prompt can say "this day is mostly in transit". Pure · returns [{date, notes[]}].
+function travelDayConstraints(trip){
+  const legs=(trip&&trip.flights)||[];
+  const byDate={};
+  const put=(d,txt)=>{ if(!d) return; (byDate[d]=byDate[d]||[]).push(txt); };
+  const hhmm=(iso)=>String(iso||'').slice(11,16);
+  legs.forEach(f=>{
+    const mode=typeof transportMode==='function'?transportMode(f):'air';
+    const noun=mode==='train'?'train':mode==='ferry'?'ferry':mode==='car'?'drive':mode==='bus'?'bus':'flight';
+    const label=(f.flightNumber||f.airline||noun);
+    const dDay=String(f.departureTime||'').slice(0,10), aDay=String(f.arrivalTime||'').slice(0,10);
+    if(dDay) put(dDay, `departs ${f.departureAirport||'?'} at ${hhmm(f.departureTime)} on ${label} (${noun})`);
+    if(aDay) put(aDay, `arrives ${f.arrivalAirport||'?'} at ${hhmm(f.arrivalTime)} on ${label}`);
+  });
+  return Object.keys(byDate).sort().map(date=>({date, notes:byDate[date]}));
+}
 function getOccasionEmoji(o){return OCCASION_OPTIONS.find(x=>x.value===o)?.emoji||'✨'}
 function getOccasionLabel(o){return OCCASION_OPTIONS.find(x=>x.value===o)?.label||'Trip'}
 function getFlightAwareUrl(fn){if(!fn)return null;return `https://www.flightaware.com/live/flight/${fn.replace(/\s+/g,'')}`}
@@ -2095,6 +2211,41 @@ function visibleEntryFlags(trip, liveReqs, dismissed){
     });
 }
 
+// Which stay (if any) applies to THIS day? The old test was
+// `!l.destinationId || l.destinationId===day.destinationId`, and since an uploaded
+// booking never carries a destinationId, every hotel matched every day — the London
+// hotel's check-in card followed the trip to Paris. A stay applies only on the nights
+// it covers: check-in day through check-out day, inclusive. If the trip has no lodging
+// for that city the day correctly shows nothing. Pure.
+function lodgingForDay(trip, day){
+  const date=String((day&&day.date)||'').slice(0,10);
+  if(!date) return null;
+  const list=(trip&&trip.lodging)||[];
+  const inWindow=list.filter(l=>{
+    if(!l) return false;
+    const ci=String(l.checkIn||'').slice(0,10), co=String(l.checkOut||'').slice(0,10);
+    if(!ci && !co) return false;          // undated stay can't be placed on a day
+    if(ci && date<ci) return false;
+    if(co && date>co) return false;
+    return true;
+  });
+  if(!inWindow.length) return null;
+  // More than one stay covering the day (overlapping bookings): prefer the one tied to
+  // this day's destination, then the one that checks in today.
+  const destId=day&&day.destinationId;
+  return inWindow.find(l=>destId && l.destinationId===destId)
+      || inWindow.find(l=>String(l.checkIn||'').slice(0,10)===date)
+      || inWindow[0];
+}
+// Is this day the check-in / check-out day for that stay?
+function lodgingDayRole(lodging, day){
+  const date=String((day&&day.date)||'').slice(0,10);
+  if(!lodging||!date) return null;
+  const ci=String(lodging.checkIn||'').slice(0,10), co=String(lodging.checkOut||'').slice(0,10);
+  if(ci===date) return 'checkin';
+  if(co===date) return 'checkout';
+  return 'staying';
+}
 // Where should a lodging entry link? An Airbnb or Vrbo booking belongs in that app,
 // where the guest sees check-in instructions and messaging. A hotel belongs on its
 // own site. Everything else falls back to a scoped search rather than Maps, because
@@ -2403,7 +2554,11 @@ function normalizeTrip(t){
   // Phase 2c (additive): per-flight travelers. Empty travelerIds = whole-group flight (legacy).
   // Backfill `mode` onto every transport record so the pills, boards and day cards
   // read one consistent field · older data and manual flights had no mode at all.
-  const flights = (t.flights||[]).map(f=>({...f, travelerIds: Array.isArray(f.travelerIds)?f.travelerIds:[], addedBy: f.addedBy||null, via: f.via||'', mode: transportMode(f)}));
+  // repairFlightLegs then re-dates any connection stamped with the wrong day (the
+  // return leg that showed up on Day 1) and infers outbound/return/connecting.
+  const flights = repairFlightLegs(
+    (t.flights||[]).map(f=>({...f, travelerIds: Array.isArray(f.travelerIds)?f.travelerIds:[], addedBy: f.addedBy||null, via: f.via||'', mode: transportMode(f)}))
+  );
   // v3→v4 (additive, v0.9): planningStage ('idea'|'booked') + ideation results
   const planningStage = t.planningStage === 'idea' ? 'idea' : 'booked';
   const ideation = t.ideation ?? null;
@@ -2665,6 +2820,7 @@ function mergeBookingIntoTrip(trip, p){
     const newFlights=[...(trip.flights||[])];
     let days=trip.days||[];
     const labels=[];
+    const mine = typeof myMemberIdFor==='function' ? myMemberIdFor(trip) : null;
     legs.forEach(f=>{
       const num=f.trainNumber||f.flightNumber||f.number||'';
       const ex=newFlights.findIndex(x=>x.flightNumber===num && x.departureTime===f.departureTime);
@@ -2679,6 +2835,11 @@ function mergeBookingIntoTrip(trip, p){
         departureTime: f.departureTime||'', arrivalTime: f.arrivalTime||'',
         confirmationNumber: f.confirmationNumber||p.confirmationNumber||null,
         notes: f.notes||p.notes||'',
+        // Assign to the uploader unless the record already names travelers.
+        travelerIds: (Array.isArray(f.travelerIds)&&f.travelerIds.length) ? f.travelerIds
+                   : (ex>=0 && (newFlights[ex].travelerIds||[]).length) ? newFlights[ex].travelerIds
+                   : (mine?[mine]:[]),
+        addedBy: (ex>=0 && newFlights[ex].addedBy) || mine || null,
       };
       if(ex>=0) newFlights[ex]=entry; else newFlights.push(entry);
       labels.push(num||entry.airline);
@@ -2736,8 +2897,21 @@ function mergeBookingIntoTrip(trip, p){
     return {trip:{...trip, lodging:newLodging, days}, kind:'lodging', label:entry.name};
   } else if(p && p.type==='flights'){
     const newFlights=[...(trip.flights||[])];
-    (p.flights||[]).forEach(f=>{ const ex=newFlights.findIndex(x=>x.flightNumber===f.flightNumber&&x.departureTime===f.departureTime); const entry={...f,id:ex>=0?newFlights[ex].id:uuid()}; if(ex>=0)newFlights[ex]=entry; else newFlights.push(entry); });
-    return {trip:{...trip, flights:newFlights}, kind:'flights', label:(p.flights||[]).map(f=>f.flightNumber).filter(Boolean).join(', ')};
+    // Whoever uploads the confirmation is on it · assigning the legs to them is the
+    // whole point of "my flights" in Crew. Previously every uploaded leg came back with
+    // travelerIds:[] (= whole group), so nobody's arrival lined up with a person.
+    const mine = typeof myMemberIdFor==='function' ? myMemberIdFor(trip) : null;
+    (p.flights||[]).forEach(f=>{
+      const ex=newFlights.findIndex(x=>x.flightNumber===f.flightNumber&&x.departureTime===f.departureTime);
+      const keep = ex>=0 ? newFlights[ex] : null;
+      const travelerIds = (Array.isArray(f.travelerIds)&&f.travelerIds.length) ? f.travelerIds
+                        : (keep&&(keep.travelerIds||[]).length) ? keep.travelerIds
+                        : (mine?[mine]:[]);
+      const entry={...f, id: keep?keep.id:uuid(), travelerIds, addedBy:(keep&&keep.addedBy)||mine||null};
+      if(ex>=0)newFlights[ex]=entry; else newFlights.push(entry);
+    });
+    // Re-date any connection the model stamped with the wrong day before it is saved.
+    return {trip:{...trip, flights:repairFlightLegs(newFlights)}, kind:'flights', label:(p.flights||[]).map(f=>f.flightNumber).filter(Boolean).join(', ')};
   }
   return {trip, kind:null, label:''};
 }
@@ -3941,98 +4115,203 @@ function JourneyCard({trip, date, onGoToCrew}){
 
 // Add/edit one flight for one (or more) travelers. Owner can tag anyone; a crew/viewer
 // member is locked to themselves · their save goes through the guarded set_my_flight RPC.
+// Add/edit a JOURNEY · one or many legs. The old sheet had exactly one set of inputs,
+// so a connection had nowhere to go: Stephanie ended up typing "DL2323, DL5988" into
+// the flight-number field and "Connection in JFK, 2.40 hour layover" into notes.
+// Now the shape is explicit (one-way / round trip / multi-city), legs are dynamic, and
+// uploading the confirmation fills in EVERY leg rather than just the first.
+// Owner can tag anyone; a crew/viewer member is locked to themselves · their save goes
+// through the guarded set_my_flight RPC.
 function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDelete}){
   const members=trip.collaborators||[];
-  const [airline,setAirline]=React.useState(flight?.airline||'');
-  const [flightNumber,setFlightNumber]=React.useState(flight?.flightNumber||'');
-  const [fromAp,setFromAp]=React.useState(flight?.departureAirport||'');
-  const [toAp,setToAp]=React.useState(flight?.arrivalAirport||'');
-  const [dep,setDep]=React.useState((flight?.departureTime||'').slice(0,16));
-  const [arr,setArr]=React.useState((flight?.arrivalTime||'').slice(0,16));
-  const [notes,setNotes]=React.useState(flight?.notes||'');
-  // Connections used to have nowhere to go: Stephanie put "DL2323, DL5988" in the
-  // flight-number field and "Connection in JFK, 2.40 hour layover" in notes.
-  const [via,setVia]=React.useState(flight?.via||'');
+  const blankLeg=()=>({_k:uuid(), airline:'', flightNumber:'', departureAirport:'', arrivalAirport:'', departureTime:'', arrivalTime:'', notes:'', mode:'air'});
+  const legFrom=(f)=>({
+    _k:uuid(), id:f.id, airline:f.airline||'', flightNumber:f.flightNumber||'',
+    departureAirport:f.departureAirport||'', arrivalAirport:f.arrivalAirport||'',
+    departureTime:(f.departureTime||'').slice(0,16), arrivalTime:(f.arrivalTime||'').slice(0,16),
+    notes:f.notes||'', mode:transportMode(f), confirmationNumber:f.confirmationNumber||null,
+    direction:f.direction||'', seatNumber:f.seatNumber||null,
+  });
+  // Editing an existing leg opens the whole journey it belongs to, so a traveler fixing
+  // a connection sees both halves instead of one orphaned row.
+  const related=React.useMemo(()=>{
+    if(!flight) return null;
+    const mine=(trip.flights||[]).filter(f=>sameTravelers(f,flight));
+    return mine.length>1 ? mine.slice().sort((a,b)=>Date.parse(a.departureTime||0)-Date.parse(b.departureTime||0)) : [flight];
+  },[flight&&flight.id]);
+  const [legs,setLegs]=React.useState(()=> flight ? (related||[flight]).map(legFrom) : [blankLeg()]);
+  const [shape,setShape]=React.useState(()=> flight ? (itineraryShape(related||[flight])==='one-way'?'one-way':itineraryShape(related||[flight])) : 'one-way');
   const [travelerIds,setTravelerIds]=React.useState(flight?(flight.travelerIds||[]):(member?[member.id]:[]));
-  const [parsing,setParsing]=React.useState(false);   // confirmation upload → prefill
+  const [parsing,setParsing]=React.useState(false);
   const [parseMsg,setParseMsg]=React.useState('');
   const dlgRef=React.useRef(null);
   useModalA11y(dlgRef, onClose, true);
   const toggleTraveler=(id)=>setTravelerIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);
-  const save=()=>{
-    if(!fromAp.trim()||!toAp.trim()||!dep){ showToast('Add at least from, to, and a departure time.','warn'); return; }
-    // Advisory date check · warn on out-of-window/backwards dates, but let the
-    // traveler confirm (positioning flights and red-eyes are legitimate).
-    const warn=flightDateWarning(trip, dep.length===16?dep+':00':dep, arr?(arr.length===16?arr+':00':arr):'');
-    if(warn && !window.confirm(warn+'\n\nSave it anyway?')) return;
-    onSave({
-      id: flight?.id||uuid(),
-      direction: flight?.direction||'outbound',
-      airline: airline.trim(), flightNumber: flightNumber.trim().toUpperCase(),
-      departureAirport: fromAp.trim(), arrivalAirport: toAp.trim(),
-      via: via.trim().toUpperCase(),
-      departureTime: dep.length===16?dep+':00':dep,
-      arrivalTime: arr?(arr.length===16?arr+':00':arr):'',
-      confirmationNumber: flight?.confirmationNumber||null,
-      notes: notes.trim(),
-      travelerIds: isOwner?travelerIds:(member?[member.id]:[]),
-      addedBy: flight?.addedBy || member?.id || null,
+  const setLeg=(k,patch)=>setLegs(ls=>ls.map(l=>l._k===k?{...l,...patch}:l));
+  const addLeg=()=>setLegs(ls=>{
+    const last=ls[ls.length-1];
+    // A new leg almost always starts where the last one ended · prefill it.
+    return [...ls, {...blankLeg(), departureAirport:(last&&last.arrivalAirport)||'', airline:(last&&last.airline)||''}];
+  });
+  const removeLeg=(k)=>setLegs(ls=>ls.length>1?ls.filter(l=>l._k!==k):ls);
+  // Choosing a shape sets up the right number of rows without destroying what's typed.
+  const applyShape=(s)=>{
+    setShape(s);
+    setLegs(ls=>{
+      if(s==='one-way') return ls.slice(0,1);
+      if(s==='round-trip'){
+        const out=ls[0]||blankLeg();
+        const back=ls[1]||{...blankLeg(), departureAirport:out.arrivalAirport||'', arrivalAirport:out.departureAirport||'', airline:out.airline||''};
+        return [out, back];
+      }
+      return ls.length>1?ls:[...ls, blankLeg()];
     });
+  };
+  const labelFor=(i)=>{
+    if(shape==='one-way') return 'Flight';
+    if(shape==='round-trip') return i===0?'Outbound':'Return';
+    return 'Leg '+(i+1);
+  };
+  const save=()=>{
+    const filled=legs.filter(l=>l.departureAirport.trim()||l.arrivalAirport.trim()||l.departureTime);
+    if(!filled.length){ showToast('Add at least from, to, and a departure time.','warn'); return; }
+    for(const l of filled){
+      if(!l.departureAirport.trim()||!l.arrivalAirport.trim()||!l.departureTime){
+        showToast('Every leg needs from, to, and a departure time.','warn'); return;
+      }
+    }
+    // Advisory date check per leg · positioning flights and red-eyes are legitimate,
+    // so the traveler confirms rather than being blocked.
+    for(const l of filled){
+      const w=flightDateWarning(trip, l.departureTime.length===16?l.departureTime+':00':l.departureTime, l.arrivalTime?(l.arrivalTime.length===16?l.arrivalTime+':00':l.arrivalTime):'');
+      if(w && !window.confirm(w+'\n\nSave it anyway?')) return;
+    }
+    const who = isOwner?travelerIds:(member?[member.id]:[]);
+    const out = filled.map((l,i)=>({
+      id: l.id||uuid(),
+      direction: l.direction || (shape==='round-trip' ? (i===0?'outbound':'return') : (i===0?'outbound':'connecting')),
+      mode: l.mode||'air',
+      airline: l.airline.trim(), flightNumber: l.flightNumber.trim().toUpperCase(),
+      departureAirport: l.departureAirport.trim(), arrivalAirport: l.arrivalAirport.trim(),
+      via: '',
+      departureTime: l.departureTime.length===16?l.departureTime+':00':l.departureTime,
+      arrivalTime: l.arrivalTime?(l.arrivalTime.length===16?l.arrivalTime+':00':l.arrivalTime):'',
+      confirmationNumber: l.confirmationNumber||null,
+      seatNumber: l.seatNumber||null,
+      notes: (l.notes||'').trim(),
+      travelerIds: who,
+      addedBy: (flight&&flight.addedBy) || member?.id || null,
+    }));
+    // Re-date any connection whose printed day is wrong before it is saved.
+    onSave(repairFlightLegs(out), {replacedIds:(related||[]).map(f=>f.id).filter(Boolean)});
   };
   return (
     <div className="overlay" ref={dlgRef} role="dialog" aria-modal="true" aria-label="Flight details" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="sheet">
         <div className="sheet-handle"/>
         <div style={{padding:'16px 24px 8px',borderBottom:'1px solid var(--color-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <h2 className="font-display" style={{fontSize:'1.2rem',fontWeight:600}}>{flight?'Edit flight':(member?member.name+"'s flight":'Add a flight')}</h2>
+          <h2 className="font-display" style={{fontSize:'1.2rem',fontWeight:600}}>{flight?'Edit travel':(member?member.name+"'s travel":'Add travel')}</h2>
           <button className="btn btn-ghost" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div style={{padding:'20px 24px 32px',display:'flex',flexDirection:'column',gap:6}}>
-          {/* Typing a flight in by hand after already having the confirmation is
-              busywork. Read the document and prefill; every field stays editable
-              so a bad capture is a quick correction, not a dead end. */}
+          {/* Typing a journey in by hand after already having the confirmation is
+              busywork. Read the document and fill in EVERY leg; all fields stay
+              editable so a bad capture is a quick correction, not a dead end. */}
           <label style={{display:'block',padding:'12px',border:'1px dashed var(--color-accent)',borderRadius:10,
             cursor:parsing?'default':'pointer',marginBottom:10,textAlign:'center',background:'var(--color-accent-soft)'}}>
             <span style={{fontWeight:600,fontSize:'.85rem'}}>{parsing?'Reading your confirmation…':'📎 Upload the confirmation instead'}</span>
-            <span style={{display:'block',fontSize:'.72rem',color:'var(--color-ink-light)',marginTop:3,lineHeight:1.45}}>PDF or screenshot · we fill this in for you</span>
+            <span style={{display:'block',fontSize:'.72rem',color:'var(--color-ink-light)',marginTop:3,lineHeight:1.45}}>PDF, screenshot, Word or text · every leg is filled in for you</span>
             <input type="file" accept="image/*,application/pdf,text/plain,.txt,.eml,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style={{display:'none'}} disabled={parsing}
               onChange={async e=>{ const f=e.target.files?.[0]; e.target.value=''; if(!f) return;
                 setParsing(true); setParseMsg('');
                 try{
                   const p=await parseConfirmationFile(f,trip);
-                  const leg=(p&&(p.flights||p.legs)||[])[0]||(p&&(p.type==='transport')?p:null);
-                  if(!leg){ setParseMsg("Couldn't find a flight in that file · fill it in below."); }
+                  // Take EVERY leg the document holds, not just the first one.
+                  let found=(p&&(p.flights||p.legs)||[]);
+                  if(!found.length && p && (p.type==='transport')) found=[p];
+                  if(!found.length){ setParseMsg("Couldn't find a flight in that file · fill it in below."); }
                   else{
-                    if(leg.airline||leg.operator) setAirline(leg.airline||leg.operator);
-                    if(leg.flightNumber||leg.trainNumber) setFlightNumber(leg.flightNumber||leg.trainNumber);
-                    if(leg.departureAirport||leg.departureStation) setFromAp(leg.departureAirport||leg.departureStation);
-                    if(leg.arrivalAirport||leg.arrivalStation) setToAp(leg.arrivalAirport||leg.arrivalStation);
-                    if(leg.departureTime) setDep(String(leg.departureTime).slice(0,16));
-                    if(leg.arrivalTime) setArr(String(leg.arrivalTime).slice(0,16));
-                    if(leg.notes) setNotes(leg.notes);
-                    setParseMsg('Filled in from your confirmation · check it and save.');
+                    const mapped=found.map(l=>({
+                      _k:uuid(),
+                      airline:l.airline||l.operator||'',
+                      flightNumber:l.flightNumber||l.trainNumber||'',
+                      departureAirport:l.departureAirport||l.departureStation||'',
+                      arrivalAirport:l.arrivalAirport||l.arrivalStation||'',
+                      departureTime:String(l.departureTime||'').slice(0,16),
+                      arrivalTime:String(l.arrivalTime||'').slice(0,16),
+                      notes:l.notes||'', mode:l.mode||p.mode||'air',
+                      confirmationNumber:l.confirmationNumber||p.confirmationNumber||null,
+                      seatNumber:l.seatNumber||null, direction:l.direction||'',
+                    }));
+                    // Fix any leg the model stamped with the wrong day, then let the
+                    // detected shape drive the labels (one-way / round trip / multi-city).
+                    const repaired=repairFlightLegs(mapped.map(m=>({...m, departureTime:m.departureTime?m.departureTime+':00':'', arrivalTime:m.arrivalTime?m.arrivalTime+':00':''})));
+                    const back=repaired.map((r,i)=>({...mapped[i], departureTime:String(r.departureTime||'').slice(0,16), arrivalTime:String(r.arrivalTime||'').slice(0,16), direction:r.direction||mapped[i].direction, _repaired:!!r._dateRepaired}));
+                    setLegs(back);
+                    const sh=itineraryShape(repaired);
+                    setShape(sh==='none'?'one-way':sh);
+                    const nRepaired=back.filter(b=>b._repaired).length;
+                    setParseMsg('Filled in '+back.length+' leg'+(back.length===1?'':'s')+' ('+(sh==='none'?'one-way':sh)+')'+(nRepaired?' · '+nRepaired+' date corrected, please check':'')+' · review and save.');
                   }
                 }catch(err){ setParseMsg("Couldn't read that file · fill it in below."); }
                 finally{ setParsing(false); }
               }}/>
           </label>
           {parseMsg && <p style={{fontSize:'.76rem',marginBottom:8,lineHeight:1.45,color:parseMsg.startsWith('Filled')?'var(--color-success)':'var(--color-flag)'}}>{parseMsg}</p>}
-          <div style={{display:'flex',gap:8}}>
-            <input className="input" style={{flex:1,minWidth:0}} placeholder="Airline" value={airline} onChange={e=>setAirline(e.target.value)}/>
-            <input className="input" style={{flex:1,minWidth:0}} placeholder="Flight # (AA123)" value={flightNumber} onChange={e=>setFlightNumber(e.target.value)}/>
+
+          <label className="section-label">Trip type</label>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:4}}>
+            {[['one-way','One way'],['round-trip','Round trip'],['multi-city','Multi-city']].map(([v,lbl])=>(
+              <button key={v} type="button" onClick={()=>applyShape(v)}
+                className={'pill '+(shape===v?'pill-accent':'pill-muted')}
+                style={{cursor:'pointer',border:'1px solid var(--color-border)',fontWeight:600}}>{lbl}</button>
+            ))}
           </div>
-          <div style={{display:'flex',gap:8}}>
-            <input className="input" style={{flex:1,minWidth:0}} placeholder="From (AUS)" value={fromAp} onChange={e=>setFromAp(e.target.value)}/>
-            <input className="input" style={{flex:1,minWidth:0}} placeholder="To (LHR)" value={toAp} onChange={e=>setToAp(e.target.value)}/>
-          </div>
-          <label className="section-label" style={{marginTop:8}}>Departs (local time)</label>
-          <input className="input" type="datetime-local" value={dep} onChange={e=>setDep(e.target.value)}/>
-          <label className="section-label" style={{marginTop:8}}>Lands (local time)</label>
-          <input className="input" type="datetime-local" value={arr} onChange={e=>setArr(e.target.value)}/>
-          <input className="input" style={{marginTop:8}} placeholder="Connecting through (JFK) · optional" aria-label="Connecting airport" value={via} onChange={e=>setVia(e.target.value)}/>
-          <input className="input" style={{marginTop:8}} placeholder="Notes (terminal, bags…)" value={notes} onChange={e=>setNotes(e.target.value)}/>
+
+          {legs.map((l,i)=>(
+            <div key={l._k} style={{border:'1px solid var(--color-border)',borderRadius:12,padding:'12px',marginTop:8,background:'var(--color-surface)'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                <span style={{fontFamily:'var(--font-mono)',fontSize:'.66rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--color-ink-muted)'}}>
+                  {labelFor(i)}{l._repaired?' · date corrected':''}
+                </span>
+                {legs.length>1 && <button type="button" className="btn btn-ghost btn-sm" aria-label={'Remove '+labelFor(i)} style={{color:'var(--color-flag)',padding:'2px 6px'}} onClick={()=>removeLeg(l._k)}>Remove</button>}
+              </div>
+              <div style={{display:'flex',gap:8}}>
+                <input className="input" style={{flex:1,minWidth:0}} placeholder="Airline / operator" value={l.airline} onChange={e=>setLeg(l._k,{airline:e.target.value})}/>
+                <input className="input" style={{flex:1,minWidth:0}} placeholder="Flight / train #" value={l.flightNumber} onChange={e=>setLeg(l._k,{flightNumber:e.target.value})}/>
+              </div>
+              <div style={{display:'flex',gap:8,marginTop:6}}>
+                <input className="input" style={{flex:1,minWidth:0}} placeholder="From (AUS)" value={l.departureAirport} onChange={e=>setLeg(l._k,{departureAirport:e.target.value})}/>
+                <input className="input" style={{flex:1,minWidth:0}} placeholder="To (LHR)" value={l.arrivalAirport} onChange={e=>setLeg(l._k,{arrivalAirport:e.target.value})}/>
+              </div>
+              <div style={{display:'flex',gap:8,marginTop:6,flexWrap:'wrap'}}>
+                <div style={{flex:1,minWidth:150}}>
+                  <label className="section-label" style={{marginTop:4}}>Departs (local)</label>
+                  <input className="input" type="datetime-local" value={l.departureTime} onChange={e=>setLeg(l._k,{departureTime:e.target.value})}/>
+                </div>
+                <div style={{flex:1,minWidth:150}}>
+                  <label className="section-label" style={{marginTop:4}}>Lands (local)</label>
+                  <input className="input" type="datetime-local" value={l.arrivalTime} onChange={e=>setLeg(l._k,{arrivalTime:e.target.value})}/>
+                </div>
+              </div>
+              <input className="input" style={{marginTop:6}} placeholder="Notes (terminal, seat, bags…)" value={l.notes} onChange={e=>setLeg(l._k,{notes:e.target.value})}/>
+              {/* The layover to the NEXT leg, computed from what's typed · this is the
+                  number that decides whether a connection is realistic. */}
+              {i<legs.length-1 && (()=>{
+                const a=Date.parse(l.arrivalTime), b=Date.parse(legs[i+1].departureTime);
+                if(isNaN(a)||isNaN(b)||b<=a) return null;
+                const mins=Math.round((b-a)/60000);
+                const tight=mins<60;
+                return <p style={{fontFamily:'var(--font-mono)',fontSize:'.68rem',marginTop:6,color:tight?'var(--color-flag)':'var(--color-ink-muted)'}}>
+                  {gapLabel(mins)} at {l.arrivalAirport||'the connection'}{tight?' · tight connection':''}
+                </p>;
+              })()}
+            </div>
+          ))}
+          <button type="button" className="btn btn-secondary btn-sm" style={{marginTop:10,alignSelf:'flex-start'}} onClick={addLeg}>+ Add a connection or leg</button>
+
           {isOwner && members.length>1 && (<>
-            <label className="section-label" style={{marginTop:8}}>Who's on this flight?</label>
+            <label className="section-label" style={{marginTop:12}}>Who's on this journey?</label>
             <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
               {members.map(m=>(
                 <button key={m.id} type="button" onClick={()=>toggleTraveler(m.id)}
@@ -4042,10 +4321,10 @@ function FlightFormSheet({trip, member, flight, isOwner, onClose, onSave, onDele
                 </button>
               ))}
             </div>
-            <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)'}}>No one selected = whole-group flight.</p>
+            <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)'}}>No one selected = whole-group travel.</p>
           </>)}
           <div style={{display:'flex',gap:8,marginTop:14}}>
-            <button className="btn btn-primary" style={{flex:1}} onClick={save}>Save flight</button>
+            <button className="btn btn-primary" style={{flex:1}} onClick={save}>{legs.length>1?('Save '+legs.length+' legs'):'Save flight'}</button>
             {flight&&onDelete&&<button className="btn btn-ghost" style={{color:'var(--color-flag)'}} onClick={()=>onDelete(flight)}>Remove</button>}
           </div>
         </div>
@@ -4327,7 +4606,10 @@ function DayView({trip,day,onUpdateTrip,onGoTab}){
     updateDay({...day,comments:(day.comments||[]).filter(c=>c.id!==cid)});
   };
 
-  const hotel=trip.lodging?.find(l=>!l.destinationId||l.destinationId===day.destinationId);
+  // Only the stay that actually covers this night · see lodgingForDay. A London hotel
+  // must not follow the trip to Paris, and a city with no booking shows nothing.
+  const hotel=lodgingForDay(trip, day);
+  const hotelRole=lodgingDayRole(hotel, day);
   // Real forecast for this day's city (Open-Meteo). Replaces the placeholder that
   // used to show the same invented numbers per country on every day of every trip.
   const [wxByDate,setWxByDate]=React.useState(null);
@@ -5906,6 +6188,10 @@ Trip context:
 - Travelers: ${trip.travelerCount || 2}
 ${lodgingLines ? `- Lodging (MUST include check-in/check-out in itinerary):\n${lodgingLines}` : ''}
 ${flightLines ? `- Flights (MUST include in itinerary with exact times and confirmation numbers):\n${flightLines}` : ''}
+${(()=>{const tc=travelDayConstraints(trip);return tc.length?`
+TRAVEL DAYS (MANDATORY · these dates are partly consumed by transit):
+${tc.map(t=>`  • ${t.date}: ${t.notes.join('; ')}`).join('\n')}
+Rules for these days: plan around the transit, never through it. A day with a morning departure gets only an early, near-the-hotel stop plus checkout — no full-day plans. A day with a late-evening or overnight arrival gets arrival logistics and at most a nearby dinner, never a packed schedule. On a day that both lands and continues onward, keep it light and close to the station or airport. Use the ACTUAL times above · do not invent different ones.`:'';})()}
 ${mustEventLines ? `- MUST-HAPPEN EVENTS (place each on its EXACT date for the EXACT people named · never drop, move, or paraphrase these):\n${mustEventLines}` : ''}
 ${pinnedLines ? `- Pinned ideas the traveler saved (honor these · e.g. stay/area/things they liked):\n${pinnedLines}` : ''}
 ${(()=>{const sc=dateCityScaffold(trip);return sc.length?`
@@ -6605,17 +6891,25 @@ function CrewSection({trip, onUpdateTrip}){
   // through the guarded set_my_flight/delete_my_flight RPCs (owner-write-only trips),
   // with a local echo so the UI responds immediately · next sync reconciles.
   const [flightSheet,setFlightSheet]=React.useState(null); // {member, flight}
-  const saveFlight=(entry)=>{
-    const flights=[...(trip.flights||[])];
-    const i=flights.findIndex(f=>f.id===entry.id);
-    if(i>=0) flights[i]=entry; else flights.push(entry);
+  // Accepts a whole journey (array of legs) or a single leg. The multi-leg sheet sends
+  // every leg at once and names the ids it replaces, so editing a 2-leg connection down
+  // to 1 leg actually drops the removed leg instead of orphaning it.
+  const saveFlight=(entryOrLegs, opts)=>{
+    const entries=Array.isArray(entryOrLegs)?entryOrLegs:[entryOrLegs];
+    if(!entries.length) return;
+    const replaced=new Set([...(opts&&opts.replacedIds||[]), ...entries.map(e=>e.id)].filter(Boolean));
+    const kept=(trip.flights||[]).filter(f=>!replaced.has(f.id));
+    const flights=repairFlightLegs([...kept, ...entries]);
     onUpdateTrip({...trip, flights});
-    track('crew_flight_save',{self:!isOwner});
+    track('crew_flight_save',{self:!isOwner, legs:entries.length});
     if(!isOwner){
       const c=sb();
-      if(c) (async()=>{ try{ const {error}=await c.rpc('set_my_flight',{p_trip_id:trip.id,p_flight:entry}); if(error) throw error; }catch(e){ showToast(seatRemoved(e)?'Your spot on this trip was removed by the organiser.':"Couldn't sync your flight · try again.",'error',6000); } })();
+      if(c) (async()=>{ try{
+        for(const entry of entries){ const {error}=await c.rpc('set_my_flight',{p_trip_id:trip.id,p_flight:entry}); if(error) throw error; }
+      }catch(e){ showToast(seatRemoved(e)?'Your spot on this trip was removed by the organiser.':"Couldn't sync your flight · try again.",'error',6000); } })();
     }
-    setFlightSheet(null); showToast('Flight saved ✓','info',2500);
+    setFlightSheet(null);
+    showToast(entries.length>1?(entries.length+' legs saved ✓'):'Flight saved ✓','info',2500);
   };
   const deleteFlight=(f)=>{
     onUpdateTrip(removeTransport(trip, f.id));
@@ -9194,6 +9488,53 @@ class ErrorBoundary extends React.Component {
   assert('modeNoun maps every mode', modeNoun('train')==='Train' && modeNoun('ferry')==='Ferry' && modeNoun('car')==='Drive' && modeNoun('air')==='Flight');
   assert('normalizeTrip backfills mode onto flights', (()=>{const n=normalizeTrip({title:'x',flights:[{airline:'Eurostar',flightNumber:'ES9108',departureTime:'2026-09-20T09:00:00'},{airline:'Delta',flightNumber:'DL83',departureTime:'2026-09-16T15:50:00'}]});return n.flights[0].mode==='train'&&n.flights[1].mode==='air';})());
 
+  // ── Europe-trip regressions (2026-08-06) · all reproduced from the real trip JSON ─
+  // 1. The return leg showed up on Day 1: the extractor stamped the ATL→AUS connection
+  //    with the OUTBOUND date (Sep 16) though the CDG→ATL leg it follows lands Sep 25.
+  (function(){
+    const real=[
+      {id:'a',flightNumber:'DL2323',departureAirport:'AUS',arrivalAirport:'JFK',departureTime:'2026-09-16T15:50:00',arrivalTime:'2026-09-16T21:00:00',travelerIds:[]},
+      {id:'b',flightNumber:'DL5988',departureAirport:'JFK',arrivalAirport:'LHR',departureTime:'2026-09-16T23:40:00',arrivalTime:'2026-09-17T12:05:00',travelerIds:[]},
+      {id:'c',flightNumber:'DL0083',departureAirport:'CDG',arrivalAirport:'ATL',departureTime:'2026-09-25T09:25:00',arrivalTime:'2026-09-25T13:05:00',travelerIds:[]},
+      {id:'d',flightNumber:'DL1491',departureAirport:'ATL',arrivalAirport:'AUS',departureTime:'2026-09-16T16:10:00',arrivalTime:'2026-09-16T17:30:00',travelerIds:[]},
+    ];
+    const fixed=repairFlightLegs(real), dl=fixed.find(f=>f.flightNumber==='DL1491');
+    assert('repairFlightLegs moves the return leg off Day 1', dl.departureTime.slice(0,10)==='2026-09-25');
+    assert('repairFlightLegs keeps the clock time', dl.departureTime.slice(11,16)==='16:10' && dl.arrivalTime.slice(11,16)==='17:30');
+    assert('repairFlightLegs makes the connection follow its inbound leg', Date.parse(dl.departureTime)>Date.parse('2026-09-25T13:05:00'));
+    assert('repairFlightLegs flags what it changed', dl._dateRepaired===true);
+    assert('repairFlightLegs leaves correct legs alone', fixed.find(f=>f.flightNumber==='DL2323').departureTime==='2026-09-16T15:50:00');
+    assert('repairFlightLegs infers outbound/return/connecting', fixed.find(f=>f.flightNumber==='DL2323').direction==='outbound' && fixed.find(f=>f.flightNumber==='DL0083').direction==='return' && dl.direction==='connecting');
+    assert('repairFlightLegs is idempotent', repairFlightLegs(fixed).find(f=>f.flightNumber==='DL1491').departureTime===dl.departureTime);
+    assert('repairFlightLegs is null-safe', repairFlightLegs(null).length===0 && repairFlightLegs([{id:'x'}]).length===1);
+    assert('itineraryShape reads a round trip', itineraryShape(fixed)==='round-trip');
+    assert('itineraryShape reads a single leg as one-way', itineraryShape([real[0]])==='one-way');
+  })();
+  // 2. The London hotel's check-in card followed the trip to Paris, because the old test
+  //    (!l.destinationId || ...) matched every day for any uploaded booking.
+  (function(){
+    const t={lodging:[{id:'L',name:'Hotel Indigo London',checkIn:'2026-09-17',checkOut:'2026-09-21'}]};
+    assert('no hotel before check-in', lodgingForDay(t,{date:'2026-09-16'})===null);
+    assert('hotel shows on check-in, mid-stay and check-out', (lodgingForDay(t,{date:'2026-09-17'})||{}).id==='L' && (lodgingForDay(t,{date:'2026-09-19'})||{}).id==='L' && (lodgingForDay(t,{date:'2026-09-21'})||{}).id==='L');
+    assert('London hotel does NOT carry over to Paris days', lodgingForDay(t,{date:'2026-09-22'})===null && lodgingForDay(t,{date:'2026-09-25'})===null);
+    assert('lodgingDayRole names the day', lodgingDayRole(t.lodging[0],{date:'2026-09-17'})==='checkin' && lodgingDayRole(t.lodging[0],{date:'2026-09-21'})==='checkout' && lodgingDayRole(t.lodging[0],{date:'2026-09-19'})==='staying');
+    assert('an undated stay is never placed on a day', lodgingForDay({lodging:[{id:'x'}]},{date:'2026-09-19'})===null);
+    assert('two stays: each day gets the right one', (()=>{ const t2={lodging:[{id:'lon',checkIn:'2026-09-17',checkOut:'2026-09-21'},{id:'par',checkIn:'2026-09-21',checkOut:'2026-09-25'}]}; return (lodgingForDay(t2,{date:'2026-09-23'})||{}).id==='par' && (lodgingForDay(t2,{date:'2026-09-18'})||{}).id==='lon'; })());
+  })();
+  // 3. The generator planned full days on top of transit.
+  (function(){
+    const t={flights:[
+      {flightNumber:'DL2323',departureAirport:'AUS',arrivalAirport:'JFK',departureTime:'2026-09-16T15:50:00',arrivalTime:'2026-09-16T21:00:00',mode:'air'},
+      {flightNumber:'DL5988',departureAirport:'JFK',arrivalAirport:'LHR',departureTime:'2026-09-16T23:40:00',arrivalTime:'2026-09-17T12:05:00',mode:'air'},
+      {flightNumber:'ES9108',airline:'Eurostar',departureAirport:'London St Pancras',arrivalAirport:'Paris Nord',departureTime:'2026-09-21T12:31:00',arrivalTime:'2026-09-21T15:59:00',mode:'train'},
+    ]};
+    const by=Object.fromEntries(travelDayConstraints(t).map(x=>[x.date,x.notes.join('; ')]));
+    assert('travelDayConstraints marks the departure day', /departs AUS at 15:50/.test(by['2026-09-16']));
+    assert('travelDayConstraints puts an overnight arrival on the next day', /arrives LHR at 12:05/.test(by['2026-09-17']));
+    assert('travelDayConstraints calls a train a train', /train/.test(by['2026-09-21']));
+    assert('travelDayConstraints leaves free days free', !by['2026-09-19']);
+    assert('travelDayConstraints is null-safe', travelDayConstraints(null).length===0);
+  })();
   // Journey card · the layover is the one connection detail we show on the day (a
   // missed connection ruins a travel day). "2h 40m at JFK" from two consecutive legs.
   (function(){
