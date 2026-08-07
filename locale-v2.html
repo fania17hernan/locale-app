@@ -2470,16 +2470,17 @@ const RAW_MOCK_TRIPS=[
   coverGradient:'gradient-generic',
   occasion:'family',
   emoji:'🎢',
-  travelPeriod:{depart:'2026-06-12',return:'2026-06-14'},
-  startDate:'2026-06-12',endDate:'2026-06-14',
+  travelPeriod:{depart:'2026-10-15',return:'2026-10-17'},
+  startDate:'2026-10-15',endDate:'2026-10-17',
   travelerPassportCountry:'US',
   travelerCount:2,
-  destinations:[{id:'cd1',city:'Anaheim',country:'United States',countryCode:'US',isInternational:false,arrivalDate:'2026-06-12',departureDate:'2026-06-14'}],
+  destinations:[{id:'cd1',city:'Anaheim',country:'United States',countryCode:'US',isInternational:false,arrivalDate:'2026-10-15',departureDate:'2026-10-17'}],
   flights:[
-    {id:'f1',flightNumber:'SW4915',origin:'Origin',destination:'LGB',departureDate:'2026-06-12',notes:'Arriving June 12'},
-    {id:'f2',flightNumber:'SW2476',origin:'LGB',destination:'Home',departureDate:'2026-06-14',notes:'Departing Monday'},
+    {id:'f1',direction:'outbound',mode:'air',airline:'Southwest',flightNumber:'SW4915',departureAirport:'PHX',arrivalAirport:'LGB',departureTime:'2026-10-15T10:20:00',arrivalTime:'2026-10-15T11:35:00',confirmationNumber:'K4RB2D',notes:'Bags fly free · rental car desk is outside baggage claim',travelerIds:['cc1','cc2','cc3'],addedBy:'cc1'},
+    {id:'f2',direction:'return',mode:'air',airline:'Southwest',flightNumber:'SW2476',departureAirport:'LGB',arrivalAirport:'PHX',departureTime:'2026-10-17T18:05:00',arrivalTime:'2026-10-17T19:20:00',confirmationNumber:'K4RB2D',notes:'Leave the hotel by 3:30pm · LGB is small but the 405 is not',travelerIds:['cc1','cc2','cc3'],addedBy:'cc1'},
   ],
-  lodging:[{id:'cl1',name:'Hotel Indigo Anaheim',address:'435 W Katella Ave, Anaheim, CA 92802'}],
+  // Dated, so the check-in card lands on the right day and doesn't bleed across the trip.
+  lodging:[{id:'cl1',name:'Hotel Indigo Anaheim',address:'435 W Katella Ave, Anaheim, CA 92802',checkIn:'2026-10-15',checkOut:'2026-10-17',checkInTime:'15:00',checkOutTime:'11:00',confirmationNumber:'IHG-884219'}],
   collaborators:[
     {id:'cc1',name:'Marcus Lee',email:'marcus@example.com',role:'owner',avatarColor:AVATAR_COLORS[0],rsvp:'going'},
     {id:'cc2',name:'Rosa Lee',email:'rosa@example.com',role:'crew',avatarColor:AVATAR_COLORS[2],rsvp:'going'},
@@ -2494,7 +2495,7 @@ const RAW_MOCK_TRIPS=[
   ],payments:[]},
   days:[
    {
-    id:'cd-day1',date:'2026-06-12',label:'Day 1 · Arrival & Downtown Disney',destinationId:'cd1',
+    id:'cd-day1',date:'2026-10-15',label:'Day 1 · Arrival & Downtown Disney',destinationId:'cd1',
     activities:[
      {id:'cda1',name:'Land at Long Beach Airport (LGB) · SW4915',emoji:'✈️',address:'4100 Donald Douglas Dr, Long Beach, CA 90808',neighborhood:'Long Beach',bucket:'must-do',category:'other',bookingRequired:false,notes:'Pick up rental car or rideshare to Hotel Indigo (~30 min)',thingsToConsider:['Grab snacks for the room at a nearby Trader Joe\'s on the way','Check-in is typically 3pm · ask for early if arriving earlier'],sortOrder:0},
      {id:'cda2',name:'Check in · Hotel Indigo Anaheim',emoji:'🏨',address:'435 W Katella Ave, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'other',bookingRequired:false,notes:'Steps from the Disneyland entrance. Ask for a park-view room if available.',thingsToConsider:['Download the Disneyland app tonight and buy Genie+ in advance','Set an alarm · rope drop tomorrow is worth it'],sortOrder:1},
@@ -2505,7 +2506,7 @@ const RAW_MOCK_TRIPS=[
     ],
     notes:'Arrival day · take it easy, get oriented, prep for big park days ahead.'},
    {
-    id:'cd-day2',date:'2026-06-13',label:'Day 2 · Disneyland Park (Day 1 Hopper)',destinationId:'cd1',
+    id:'cd-day2',date:'2026-10-16',label:'Day 2 · Disneyland Park (Day 1 Hopper)',destinationId:'cd1',
     activities:[
      {id:'cda4',name:'Disneyland Park · Rope Drop',emoji:'🏰',address:'1313 Disneyland Dr, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'entertainment',bookingRequired:true,bookingUrl:'https://disneyland.disney.go.com/tickets/',notes:'Arrive 30 min before opening for rope drop. Head straight to Indiana Jones Adventure or Pirates of the Caribbean before crowds build.',thingsToConsider:['Buy 2-Day Park Hopper tickets in advance online · cheaper than at gate','Download Disneyland app for Lightning Lane and wait times','Genie+ is $30–35/person · worth it on a busy summer Saturday'],sortOrder:0},
      {id:'cda5',name:'New Orleans Square & Haunted Mansion',emoji:'👻',address:'Disneyland Park, New Orleans Square',neighborhood:'Disneyland',bucket:'must-do',category:'entertainment',bookingRequired:false,notes:'One of the most iconic areas of Disneyland. Haunted Mansion, Pirates of the Caribbean, and the Blue Bayou restaurant are all here.',thingsToConsider:['Blue Bayou is a lovely sit-down lunch spot inside the park · reserve in advance','Evening is magical here with the lights and ambiance'],sortOrder:1},
@@ -2516,7 +2517,7 @@ const RAW_MOCK_TRIPS=[
     ],
     notes:'Big park day · pace yourselves and stay hydrated. July in Anaheim is hot (85–95°F). Take a mid-afternoon break at the hotel pool if needed.'},
    {
-    id:'cd-day3',date:'2026-06-13',label:'Day 2 Evening · Disney California Adventure',destinationId:'cd1',
+    id:'cd-day3',date:'2026-10-16',label:'Day 2 Evening · Disney California Adventure',destinationId:'cd1',
     activities:[
      {id:'cda7',name:'Disney California Adventure · Evening Hop',emoji:'🎡',address:'1313 Disneyland Dr, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'entertainment',bookingRequired:true,bookingUrl:'https://disneyland.disney.go.com/tickets/',notes:'Use your Park Hopper to jump to DCA in the afternoon/evening. Don\'t miss Guardians of the Galaxy: Mission Breakout and Radiator Springs Racers.',thingsToConsider:['World of Color water/light show at night is stunning · grab a spot 30 min early','Pixar Pier is beautiful at dusk'],sortOrder:0},
      {id:'cda8',name:'Guardians of the Galaxy: Mission Breakout',emoji:'🚀',address:'Disney California Adventure, Hollywood Land',neighborhood:'DCA',bucket:'must-do',category:'entertainment',bookingRequired:false,notes:'Best ride at DCA. Drop-style thrill ride with a great soundtrack. Use Lightning Lane if the wait is over 45 min.',thingsToConsider:['Gets very busy · go first thing after hopping or grab Lightning Lane','Random music tracks play each ride · try to ride twice for different songs'],sortOrder:1},
@@ -2527,7 +2528,7 @@ const RAW_MOCK_TRIPS=[
     ],
     notes:''},
    {
-    id:'cd-day4',date:'2026-06-14',label:'Day 3 · Checkout & Departure',destinationId:'cd1',
+    id:'cd-day4',date:'2026-10-17',label:'Day 3 · Checkout & Departure',destinationId:'cd1',
     activities:[
      {id:'cda10',name:'Hotel checkout · Hotel Indigo',emoji:'🏨',address:'435 W Katella Ave, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'other',bookingRequired:false,notes:'Check-out is 11am. Store luggage with concierge if your flight is later.',thingsToConsider:['Ask about late checkout if your flight is afternoon or later','Grab coffee from the hotel or nearby Starbucks on Harbor Blvd'],sortOrder:0},
      {id:'cda11',name:'Breakfast at The Original Pancake House',emoji:'🥞',address:'1418 E Lincoln Ave, Anaheim, CA 92805',neighborhood:'Anaheim',bucket:'must-do',category:'food',bookingRequired:false,notes:'Anaheim institution. Their Dutch Baby and apple pancake are massive and incredible. Cash-friendly, quick service.',thingsToConsider:['Arrives hot and fast · good for a pre-flight meal','About 25 min drive to LGB airport'],sortOrder:1},
@@ -2657,7 +2658,7 @@ const MOCK_TRIPS=[...RAW_MOCK_TRIPS, RAW_MOCK_LISBON].map(t=>normalizeTrip(t));
 // ── STORAGE ────────────────────────────────────────────────────────────────────
 const SK='locale_v4';
 // Bump this whenever the sample trips change so existing users get the new ones.
-const DEMO_SEED_VERSION=2;
+const DEMO_SEED_VERSION=3;
 const DEMO_SEED_KEY='locale_demo_seed_v';
 function loadTrips(){
   try{
