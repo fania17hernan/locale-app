@@ -2388,20 +2388,30 @@ const RAW_MOCK_TRIPS=[
    {id:'d2',city:'London',country:'United Kingdom',countryCode:'GB',isInternational:true,arrivalDate:'2026-09-17',departureDate:'2026-09-21'},
    {id:'d3',city:'Paris',country:'France',countryCode:'FR',isInternational:true,arrivalDate:'2026-09-21',departureDate:'2026-09-26'},
   ],
+  // Three people flying in from three cities on the same day · this is what makes the
+  // arrivals board mean something (who lands first, who waits, how long the gap is).
   flights:[
-   {id:'f1',direction:'outbound',airline:'Delta',flightNumber:'DL5996',departureAirport:'JFK',arrivalAirport:'LHR',departureTime:'2026-09-17T08:15:00',arrivalTime:'2026-09-17T20:10:00',confirmationNumber:null,notes:'',travelerIds:['c4'],addedBy:'c4'},
-   {id:'f4',direction:'outbound',airline:'American',flightNumber:'AA6001',departureAirport:'PHX',arrivalAirport:'LHR',departureTime:'2026-09-17T09:05:00',arrivalTime:'2026-09-17T18:25:00',confirmationNumber:null,notes:'Lands first · will wait at arrivals',travelerIds:['c5'],addedBy:'c5'},
-   {id:'f2',direction:'connecting',airline:'Eurostar',flightNumber:'ES9108',departureAirport:'London St Pancras',arrivalAirport:'Paris Gare du Nord',departureTime:'2026-09-21T09:24:00',arrivalTime:'2026-09-21T13:02:00',confirmationNumber:null,notes:'Book in advance · fills up fast'},
-   {id:'f3',direction:'return',airline:'Delta',flightNumber:'DL83',departureAirport:'CDG',arrivalAirport:'JFK',departureTime:'2026-09-26T09:25:00',arrivalTime:'2026-09-26T12:30:00',confirmationNumber:null,notes:'Leave hotel 6:30am'},
+   {id:'f4',direction:'outbound',mode:'air',airline:'American',flightNumber:'AA6001',departureAirport:'PHX',arrivalAirport:'LHR',departureTime:'2026-09-17T09:05:00',arrivalTime:'2026-09-17T18:25:00',confirmationNumber:'HKQ42P',notes:'Lands first · happy to wait at arrivals',travelerIds:['c5'],addedBy:'c5'},
+   {id:'f1',direction:'outbound',mode:'air',airline:'Delta',flightNumber:'DL5996',departureAirport:'JFK',arrivalAirport:'LHR',departureTime:'2026-09-17T08:15:00',arrivalTime:'2026-09-17T20:10:00',confirmationNumber:'JQ7T2M',notes:'Terminal 3 · bags checked through',travelerIds:['c4'],addedBy:'c4'},
+   {id:'f5',direction:'outbound',mode:'air',airline:'British Airways',flightNumber:'BA0284',departureAirport:'SFO',arrivalAirport:'LHR',departureTime:'2026-09-17T16:40:00',arrivalTime:'2026-09-17T21:45:00',confirmationNumber:'RM88XC',notes:'Last one in · meet everyone at the hotel',travelerIds:['c6'],addedBy:'c6'},
+   {id:'f2',direction:'connecting',mode:'train',airline:'Eurostar',flightNumber:'ES9108',departureAirport:'London St Pancras',arrivalAirport:'Paris Gare du Nord',departureTime:'2026-09-21T09:24:00',arrivalTime:'2026-09-21T13:02:00',confirmationNumber:'EU5518',notes:'Book in advance · fills up fast. Arrive 45 min early for passport control.',travelerIds:['c4','c5','c6']},
+   {id:'f3',direction:'return',mode:'air',airline:'Delta',flightNumber:'DL83',departureAirport:'CDG',arrivalAirport:'JFK',departureTime:'2026-09-26T09:25:00',arrivalTime:'2026-09-26T12:30:00',confirmationNumber:'JQ7T2M',notes:'Leave the hotel by 6:30am',travelerIds:['c4']},
   ],
   lodging:[
    {id:'l2',name:'The Hoxton, Shoreditch',address:'81 Great Eastern St, London EC2A 3HU',checkIn:'2026-09-17',checkOut:'2026-09-21'},
    {id:'l3',name:'Hôtel du Petit Moulin',address:'29/31 Rue de Poitou, 75003 Paris',checkIn:'2026-09-21',checkOut:'2026-09-26'},
   ],
   collaborators:[
-   {id:'c4',name:'Stephanie',email:'s.borboa9@gmail.com',role:'owner',avatarColor:AVATAR_COLORS[3],rsvp:'going'},
-   {id:'c5',name:'Alex M.',email:'alex@example.com',phone:'512-555-0134',role:'editor',avatarColor:AVATAR_COLORS[4]},
+   {id:'c4',name:'Dana Whitfield',email:'dana@example.com',phone:'212-555-0148',role:'owner',avatarColor:AVATAR_COLORS[3],rsvp:'going'},
+   {id:'c5',name:'Alex Moreau',email:'alex@example.com',phone:'512-555-0134',role:'crew',avatarColor:AVATAR_COLORS[4],rsvp:'going'},
+   {id:'c6',name:'Priya Raman',email:'priya@example.com',role:'crew',avatarColor:AVATAR_COLORS[1],rsvp:'pending',invitedAt:1,inviteSentCount:1},
   ],
+  // A real split · the Eurostar line excludes Priya, who booked her own seat.
+  budget:{currency:'GBP',items:[
+    {id:'b1',label:'The Hoxton · 4 nights',amount:960,paidBy:'c4',excluded:[],settledIds:['c5'],day:null},
+    {id:'b2',label:'Eurostar London → Paris',amount:237,paidBy:'c4',excluded:['c6'],settledIds:[],day:null},
+    {id:'b3',label:'Dinner at Padella',amount:88,paidBy:'c5',excluded:[],settledIds:[],day:null},
+  ],payments:[]},
   days:[
    {id:'lp-1',date:'2026-09-17',label:'Day 1 · London Arrival',destinationId:'d2',
     activities:[
@@ -2460,22 +2470,32 @@ const RAW_MOCK_TRIPS=[
   coverGradient:'gradient-generic',
   occasion:'family',
   emoji:'🎢',
-  travelPeriod:{depart:'2026-06-12',return:'2026-06-14'},
-  startDate:'2026-06-12',endDate:'2026-06-14',
+  travelPeriod:{depart:'2026-10-15',return:'2026-10-17'},
+  startDate:'2026-10-15',endDate:'2026-10-17',
   travelerPassportCountry:'US',
   travelerCount:2,
-  destinations:[{id:'cd1',city:'Anaheim',country:'United States',countryCode:'US',isInternational:false,arrivalDate:'2026-06-12',departureDate:'2026-06-14'}],
+  destinations:[{id:'cd1',city:'Anaheim',country:'United States',countryCode:'US',isInternational:false,arrivalDate:'2026-10-15',departureDate:'2026-10-17'}],
   flights:[
-    {id:'f1',flightNumber:'SW4915',origin:'Origin',destination:'LGB',departureDate:'2026-06-12',notes:'Arriving June 12'},
-    {id:'f2',flightNumber:'SW2476',origin:'LGB',destination:'Home',departureDate:'2026-06-14',notes:'Departing Monday'},
+    {id:'f1',direction:'outbound',mode:'air',airline:'Southwest',flightNumber:'SW4915',departureAirport:'PHX',arrivalAirport:'LGB',departureTime:'2026-10-15T10:20:00',arrivalTime:'2026-10-15T11:35:00',confirmationNumber:'K4RB2D',notes:'Bags fly free · rental car desk is outside baggage claim',travelerIds:['cc1','cc2','cc3'],addedBy:'cc1'},
+    {id:'f2',direction:'return',mode:'air',airline:'Southwest',flightNumber:'SW2476',departureAirport:'LGB',arrivalAirport:'PHX',departureTime:'2026-10-17T18:05:00',arrivalTime:'2026-10-17T19:20:00',confirmationNumber:'K4RB2D',notes:'Leave the hotel by 3:30pm · LGB is small but the 405 is not',travelerIds:['cc1','cc2','cc3'],addedBy:'cc1'},
   ],
-  lodging:[{id:'cl1',name:'Hotel Indigo Anaheim',address:'435 W Katella Ave, Anaheim, CA 92802'}],
+  // Dated, so the check-in card lands on the right day and doesn't bleed across the trip.
+  lodging:[{id:'cl1',name:'Hotel Indigo Anaheim',address:'435 W Katella Ave, Anaheim, CA 92802',checkIn:'2026-10-15',checkOut:'2026-10-17',checkInTime:'15:00',checkOutTime:'11:00',confirmationNumber:'IHG-884219'}],
   collaborators:[
-    {id:'cc1',name:'Stephanie',email:'s.borboa9@gmail.com',role:'owner',avatarColor:AVATAR_COLORS[0]},
+    {id:'cc1',name:'Marcus Lee',email:'marcus@example.com',role:'owner',avatarColor:AVATAR_COLORS[0],rsvp:'going'},
+    {id:'cc2',name:'Rosa Lee',email:'rosa@example.com',role:'crew',avatarColor:AVATAR_COLORS[2],rsvp:'going'},
+    {id:'cc3',name:'Ellie (age 6)',email:'',role:'viewer',avatarColor:AVATAR_COLORS[5],rsvp:'going'},
   ],
+  // The classic group-trip problem, shown small: the 6-year-old is excluded from the
+  // park-hopper line she didn't need, so the split isn't just "divide by three".
+  budget:{currency:'USD',items:[
+    {id:'db1',label:'Hotel Indigo · 2 nights',amount:412,paidBy:'cc1',excluded:['cc3'],settledIds:[],day:null},
+    {id:'db2',label:'Park tickets · 2 days',amount:606,paidBy:'cc1',excluded:[],settledIds:['cc2'],day:null},
+    {id:'db3',label:'Rental car + parking',amount:145,paidBy:'cc2',excluded:['cc3'],settledIds:[],day:null},
+  ],payments:[]},
   days:[
    {
-    id:'cd-day1',date:'2026-06-12',label:'Day 1 · Arrival & Downtown Disney',destinationId:'cd1',
+    id:'cd-day1',date:'2026-10-15',label:'Day 1 · Arrival & Downtown Disney',destinationId:'cd1',
     activities:[
      {id:'cda1',name:'Land at Long Beach Airport (LGB) · SW4915',emoji:'✈️',address:'4100 Donald Douglas Dr, Long Beach, CA 90808',neighborhood:'Long Beach',bucket:'must-do',category:'other',bookingRequired:false,notes:'Pick up rental car or rideshare to Hotel Indigo (~30 min)',thingsToConsider:['Grab snacks for the room at a nearby Trader Joe\'s on the way','Check-in is typically 3pm · ask for early if arriving earlier'],sortOrder:0},
      {id:'cda2',name:'Check in · Hotel Indigo Anaheim',emoji:'🏨',address:'435 W Katella Ave, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'other',bookingRequired:false,notes:'Steps from the Disneyland entrance. Ask for a park-view room if available.',thingsToConsider:['Download the Disneyland app tonight and buy Genie+ in advance','Set an alarm · rope drop tomorrow is worth it'],sortOrder:1},
@@ -2486,7 +2506,7 @@ const RAW_MOCK_TRIPS=[
     ],
     notes:'Arrival day · take it easy, get oriented, prep for big park days ahead.'},
    {
-    id:'cd-day2',date:'2026-06-13',label:'Day 2 · Disneyland Park (Day 1 Hopper)',destinationId:'cd1',
+    id:'cd-day2',date:'2026-10-16',label:'Day 2 · Disneyland Park (Day 1 Hopper)',destinationId:'cd1',
     activities:[
      {id:'cda4',name:'Disneyland Park · Rope Drop',emoji:'🏰',address:'1313 Disneyland Dr, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'entertainment',bookingRequired:true,bookingUrl:'https://disneyland.disney.go.com/tickets/',notes:'Arrive 30 min before opening for rope drop. Head straight to Indiana Jones Adventure or Pirates of the Caribbean before crowds build.',thingsToConsider:['Buy 2-Day Park Hopper tickets in advance online · cheaper than at gate','Download Disneyland app for Lightning Lane and wait times','Genie+ is $30–35/person · worth it on a busy summer Saturday'],sortOrder:0},
      {id:'cda5',name:'New Orleans Square & Haunted Mansion',emoji:'👻',address:'Disneyland Park, New Orleans Square',neighborhood:'Disneyland',bucket:'must-do',category:'entertainment',bookingRequired:false,notes:'One of the most iconic areas of Disneyland. Haunted Mansion, Pirates of the Caribbean, and the Blue Bayou restaurant are all here.',thingsToConsider:['Blue Bayou is a lovely sit-down lunch spot inside the park · reserve in advance','Evening is magical here with the lights and ambiance'],sortOrder:1},
@@ -2497,7 +2517,7 @@ const RAW_MOCK_TRIPS=[
     ],
     notes:'Big park day · pace yourselves and stay hydrated. July in Anaheim is hot (85–95°F). Take a mid-afternoon break at the hotel pool if needed.'},
    {
-    id:'cd-day3',date:'2026-06-13',label:'Day 2 Evening · Disney California Adventure',destinationId:'cd1',
+    id:'cd-day3',date:'2026-10-16',label:'Day 2 Evening · Disney California Adventure',destinationId:'cd1',
     activities:[
      {id:'cda7',name:'Disney California Adventure · Evening Hop',emoji:'🎡',address:'1313 Disneyland Dr, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'entertainment',bookingRequired:true,bookingUrl:'https://disneyland.disney.go.com/tickets/',notes:'Use your Park Hopper to jump to DCA in the afternoon/evening. Don\'t miss Guardians of the Galaxy: Mission Breakout and Radiator Springs Racers.',thingsToConsider:['World of Color water/light show at night is stunning · grab a spot 30 min early','Pixar Pier is beautiful at dusk'],sortOrder:0},
      {id:'cda8',name:'Guardians of the Galaxy: Mission Breakout',emoji:'🚀',address:'Disney California Adventure, Hollywood Land',neighborhood:'DCA',bucket:'must-do',category:'entertainment',bookingRequired:false,notes:'Best ride at DCA. Drop-style thrill ride with a great soundtrack. Use Lightning Lane if the wait is over 45 min.',thingsToConsider:['Gets very busy · go first thing after hopping or grab Lightning Lane','Random music tracks play each ride · try to ride twice for different songs'],sortOrder:1},
@@ -2508,7 +2528,7 @@ const RAW_MOCK_TRIPS=[
     ],
     notes:''},
    {
-    id:'cd-day4',date:'2026-06-14',label:'Day 3 · Checkout & Departure',destinationId:'cd1',
+    id:'cd-day4',date:'2026-10-17',label:'Day 3 · Checkout & Departure',destinationId:'cd1',
     activities:[
      {id:'cda10',name:'Hotel checkout · Hotel Indigo',emoji:'🏨',address:'435 W Katella Ave, Anaheim, CA 92802',neighborhood:'Anaheim Resort',bucket:'must-do',category:'other',bookingRequired:false,notes:'Check-out is 11am. Store luggage with concierge if your flight is later.',thingsToConsider:['Ask about late checkout if your flight is afternoon or later','Grab coffee from the hotel or nearby Starbucks on Harbor Blvd'],sortOrder:0},
      {id:'cda11',name:'Breakfast at The Original Pancake House',emoji:'🥞',address:'1418 E Lincoln Ave, Anaheim, CA 92805',neighborhood:'Anaheim',bucket:'must-do',category:'food',bookingRequired:false,notes:'Anaheim institution. Their Dutch Baby and apple pancake are massive and incredible. Cash-friendly, quick service.',thingsToConsider:['Arrives hot and fast · good for a pre-flight meal','About 25 min drive to LGB airport'],sortOrder:1},
@@ -2600,9 +2620,9 @@ const RAW_MOCK_LISBON={
   planningStage:'idea', travelPeriod:{depart:'',return:''}, travelerPassportCountry:'US',
   destinations:[{id:'lz1',city:'Lisbon',country:'Portugal',countryCode:'PT',isInternational:true,arrivalDate:'',departureDate:''}],
   collaborators:[
-    {id:'lc1',name:'You',email:'',role:'owner',avatarColor:AVATAR_COLORS[0],rsvp:'going'},
-    {id:'lc2',name:'Maya',email:'',role:'crew',avatarColor:AVATAR_COLORS[1],rsvp:'pending'},
-    {id:'lc3',name:'Theo',email:'',role:'crew',avatarColor:AVATAR_COLORS[2],rsvp:'pending'},
+    {id:'lc1',name:'Jordan Ellis',email:'jordan@example.com',role:'owner',avatarColor:AVATAR_COLORS[0],rsvp:'going'},
+    {id:'lc2',name:'Maya Okafor',email:'maya@example.com',role:'crew',avatarColor:AVATAR_COLORS[1],rsvp:'pending'},
+    {id:'lc3',name:'Theo Barnes',email:'theo@example.com',role:'crew',avatarColor:AVATAR_COLORS[2],rsvp:'pending'},
   ],
   days:[], checklist:[], flights:[], lodging:[],
   pinnedIdeas:[
@@ -2614,7 +2634,7 @@ const RAW_MOCK_LISBON={
       reactions:[{memberId:'lc3',reaction:'love',ts:4}]}
   ],
   ideation:{
-    destination_summary:'Lisbon rewards wanderers: tiled streets, miradouro sunset views, and a food scene that punches way above its price point. Great first European city · walkable, friendly, easy transit.',
+    destination_summary:"If this is your first trip abroad, Lisbon is about as forgiving as Europe gets: English is widely spoken, the metro is simple, it's one of the safest capitals in Europe, and your dollar goes a long way. Tiled streets, miradouro sunsets, and a food scene well above its price point.",
     best_time:{when:'Late May to mid June', why:'Jacaranda blooms, 75° days, and shoulder-season prices before the July crowds arrive.'},
     neighborhoods:[
       {name:'Príncipe Real', why:'Leafy squares, indie shops, standout restaurants', stay_here_if:'You want charm and calm within a 10-minute walk of everything.'},
@@ -2629,42 +2649,44 @@ const RAW_MOCK_LISBON={
 // new user can open one and immediately feel the features that matter to them.
 // Keyed by demo trip id; a trip with no entry simply shows no badge.
 const DEMO_PERSONA={
-  'mock-lp':          { label:'The Organizer', blurb:'Booked trip, crew to herd · arrivals board, crew RSVP, shared itinerary, calendar export' },
-  'mock-lisbon':      { label:'The Dreamer',   blurb:'No dates yet · pin ideas, collect crew reactions, then make it real' },
-  'mock-cali-disney': { label:'The First-timer', blurb:'Family trip, unfamiliar city · generated days, packing, budget split' },
+  'mock-lp':          { label:'The Organizer',  blurb:'Two countries, three cities of origin · arrivals board, Eurostar leg, crew RSVP, split costs' },
+  'mock-lisbon':      { label:'The Dreamer',    blurb:'First time abroad, no dates yet · pin ideas, collect crew reactions, then make it real' },
+  'mock-cali-disney': { label:'The First-timer',blurb:'One city, first group trip · AI-drafted days, packing list, budget split' },
 };
 const MOCK_TRIPS=[...RAW_MOCK_TRIPS, RAW_MOCK_LISBON].map(t=>normalizeTrip(t));
 
 // ── STORAGE ────────────────────────────────────────────────────────────────────
 const SK='locale_v4';
+// Bump this whenever the sample trips change so existing users get the new ones.
+const DEMO_SEED_VERSION=3;
+const DEMO_SEED_KEY='locale_demo_seed_v';
 function loadTrips(){
   try{
     const r=localStorage.getItem(SK);
     if(r){
       const parsed=JSON.parse(r);
       const trips=parsed.map(normalizeTrip);
-      // Demo refresh: users seeded before the persona demos existed get the Lisbon idea demo too
+      // Demo refresh, versioned. This replaced a growing stack of one-off guards, each
+      // sniffing for a field the previous seed lacked — none of which fire when the demo
+      // CONTENT changes (new names, budgets, an extra traveler). Bump DEMO_SEED_VERSION
+      // and every sample trip is reseeded. Only ever touches demos, and only while the
+      // user has made no trip of their own, so real work is never overwritten.
+      const seeded=(()=>{ try{ return parseInt(localStorage.getItem(DEMO_SEED_KEY)||'0',10)||0; }catch(e){ return 0; } })();
+      if(trips.length && trips.every(t=>t.isDemo) && seeded<DEMO_SEED_VERSION){
+        const fresh=MOCK_TRIPS.map(t=>normalizeTrip(t));
+        try{ localStorage.setItem(SK, JSON.stringify(fresh)); localStorage.setItem(DEMO_SEED_KEY, String(DEMO_SEED_VERSION)); }catch(e){}
+        return fresh;
+      }
+      // Users seeded before the Dreamer demo existed never received it at all.
       if(trips.some(t=>t.isDemo) && !trips.some(t=>t.id==='mock-lisbon') && trips.every(t=>t.isDemo)){
         trips.push(normalizeTrip(RAW_MOCK_LISBON));
         try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
-      }
-      // Round 9 demo refresh: pre-sweep seeds still carry em dashes in the Lisbon pins.
-      // Round 12: also refresh seeds that predate pin reactions, so the Dreamer demo shows buy-in.
-      const lb=trips.findIndex(t=>t.id==='mock-lisbon' && t.isDemo && (JSON.stringify(t.pinnedIdeas||[]).includes('\u2014') || !(t.pinnedIdeas||[]).some(p=>p.title) || !(t.pinnedIdeas||[]).some(p=>(p.reactions||[]).length)));
-      if(lb>=0 && trips.every(t=>t.isDemo)){
-        trips[lb]=normalizeTrip(RAW_MOCK_LISBON);
-        try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
-      }
-      // Phase 2c demo refresh: older seeds lack per-traveler flights · refresh the organizer demo so the arrivals board shows
-      const lpIdx=trips.findIndex(t=>t.id==='mock-lp' && t.isDemo && !(t.flights||[]).some(f=>(f.travelerIds||[]).length));
-      if(lpIdx>=0 && trips.every(t=>t.isDemo)){
-        const fresh=RAW_MOCK_TRIPS.find(r=>r.id==='mock-lp');
-        if(fresh){ trips[lpIdx]=normalizeTrip(fresh); try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){} }
       }
       return trips;
     }
   }catch(e){}
   localStorage.setItem(SK,JSON.stringify(MOCK_TRIPS));
+  try{ localStorage.setItem(DEMO_SEED_KEY, String(DEMO_SEED_VERSION)); }catch(e){}
   return MOCK_TRIPS;
 }
 // Persistent visually-hidden live region so toast messages reach screen readers (WCAG 4.1.3)
