@@ -1738,7 +1738,7 @@ function validateIdeation(o){
 }
 
 // ── DAY ROUTE · Google Maps waypoint link (no API key, no cost) ───────────────
-function buildDayRouteUrl(trip, day){
+function buildDayRouteUrl(trip, day, mode){
   const lodging=(trip.lodging||[])[0];
   const cityFallback=(trip.destinations||[]).find(d=>d.id===day.destinationId)?.city||(trip.destinations||[])[0]?.city||'';
   const stopAddr=(s)=>(s.address&&s.address.trim())?s.address:(s.name?s.name+(cityFallback?', '+cityFallback:''):'');
@@ -1755,7 +1755,11 @@ function buildDayRouteUrl(trip, day){
   // offers a one-tap switch to transit or driving once the route opens.
   const origin=chain[0], destination=chain[chain.length-1];
   const waypoints=chain.slice(1,-1);
-  const p=new URLSearchParams({api:'1', origin, destination, travelmode:'walking'});
+  // Emily: Maps opened in DRIVING mode, which is wrong for a city day. It then defaulted
+  // to WALKING, which is wrong the other way — a day that crosses a city came back as an
+  // 11-hour walk. Transit is the realistic default for a city day; the caller can pass
+  // 'walking' when the stops are genuinely clustered, and Google offers a one-tap switch.
+  const p=new URLSearchParams({api:'1', origin, destination, travelmode:(mode==='walking'?'walking':'transit')});
   if(waypoints.length) p.set('waypoints', waypoints.join('|'));
   return 'https://www.google.com/maps/dir/?'+p.toString();
 }
@@ -2899,10 +2903,19 @@ function mergeBookingIntoTrip(trip, p){
     return {trip:{...trip, days}, kind:'activity', label:p.name||'event'};
   }
   if(p && p.type==='lodging'){
-    const newLodging=[...(trip.lodging||[])];
-    const ex=newLodging.findIndex(l=>l.name===p.name);
-    const entry={id:ex>=0?newLodging[ex].id:uuid(),name:p.name||'',address:p.address||'',checkIn:p.checkIn||'',checkOut:p.checkOut||'',checkInTime:p.checkInTime||'',checkOutTime:p.checkOutTime||'',confirmationNumber:p.confirmationNumber||'',roomType:p.roomType||'',notes:p.notes||''};
-    if(ex>=0)newLodging[ex]=entry; else newLodging.push(entry);
+    // Changing hotels used to leave BOTH stays on the trip (the match was on name, so a
+    // different hotel simply appended) and both sets of check-in/out stops on the days.
+    // A booking that covers the same nights REPLACES the old one — old stay and its
+    // timeline stops removed first. A stay in different nights is additive, as before.
+    const candidate={checkIn:p.checkIn||'',checkOut:p.checkOut||''};
+    const superseded=(trip.lodging||[]).filter(l=> l && (l.name===p.name || lodgingOverlaps(l,candidate)));
+    let base=trip;
+    superseded.forEach(l=>{ base=removeLodging(base,l.id); });
+    const keptId=superseded.length?superseded[0].id:null;
+    const newLodging=[...(base.lodging||[])];
+    const entry={id:keptId||uuid(),name:p.name||'',address:p.address||'',checkIn:p.checkIn||'',checkOut:p.checkOut||'',checkInTime:p.checkInTime||'',checkOutTime:p.checkOutTime||'',confirmationNumber:p.confirmationNumber||'',roomType:p.roomType||'',notes:p.notes||''};
+    newLodging.push(entry);
+    trip=base;
     // Put check-in and check-out on the right days so the stay lives in the timeline,
     // not just in a lodging list the traveler has to remember to look at.
     const link = typeof lodgingLink==='function' ? lodgingLink(entry) : null;
@@ -2948,6 +2961,31 @@ function mergeBookingIntoTrip(trip, p){
 // delete left an orphaned stop, and a re-add was skipped by the dedup guard — the
 // pills and the day fell out of sync. Pure · returns a new trip. Only touches the
 // matching stop, so a hand-entered flight (which never made a stop) is unaffected.
+// Removing a stay must also clear the check-in / check-out stops it wrote onto the
+// timeline, or you are left with "Check in at <old hotel>" on a day you're staying
+// somewhere else. Same _bookingKey contract as removeTransport. Pure.
+function removeLodging(trip, lodgingId){
+  const list=(trip.lodging||[]);
+  const l=list.find(x=>x&&x.id===lodgingId);
+  const newLodging=list.filter(x=>x&&x.id!==lodgingId);
+  let days=trip.days||[];
+  if(l){
+    const inKey='lodging-in:'+(l.name||'')+':'+(l.checkIn||'');
+    const outKey='lodging-out:'+(l.name||'')+':'+(l.checkOut||'');
+    days=days.map(d=>({...d, activities:(d.activities||[]).filter(a=>!(a&&(a._bookingKey===inKey||a._bookingKey===outKey)))}));
+  }
+  return {...trip, lodging:newLodging, days};
+}
+// Two stays overlap if they share a night. Used to decide whether a newly uploaded
+// booking REPLACES an existing one (you changed hotels) or is an additional stay
+// (a second city). Pure.
+function lodgingOverlaps(a, b){
+  const ci=(x)=>String((x&&x.checkIn)||'').slice(0,10), co=(x)=>String((x&&x.checkOut)||'').slice(0,10);
+  const aI=ci(a), aO=co(a), bI=ci(b), bO=co(b);
+  if(!aI||!bI) return false;
+  const aEnd=aO||aI, bEnd=bO||bI;
+  return aI < bEnd && bI < aEnd || aI===bI;   // share at least one night, or same arrival
+}
 function removeTransport(trip, flightId){
   const flights=(trip.flights||[]);
   const f=flights.find(x=>x&&x.id===flightId);
@@ -3900,6 +3938,11 @@ function dayStopsForRoute(trip,day){
 // between guessed points — the "dated and not helpful" look. Same stop order and
 // lodging anchor as the Open-in-Maps link, so the two always agree.
 function DayRouteMap({trip,day}){
+  // Transit first. Walking was the default and it produced nonsense on any day that
+  // crosses a city — the Anaheim demo came back as an 11 hr 27 min, 30.8 mile walk.
+  // This map is a high-level "what does today look like" overview; the Google Maps
+  // link is where you go for real turn-by-turn.
+  const [mode,setMode]=React.useState('transit');
   const stops=dayStopsForRoute(trip,day);
   if(!stops.length){
     return <div style={{marginTop:10,padding:'12px 14px',border:'1px solid var(--color-border)',borderRadius:10,fontSize:'.8rem',color:'var(--color-ink-muted)'}}>Add a stop with an address to map this day.</div>;
@@ -3909,7 +3952,7 @@ function DayRouteMap({trip,day}){
   const waypoints=names.slice(1,-1).slice(0,8); // Embed API caps waypoints
   const params=['origin='+encodeURIComponent(origin),
                 'destination='+encodeURIComponent(destination),
-                'mode=walking'];
+                'mode='+(mode==='walking'?'walking':'transit')];
   if(waypoints.length) params.push('waypoints='+encodeURIComponent(waypoints.join('|')));
   const single = names.length===1;
   const src = single
@@ -3917,9 +3960,19 @@ function DayRouteMap({trip,day}){
     : gmapsEmbed('directions', params.join('&'));
   return (
     <div style={{marginTop:10}}>
+      {!single && (
+        <div style={{display:'flex',gap:6,marginBottom:8,alignItems:'center'}}>
+          {[['transit','🚇 Transit'],['walking','🚶 Walking']].map(([v,lbl])=>(
+            <button key={v} type="button" onClick={()=>setMode(v)}
+              className={'pill '+(mode===v?'pill-accent':'pill-muted')}
+              aria-pressed={mode===v}
+              style={{cursor:'pointer',border:'1px solid var(--color-border)',fontWeight:600,fontSize:'.75rem'}}>{lbl}</button>
+          ))}
+        </div>
+      )}
       <iframe title={'Route for '+(day.label||day.date||'this day')} loading="lazy" referrerPolicy="no-referrer-when-downgrade"
         src={src} style={{width:'100%',height:280,border:'1px solid var(--color-border)',borderRadius:10,display:'block'}}/>
-      <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)',marginTop:6}}>Walking route · venue locations come from AI-suggested addresses. Always double-check before heading out.</p>
+      <p style={{fontSize:'.7rem',color:'var(--color-ink-muted)',marginTop:6}}>A rough shape of the day, not turn-by-turn · open it in Google Maps for live times. Venue locations come from AI-suggested addresses, so double-check before heading out.</p>
     </div>
   );
 }
@@ -4043,10 +4096,12 @@ function ArrivalsBoard({trip, date, mode}){
         const first = arrivalsMode && sameDay && rows.length>1 && i===0;
         const last  = arrivalsMode && sameDay && rows.length>1 && i===rows.length-1;
         const status = first ? 'LANDS FIRST' : last ? 'LANDS LAST' : (sameDay?'ON TIME':formatDateShort((f[key]||'').slice(0,10)));
+        // max-content, not fixed px · a padded 12-hour time ("12:30 PM") overflowed a
+        // 62px column and collided with the flight number on a phone.
         return (
-          <div key={f.id} style={{display:'grid',gridTemplateColumns:'62px 74px 1fr auto',gap:8,alignItems:'baseline',padding:'9px 0',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
+          <div key={f.id} style={{display:'grid',gridTemplateColumns:'max-content max-content minmax(0,1fr) max-content',columnGap:10,alignItems:'baseline',padding:'9px 0',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
             <span style={{fontFamily:'var(--font-mono)',fontWeight:600,fontSize:'.9rem',color:'#FFD9A8',fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap'}}>{t24(f[key])}</span>
-            <span style={{fontFamily:'var(--font-mono)',fontSize:'.8rem',color:'#F5F1E9',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{f.flightNumber||f.airline||modeNoun(transportMode(f))}</span>
+            <span style={{fontFamily:'var(--font-mono)',fontSize:'.8rem',color:'#F5F1E9',whiteSpace:'nowrap'}}>{f.flightNumber||f.airline||modeNoun(transportMode(f))}</span>
             <span style={{fontFamily:'var(--font-mono)',fontSize:'.8rem',color:'#8C857A',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
               {modeEmoji(transportMode(f))} {port}{f.via?(' · via '+f.via):''}
               <span style={{display:'block',fontFamily:'var(--font-body)',fontSize:'.7rem',color:'#6E675C',marginTop:1,overflow:'hidden',textOverflow:'ellipsis'}}>
@@ -4480,7 +4535,7 @@ function LinkedText({text, style}){
     ? <a key={i} href={p.href} target="_blank" rel="noopener noreferrer" style={{color:'var(--color-accent)',textDecoration:'underline',wordBreak:'break-word',...(style||{})}}>{p.value}</a>
     : <React.Fragment key={i}>{p.value}</React.Fragment>)}</>;
 }
-function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDeleteComment, onMoveToDay, currentDayId, draggable}){
+function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDeleteComment, onMoveToDay, currentDayId, draggable, showTime=true}){
   const [open,setOpen]=useState(false);
   const [draft,setDraft]=useState('');
   const [showMap,setShowMap]=useState(false);
@@ -4498,8 +4553,8 @@ function TimelineStop({trip, item, type, onEdit, onDelete, onAddComment, onDelet
       {/* Time sits in its own mono column, the way the timeline reads on the landing
           page: you scan the left edge for "when", the right for "what". The first
           line of the notes shows as a preview so a collapsed day still tells a story. */}
-      <div style={{flex:1,minWidth:0,padding:'0 0 18px 14px',display:'grid',gridTemplateColumns:'auto 1fr',gap:10,alignItems:'start'}}>
-       <span style={{fontFamily:'var(--font-mono)',fontSize:'.74rem',color:'var(--color-ink-muted)',letterSpacing:'.04em',fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap',minWidth:46,paddingTop:2}}>{time||'—'}</span>
+      <div style={{flex:1,minWidth:0,padding:'0 0 18px 12px',display:'grid',gridTemplateColumns:showTime?'auto 1fr':'1fr',gap:showTime?9:0,alignItems:'start'}}>
+       {showTime && <span style={{fontFamily:'var(--font-mono)',fontSize:'.72rem',color:'var(--color-ink-muted)',letterSpacing:'.02em',fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap',minWidth:44,paddingTop:3}}>{time||''}</span>}
        <div style={{flex:1,minWidth:0}}>
         {/* Tapping the title (not a separate small link) opens notes/details · bigger, thumb-friendly target. */}
         <button onClick={()=>setOpen(o=>!o)} aria-expanded={open} aria-label={`${item.name}, ${comments.length?comments.length+' note'+(comments.length>1?'s':''):'no notes yet'} · tap for details`}
@@ -4831,6 +4886,14 @@ function DayView({trip,day,onUpdateTrip,onGoTab}){
             <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
               <a className="btn btn-secondary btn-sm" href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a>
               {hotel.address && <a className="btn btn-ghost btn-sm" href={'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(hotel.address)} target="_blank" rel="noopener noreferrer">Directions ↗</a>}
+              {/* Changed hotels? Drop this one — its check-in/out stops go with it — then
+                  upload the new confirmation from "Update itinerary". */}
+              {isOwner && isCheckIn && (
+                <button className="btn btn-ghost btn-sm" style={{color:'var(--color-flag)'}}
+                  onClick={()=>{ if(window.confirm('Remove "'+hotel.name+'" from this trip?\n\nIts check-in and check-out stops are removed too. Upload the new booking to replace it.')) onUpdateTrip(removeLodging(trip, hotel.id)); }}>
+                  Remove stay
+                </button>
+              )}
             </div>
           </div>
         );
@@ -4883,7 +4946,9 @@ function DayView({trip,day,onUpdateTrip,onGoTab}){
             {totalStops===0 ? 'No stops yet · tap + Activity or + Food to start this day.' : 'Nothing matches this filter.'}
           </p>
         ) : merged.map(({item,type})=>(
-          <TimelineStop key={item.id} trip={trip} item={item} type={type}
+          /* Only reserve the time gutter when something on this day is actually timed ·
+             otherwise every row rendered an em dash and a 46px empty column. */
+          <TimelineStop key={item.id} trip={trip} item={item} type={type} showTime={merged.some(m=>fmtStopTime(m.item.time))}
             onEdit={isOwner?(it=>{setAddingType(null);setEditingItem({item:it,type});}):null}
             onDelete={isOwner?(id=>handleDelete(id,type==='restaurant'?'restaurants':'activities')):null}
             onAddComment={addStopComment} onDeleteComment={isOwner?deleteStopComment:null}
@@ -4980,21 +5045,25 @@ function pinDisplay(p, city){
     title=(m[0]||t).trim(); detail=m.slice(1).join(' · ').trim();
     if(title.length>64){ detail=(title+(detail?' · '+detail:'')); title=title.slice(0,61).trim()+'…'; }
   }
-  // Maps is right for somewhere you need to GET to, wrong for a named venue you want
-  // to read about or book. Restaurants, museums, hotels and the like get a search
-  // scoped to the venue that lands on its own site; neighbourhoods, regions and
-  // timing notes still get Maps.
+  // Three kinds of pin, three useful destinations:
+  //  · a PLACE you'd need to get to (neighbourhood, region, day trip) → Maps
+  //  · a named VENUE you want to read about or book → a search that lands on its site
+  //  · a TIMING note ("Late May") → Maps is meaningless; you want to read about the
+  //    season, weather and crowds, so send them to a search about that time of year.
   const q=encodeURIComponent(title+(city?(' '+city):''));
   const t=(tag||'').toLowerCase();
-  const areaTags=['stay','timing','day trip','neighborhood','neighbourhood','area','region'];
+  const isTiming = t==='timing' || t==='when';
+  const areaTags=['stay','timing','when','day trip','neighborhood','neighbourhood','area','region'];
   const isVenue = !areaTags.includes(t) &&
     /\b(restaurant|cafe|café|bar|museum|gallery|theatre|theater|hotel|club|venue|shop|store|spa|bakery|brewery|winery|palace|castle)\b/i.test(title+' '+(detail||''));
   return {
     tag: tag||'Idea', title, detail: detail||'',
-    link: isVenue
-      ? 'https://www.google.com/search?q='+encodeURIComponent(title+(city?(' '+city):'')+' official site')
-      : 'https://www.google.com/maps/search/?api=1&query='+q,
-    linkLabel: isVenue ? 'Look it up' : 'Explore on Maps',
+    link: isTiming
+      ? 'https://www.google.com/search?q='+encodeURIComponent((city?city+' ':'')+'in '+title+' weather crowds what to expect')
+      : isVenue
+        ? 'https://www.google.com/search?q='+encodeURIComponent(title+(city?(' '+city):'')+' official site')
+        : 'https://www.google.com/maps/search/?api=1&query='+q,
+    linkLabel: isTiming ? 'What it’s like then' : isVenue ? 'Look it up' : 'Explore on Maps',
   };
 }
 
@@ -9293,7 +9362,12 @@ class ErrorBoundary extends React.Component {
     const d=pinDisplay({id:'p',text:'x',tag:'Stay',title:'Príncipe Real',detail:'Leafy and walkable'},'Lisbon');
     return /google\.com\/maps/.test(d.link) && d.linkLabel==='Explore on Maps';
   })());
-  assert('pinDisplay keeps Maps for timing notes', /google\.com\/maps/.test(pinDisplay({id:'p',text:'x',tag:'Timing',title:'Late May',detail:'Jacaranda season'},'Lisbon').link));
+  // Superseded 2026-08-06: a map cannot answer "Late May". A timing pin now opens a
+  // search about that season in that city; see the timing-vs-place assertions below.
+  assert('pinDisplay sends a timing note to research, not Maps', (()=>{
+    const t=pinDisplay({id:'p',text:'x',tag:'Timing',title:'Late May',detail:'Jacaranda season'},'Lisbon');
+    return !/google\.com\/maps/.test(t.link) && /weather|crowds/.test(decodeURIComponent(t.link));
+  })());
   assert('mergeCityResults appends remote hits without duplicating local ones', (()=>{
     const local=[{city:'Paris',countryCode:'FR'}];
     const remote=[{city:'Paris',countryCode:'FR'},{city:'Paris',countryCode:'US'},{city:'Guadalajara',countryCode:'MX'}];
@@ -9421,7 +9495,39 @@ class ErrorBoundary extends React.Component {
   const url = buildDayRouteUrl(routeTrip, routeDay);
   assert('day route URL is a Google Maps dir link', url && url.startsWith('https://www.google.com/maps/dir/'));
   // Emily: Maps used to open in driving mode on city days.
-  assert('day route defaults to walking, not driving', /[?&]travelmode=walking\b/.test(url) && !/travelmode=driving/.test(url));
+  // Walking was the default and produced nonsense on any day that crosses a city (the
+  // Anaheim demo rendered an 11 hr 27 min, 30.8 mile walk). Transit is the realistic
+  // default for a city day; walking stays available for genuinely clustered stops.
+  assert('day route defaults to transit, not walking or driving', /[?&]travelmode=transit\b/.test(url) && !/travelmode=driving/.test(url) && !/travelmode=walking/.test(url));
+  assert('day route still offers walking on request', /[?&]travelmode=walking\b/.test(buildDayRouteUrl(routeTrip, routeDay, 'walking')));
+  // Changing hotels · a new booking covering the same nights REPLACES the old stay and
+  // its timeline stops, instead of leaving two hotels and two check-ins on the trip.
+  (function(){
+    const base={ startDate:'2026-09-16', endDate:'2026-09-21',
+      days:[{id:'d1',date:'2026-09-17',activities:[{id:'keep',name:'Borough Market'}],restaurants:[]},
+            {id:'d2',date:'2026-09-21',activities:[],restaurants:[]}],
+      flights:[], lodging:[], destinations:[{id:'x',city:'London'}] };
+    const a=mergeBookingIntoTrip(base,{type:'lodging',name:'The Hoxton',checkIn:'2026-09-17',checkOut:'2026-09-21'}).trip;
+    const b=mergeBookingIntoTrip(a,{type:'lodging',name:'citizenM Shoreditch',checkIn:'2026-09-17',checkOut:'2026-09-21'}).trip;
+    assert('changing hotels leaves exactly one stay', b.lodging.length===1 && b.lodging[0].name==='citizenM Shoreditch');
+    assert('the old hotel’s check-in and check-out stops are removed', !b.days[0].activities.some(x=>/The Hoxton/.test(x.name)) && !b.days[1].activities.some(x=>/The Hoxton/.test(x.name)));
+    assert('the new hotel’s check-in stop is added', b.days[0].activities.some(x=>/Check in at citizenM/.test(x.name)));
+    assert('unrelated stops survive a hotel change', b.days[0].activities.some(x=>x.id==='keep'));
+    const r=removeLodging(b, b.lodging[0].id);
+    assert('removeLodging drops the stay and its stops', r.lodging.length===0 && !r.days[0].activities.some(x=>/Check in at/.test(x.name)) && r.days[0].activities.some(x=>x.id==='keep'));
+    const again=mergeBookingIntoTrip(r,{type:'lodging',name:'The Hoxton',checkIn:'2026-09-17',checkOut:'2026-09-21'}).trip;
+    assert('re-uploading after removal gives one stay and one check-in', again.lodging.length===1 && again.days[0].activities.filter(x=>/Check in at/.test(x.name)).length===1);
+    const multi={...base, days:[...base.days,{id:'d3',date:'2026-09-23',activities:[],restaurants:[]}]};
+    const m2=mergeBookingIntoTrip(mergeBookingIntoTrip(multi,{type:'lodging',name:'Hoxton London',checkIn:'2026-09-17',checkOut:'2026-09-21'}).trip,
+                                  {type:'lodging',name:'Hotel Paris',checkIn:'2026-09-21',checkOut:'2026-09-25'}).trip;
+    assert('a stay in a different city is still additive', m2.lodging.length===2);
+  })();
+  // A timing pin ("Late May") has nowhere to go on a map · send it to research instead.
+  assert('a timing pin researches the season rather than opening Maps', (()=>{
+    const t=pinDisplay({id:'p',text:'x',tag:'Timing',title:'Late May',detail:'Jacaranda season'},'Lisbon');
+    return !/google\.com\/maps/.test(t.link) && /weather|crowds/.test(decodeURIComponent(t.link)) && /Lisbon/.test(decodeURIComponent(t.link));
+  })());
+  assert('a place pin still opens Maps', /google\.com\/maps/.test(pinDisplay({id:'p',text:'x',tag:'Neighborhood',title:'Alfama'},'Lisbon').link));
   assert('day route uses the documented Maps URLs API', /[?&]api=1\b/.test(url) && /[?&]origin=/.test(url) && /[?&]destination=/.test(url));
   assert('day route starts and ends at lodging', url.indexOf('848+Washington') !== -1 && url.indexOf('848+Washington') !== url.lastIndexOf('848+Washington'));
   assert('day route falls back to name + city for missing address', url.includes('Dante%2C+New+York'));
