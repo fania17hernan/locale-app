@@ -9362,7 +9362,12 @@ class ErrorBoundary extends React.Component {
     const d=pinDisplay({id:'p',text:'x',tag:'Stay',title:'Príncipe Real',detail:'Leafy and walkable'},'Lisbon');
     return /google\.com\/maps/.test(d.link) && d.linkLabel==='Explore on Maps';
   })());
-  assert('pinDisplay keeps Maps for timing notes', /google\.com\/maps/.test(pinDisplay({id:'p',text:'x',tag:'Timing',title:'Late May',detail:'Jacaranda season'},'Lisbon').link));
+  // Superseded 2026-08-06: a map cannot answer "Late May". A timing pin now opens a
+  // search about that season in that city; see the timing-vs-place assertions below.
+  assert('pinDisplay sends a timing note to research, not Maps', (()=>{
+    const t=pinDisplay({id:'p',text:'x',tag:'Timing',title:'Late May',detail:'Jacaranda season'},'Lisbon');
+    return !/google\.com\/maps/.test(t.link) && /weather|crowds/.test(decodeURIComponent(t.link));
+  })());
   assert('mergeCityResults appends remote hits without duplicating local ones', (()=>{
     const local=[{city:'Paris',countryCode:'FR'}];
     const remote=[{city:'Paris',countryCode:'FR'},{city:'Paris',countryCode:'US'},{city:'Guadalajara',countryCode:'MX'}];
