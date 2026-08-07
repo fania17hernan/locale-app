@@ -1484,12 +1484,17 @@ async function docxToText(file){
 function linkifyParts(text){
   const s=(text==null?'':String(text));
   if(!s) return [];
-  const re=/((?:https?:\/\/|www\.)[^\s<>()]+[^\s<>().,;:!?'"])/gi;
+  // Also catch a bare domain someone pasted without a scheme ("opentable.com/padella"),
+  // because that is exactly how a booking link arrives from a confirmation email and we
+  // promise it becomes tappable. Restricted to a known TLD list so ordinary prose
+  // ("9 a.m.", "Sep 17.") can never be mistaken for a link. javascript:/data: still
+  // cannot match — the pattern only ever produces an https:// href.
+  const re=/((?:https?:\/\/|www\.)[^\s<>()]+[^\s<>().,;:!?'"]|\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|co|app|travel|uk|fr|de|es|it|nl|eu|ie|ca)(?:\/[^\s<>()]*[^\s<>().,;:!?'"])?)/gi;
   const out=[]; let last=0, m;
   while((m=re.exec(s))!==null){
     if(m.index>last) out.push({type:'text',value:s.slice(last,m.index)});
     const raw=m[0];
-    out.push({type:'link',value:raw,href:/^www\./i.test(raw)?('https://'+raw):raw});
+    out.push({type:'link',value:raw,href:/^https?:\/\//i.test(raw)?raw:('https://'+raw)});
     last=m.index+raw.length;
   }
   if(last<s.length) out.push({type:'text',value:s.slice(last)});
@@ -9124,6 +9129,12 @@ class ErrorBoundary extends React.Component {
   assert('linkifyParts leaves plain text alone', (()=>{ const p=linkifyParts('just a note'); return p.length===1 && p[0].type==='text'; })());
   assert('linkifyParts drops trailing sentence punctuation from the href', (()=>{ const p=linkifyParts('go to https://a.com/b.'); return p[1].href==='https://a.com/b'; })());
   assert('linkifyParts is null-safe', linkifyParts(null).length===0 && linkifyParts('').length===0 && linkifyParts(undefined).length===0);
+  // A booking link pasted without a scheme ("opentable.com/padella") is exactly how it
+  // arrives from a confirmation email · the landing page promises it becomes tappable.
+  assert('linkifyParts links a bare domain with a path', (()=>{ const p=linkifyParts('Notes: opentable.com/padella'); return p.some(x=>x.type==='link'&&x.href==='https://opentable.com/padella'); })());
+  assert('linkifyParts links a bare domain on its own', linkifyParts('book at dishoom.com').some(x=>x.type==='link'&&x.href==='https://dishoom.com'));
+  // …without turning ordinary prose into links.
+  assert('linkifyParts leaves times, decimals and sentence ends alone', linkifyParts('meet at 9 a.m. sharp').every(p=>p.type==='text') && linkifyParts('it cost 12.50 total').every(p=>p.type==='text') && linkifyParts('Arrive Sep 17. Then walk.').every(p=>p.type==='text') && linkifyParts('e.g. bring a coat').every(p=>p.type==='text'));
   // P0b · OTP code normalisation (the field strips non-digits and caps at 6)
   (function(){
     const norm=(v)=>String(v||'').replace(/\D/g,'').slice(0,OTP_MAX_LEN);
