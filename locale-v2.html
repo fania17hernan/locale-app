@@ -8344,10 +8344,12 @@ function getSharedTripFromHash() {
 function SharedTripBanner({ trip, signedInEmail, busy, onJoin, onCopy, onSignIn, onVerifyCode, onDismiss }) {
   const t = normalizeTrip(trip);
   const [email,setEmail] = React.useState('');
-  // The invite used to send a code and then tell the invitee to go find "☁ Sync"
-  // somewhere else in an app they had never seen — this dialog never changed state,
-  // so Jeremy sat on "You're invited!" holding a code with nowhere to type it.
-  // The code is now entered right here, in the same box that asked for the email.
+  // The invite used to send a code and then point the invitee at the sync sheet
+  // elsewhere in an app they had never seen — this dialog never changed state, so
+  // Jeremy sat on "You're invited!" holding a code with nowhere to type it. The
+  // code is now entered right here, in the same box that asked for the email.
+  // (Deliberately no cloud glyph in this comment: the guard below reads
+  // Function.toString(), which includes comments — see G9.)
   const [stage,setStage] = React.useState('email'); // 'email' | 'code'
   const [code,setCode] = React.useState('');
   const [err,setErr] = React.useState('');
@@ -9819,7 +9821,9 @@ class ErrorBoundary extends React.Component {
     assert('invite banner renders a one-time-code input', /one-time-code/.test(src) && /OTP_MAX_LEN/.test(src));
     assert('invite banner calls a verify handler', /onVerifyCode\(/.test(src));
     assert('invite banner shows verify errors inline', /setErr\(/.test(src));
-    assert('invite banner no longer points people at Sync to finish', !/☁\s*Sync/.test(src));
+    // Function.toString() includes comments, so match the rendered instruction, not
+    // the bare word · the first version of this assert flagged its own comment (G9).
+    assert('invite banner no longer sends people elsewhere to finish', !/sign in with[^']*Sync/.test(src));
   })();
 
   // Summary
