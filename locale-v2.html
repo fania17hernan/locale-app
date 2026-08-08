@@ -1202,13 +1202,25 @@ function clearTombstones(ids){ try{ const s=new Set(ids); localStorage.setItem(D
 function mergeMemberFields(local, server, myCollabId){
   if(!server) return local;
   const out={...local};
-  // Flights: union by id. Anything a member added is the server's to own.
-  const localFlights=Array.isArray(local.flights)?local.flights:[];
-  const serverFlights=Array.isArray(server.flights)?server.flights:[];
-  const mineOrUnowned=localFlights.filter(f=>!f.addedBy || f.addedBy===myCollabId);
-  const theirs=serverFlights.filter(f=>f.addedBy && f.addedBy!==myCollabId);
+  // Flights: local is the source of truth for what this device just did; the server
+  // only CONTRIBUTES legs it has that we don't.
+  //
+  // This used to keep only `!f.addedBy || f.addedBy===myCollabId` from local. But the
+  // flight sheet stamps addedBy with the MEMBER the flight is for, so when the trip
+  // owner added a flight on behalf of a crew member, addedBy was that member's id,
+  // the filter decided the leg wasn't ours to keep, and dropped it. The server had
+  // never seen it either, so nothing came back — the leg rendered, then vanished
+  // ~1.2s later when the debounced push ran. Silent data loss on the owner's own edit.
+  //
+  // Keeping all of local, and adding only server legs we don't already hold, preserves
+  // both sides: the owner's edits survive, and a member who added their own flight
+  // straight to the server (set_my_flight RPC) is still merged in rather than clobbered.
+  const localFlights=(Array.isArray(local.flights)?local.flights:[]).filter(Boolean);
+  const serverFlights=(Array.isArray(server.flights)?server.flights:[]).filter(Boolean);
+  const localIds=new Set(localFlights.map(f=>f.id).filter(Boolean));
+  const theirs=serverFlights.filter(f=>f.addedBy && f.addedBy!==myCollabId && f.id && !localIds.has(f.id));
   const seen=new Set();
-  out.flights=[...mineOrUnowned,...theirs].filter(f=>{ if(!f||seen.has(f.id)) return false; seen.add(f.id); return true; });
+  out.flights=[...localFlights,...theirs].filter(f=>{ if(!f||seen.has(f.id)) return false; seen.add(f.id); return true; });
   // Pin reactions: per member. Keep mine from local, take everyone else's from server.
   const serverPins={}; (Array.isArray(server.pinnedIdeas)?server.pinnedIdeas:[]).forEach(p=>{ if(p&&p.id) serverPins[p.id]=p; });
   out.pinnedIdeas=(Array.isArray(local.pinnedIdeas)?local.pinnedIdeas:[]).map(p=>{
@@ -9397,6 +9409,29 @@ class ErrorBoundary extends React.Component {
     const local={flights:[{id:'f1',addedBy:'m1'}]};
     const server={flights:[{id:'f1',addedBy:'m1'}]};
     return mergeMemberFields(local,server,'m1').flights.length===1;
+  })());
+  // Regression (2026-08-08, from Stephanie's screen recording): the OWNER adding a
+  // flight on behalf of a crew member. The sheet stamps addedBy with that MEMBER's id,
+  // and the old filter (`!f.addedBy || f.addedBy===myCollabId`) therefore threw the leg
+  // away on push — it rendered, then vanished ~1.2s later when the debounced push ran.
+  assert('mergeMemberFields keeps a flight the owner added FOR a crew member', (()=>{
+    const ME='steph', JER='jeremy';
+    const server={flights:[{id:'s1',addedBy:ME,travelerIds:[ME]}]};
+    const local={flights:[{id:'s1',addedBy:ME,travelerIds:[ME]},{id:'j1',addedBy:JER,travelerIds:[JER]}]};
+    const m=mergeMemberFields(local,server,ME);
+    return m.flights.some(f=>f.id==='j1') && m.flights.some(f=>f.id==='s1');
+  })());
+  assert('mergeMemberFields still merges in a member\'s own server-side flight', (()=>{
+    const ME='steph', MAT='mateo';
+    const local={flights:[{id:'s1',addedBy:ME}]};
+    const server={flights:[{id:'s1',addedBy:ME},{id:'m9',addedBy:MAT}]};
+    return mergeMemberFields(local,server,ME).flights.some(f=>f.id==='m9');
+  })());
+  assert('mergeMemberFields prefers the local copy of a leg both sides hold', (()=>{
+    const local={flights:[{id:'j1',addedBy:'jeremy',flightNumber:'DL2323'}]};
+    const server={flights:[{id:'j1',addedBy:'jeremy',flightNumber:'STALE'}]};
+    const m=mergeMemberFields(local,server,'steph');
+    return m.flights.filter(f=>f.id==='j1').length===1 && m.flights[0].flightNumber==='DL2323';
   })());
   assert('mergeMemberFields preserves other members\' reactions', (()=>{
     const local={pinnedIdeas:[{id:'p1',reactions:[{memberId:'m1',reaction:'love'}]}]};
