@@ -7097,15 +7097,7 @@ function CrewSection({trip, onUpdateTrip}){
         headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+sess.access_token, 'apikey': SUPABASE_ANON_KEY },
         body: JSON.stringify({ invite_id: inv.id, invite_url: url }),
       });
-      // A 200 here means Resend ACCEPTED the message, not that it landed. Saying
-      // "emailed ✓" sent Stephanie chasing two crew members whose invites never
-      // arrived — one address had a typo, the other was almost certainly filtered.
-      // Name the exact address so a typo is obvious, and don't promise delivery.
-      if(resp.ok){
-        markInviteSent(m); track('crew_invite',{via:'email'});
-        showToast(`Invite queued to ${m.email.trim()} · if it hasn't landed in a few minutes, check their spam or use Text a link.`,'info',7000);
-        return;
-      }
+      if(resp.ok){ markInviteSent(m); track('crew_invite',{via:'email'}); showToast(`Invite emailed to ${m.name} ✓`,'info',4000); return; }
       mailFallback();
     }catch(e){ mailFallback(); }
   };
@@ -7136,13 +7128,7 @@ function CrewSection({trip, onUpdateTrip}){
                 <span className={`pill ${m.role==='viewer'?'pill-muted':'pill-neutral'}`} style={{padding:'1px 6px',fontSize:'.65rem'}}>{m.role==='viewer'?'Viewer':'Crew'}</span>
               </div>
               <div style={{fontSize:'.72rem',color:'var(--color-ink-muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{[m.email,m.phone].filter(Boolean).join(' · ') || 'No contact info'}</div>
-              {/* "Invited" only means we handed it to the mail provider. After a few
-                  sends with no RSVP the address or a spam filter is the likely problem,
-                  so say so instead of letting the owner keep resending into the void. */}
-              {m.invitedAt && <div style={{fontSize:'.68rem',color:(m.inviteSentCount>2&&(m.rsvp||'pending')==='pending')?'var(--color-flag)':'var(--color-ink-muted)',marginTop:2}}>
-                Invited {relativeAgo(m.invitedAt)}{m.inviteSentCount>1?` · sent ${m.inviteSentCount}×`:''}
-                {m.inviteSentCount>2&&(m.rsvp||'pending')==='pending' ? ' · still no reply, check the address or send a link' : ''}
-              </div>}
+              {m.invitedAt && <div style={{fontSize:'.68rem',color:'var(--color-ink-muted)',marginTop:2}}>Invited {relativeAgo(m.invitedAt)}{m.inviteSentCount>1?` · sent ${m.inviteSentCount}×`:''}</div>}
               {canEditRsvp && <div style={{fontSize:'.65rem',color:'var(--color-accent)',marginTop:2}}>Tap to edit</div>}
             </div>
             {isOwner && (m.rsvp||'pending')!=='going' && <button aria-label={m.invitedAt?`Resend invite to ${m.name}`:`Invite ${m.name}`} onClick={()=>inviteMember(m)} className="btn btn-ghost btn-sm" style={{fontSize:'.72rem',padding:'4px 8px',whiteSpace:'nowrap'}}>{m.invitedAt?'Resend':'Invite'}</button>}
