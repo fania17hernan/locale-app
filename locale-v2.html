@@ -3107,6 +3107,11 @@ function DayTips({trip, day, dest, isOwner, onUpdateTrip}){
     showToast('Added to this day ✓','info',2500);
   };
 
+  // Owner-only surface. Generating writes aiTips onto the shared trip and "Add"
+  // edits the itinerary, so crew have nothing to press here · rendering the card
+  // for them was a heading and a promise with no button under it.
+  if(!isOwner) return null;
+
   return (
     <div className="card" style={{marginBottom:12}}>
       <p className="section-label" style={{margin:'0 0 4px'}}>Near today's plan</p>
@@ -5092,6 +5097,15 @@ function myMemberIdFor(trip){
   const owner = cols.find(c=>c.role==='owner') || cols[0];
   return owner ? owner.id : null;
 }
+// Do I hold a seat on this trip · i.e. is one of these collaborator rows me?
+// Component-scope answer to the question the per-row `isMe` used to answer, so
+// copy outside a members.map() can ask it without reaching into that closure.
+function hasSeatOnTrip(trip){
+  if(!trip) return false;
+  const isOwner = trip._myRole==='owner' || !trip._myRole;
+  if(isOwner || !trip._myCollaboratorId) return false;
+  return (trip.collaborators||[]).some(m=>m && m.id===trip._myCollaboratorId);
+}
 function pinReactionCounts(pin){
   const out={}; PIN_REACTION_KEYS.forEach(k=>out[k]=0);
   (pin.reactions||[]).forEach(r=>{ if(out[r.reaction]!==undefined) out[r.reaction]++; });
@@ -6965,6 +6979,13 @@ function CrewSection({trip, onUpdateTrip}){
   const members = trip.collaborators || [];
   const counts = members.reduce((a,m)=>{const r=m.rsvp||'pending';a[r]=(a[r]||0)+1;return a;},{});
   const isOwner = trip._myRole==='owner' || !trip._myRole; // untagged (locally-created, never synced) trips are always mine
+  // Do I have a seat on this trip? Computed once at component scope, NOT inside the
+  // members.map below · the per-row `isMe` used to be the only definition, and the
+  // footer copy referenced it from outside that closure. Owners never render that
+  // footer, so the ReferenceError only ever fired for crew: the whole Crew tab (and
+  // any tap-through to it, like the journey card) died with "Can't find variable: isMe"
+  // while the owner's build looked perfect. Role-gated branches need role-gated tests.
+  const iAmAMember = hasSeatOnTrip(trip);
   const save = (next)=> onUpdateTrip({...trip, collaborators: next});
   const setRsvp = (id, rsvp)=>{
     if(!isOwner){
@@ -7113,7 +7134,7 @@ function CrewSection({trip, onUpdateTrip}){
       <div className="card" style={{marginBottom:12,padding:0}}>
         {members.length===0 && <div style={{padding:16,color:'var(--color-ink-light)',fontSize:'.9rem'}}>No one added yet. Add travelers below, then share the invite link.</div>}
         {members.map(m=>{
-          const isMe = !isOwner && m.id===trip._myCollaboratorId;
+          const isMe = !isOwner && m.id===trip._myCollaboratorId; // this row is me
           const canEditRsvp = isOwner || isMe;
           return (
           <React.Fragment key={m.id}>
@@ -7236,7 +7257,7 @@ function CrewSection({trip, onUpdateTrip}){
           <button className="btn btn-secondary" style={{width:'100%'}} onClick={shareInvite}>Share invite link</button>
         </>
       ) : (
-        <p style={{fontSize:'.8rem',color:'var(--color-ink-muted)',textAlign:'center',padding:'8px 0'}}>You're viewing this trip as {trip._myRole==='crew'?'Crew':'a Viewer'}{isMe?' · you can set your own RSVP above':''}.</p>
+        <p style={{fontSize:'.8rem',color:'var(--color-ink-muted)',textAlign:'center',padding:'8px 0'}}>You're viewing this trip as {trip._myRole==='crew'?'Crew':'a Viewer'}{iAmAMember?' · tap your own row above to RSVP':''}.</p>
       )}
     </div>
   );
@@ -8969,7 +8990,7 @@ function BugReportButton({ currentView }) {
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, reportState: 'idle' }; // idle|sending|sent|failed
   }
   static getDerivedStateFromError(error) {
     return { hasError: true, error };
@@ -8983,6 +9004,48 @@ class ErrorBoundary extends React.Component {
       log.unshift({ ts: new Date().toISOString(), msg: error?.message, stack: error?.stack?.slice(0,500) });
       localStorage.setItem('locale_error_log', JSON.stringify(log.slice(0, 10)));
     } catch(e) {}
+  }
+  // Deliver the report to usage_events so it lands on the ops dashboard. Falls back
+  // to the clipboard rather than a dead mail draft · a crew member on someone else's
+  // trip has no way to reach the organiser otherwise.
+  sendReport(){
+    if(this.state.reportState==='sent') return;
+    if(this.state.reportState==='failed'){ this.copyReport(); return; }
+    this.setState({reportState:'sending'});
+    const payload=this.reportPayload();
+    let settled=false;
+    const finish=(ok)=>{ if(settled) return; settled=true; this.setState({reportState: ok?'sent':'failed'}); };
+    // Don't leave the button spinning forever if the network hangs.
+    setTimeout(()=>finish(false), 8000);
+    try{
+      const c=sb();
+      if(!c){ finish(false); return; }
+      c.from('usage_events').insert({ event:'error_report', props:payload }).then(
+        (res)=>finish(!(res&&res.error)),
+        ()=>finish(false)
+      );
+    }catch(_){ finish(false); }
+  }
+  reportPayload(){
+    let log=[];
+    try{ log=JSON.parse(localStorage.getItem('locale_error_log')||'[]').slice(0,3); }catch(_){}
+    return {
+      message: String(this.state.error?.message||this.state.error||'').slice(0,300),
+      stack: String(this.state.error?.stack||'').slice(0,1200),
+      recent: log,
+      url: String(location.pathname+location.hash).slice(0,200),
+      ua: String(navigator.userAgent).slice(0,200),
+      reportedAt: new Date().toISOString()
+    };
+  }
+  copyReport(){
+    const text=JSON.stringify(this.reportPayload(),null,2);
+    try{
+      navigator.clipboard.writeText(text).then(
+        ()=>this.setState({reportState:'sent'}),
+        ()=>{}
+      );
+    }catch(_){}
   }
   render() {
     if (this.state.hasError) {
@@ -8999,15 +9062,29 @@ class ErrorBoundary extends React.Component {
               onClick={()=>window.location.reload()}>
               🔄 Refresh the app
             </button>
+            {/* Was a mailto: with no recipient · it opened an empty compose window and
+                the report went nowhere. Crew hit "send", saw a blank To: field, and the
+                organiser never learned the app had broken for them. Reports now go
+                straight to usage_events, the same table the ops dashboard reads. */}
             <button
-              style={{background:'transparent',color:'var(--color-ink-muted)',border:'1px solid var(--color-border)',borderRadius:10,padding:'10px 20px',fontSize:'.85rem',cursor:'pointer',fontFamily:'var(--font-body)'}}
-              onClick={()=>{
-                const log = JSON.parse(localStorage.getItem('locale_error_log')||'[]');
-                const body = encodeURIComponent('Error log:\n\n' + JSON.stringify(log, null, 2));
-                window.location.href = 'mailto:?subject=Locale%20Error%20Report&body=' + body;
-              }}>
-              📧 Send error report
+              disabled={this.state.reportState==='sending'||this.state.reportState==='sent'}
+              style={{background:'transparent',color:'var(--color-ink-muted)',border:'1px solid var(--color-border)',borderRadius:10,padding:'10px 20px',fontSize:'.85rem',cursor:this.state.reportState==='sent'?'default':'pointer',fontFamily:'var(--font-body)',opacity:this.state.reportState==='sent'?.65:1}}
+              onClick={()=>this.sendReport()}>
+              {this.state.reportState==='sending' ? '⏳ Sending…'
+                : this.state.reportState==='sent' ? '✓ Report sent'
+                : this.state.reportState==='failed' ? '📋 Copy report instead'
+                : '📧 Send error report'}
             </button>
+            {this.state.reportState==='sent' && (
+              <p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',lineHeight:1.5}}>
+                Thanks · the trip organiser can see this now.
+              </p>
+            )}
+            {this.state.reportState==='failed' && (
+              <p style={{fontSize:'.75rem',color:'var(--color-ink-muted)',lineHeight:1.5}}>
+                Couldn't reach the server. Tap again to copy the details, then paste them to the organiser.
+              </p>
+            )}
           </div>
           {this.state.error?.message && (
             <p style={{marginTop:20,fontSize:'.75rem',color:'var(--color-ink-muted)',fontFamily:'monospace',maxWidth:400,wordBreak:'break-all'}}>
@@ -9824,6 +9901,39 @@ class ErrorBoundary extends React.Component {
     // Function.toString() includes comments, so match the rendered instruction, not
     // the bare word · the first version of this assert flagged its own comment (G9).
     assert('invite banner no longer sends people elsewhere to finish', !/sign in with[^']*Sync/.test(src));
+  })();
+
+  // Role-gated rendering · every one of these existed as a crash or a dead end for
+  // Jeremy while Stephanie's owner view looked perfect. Owner-only testing is how
+  // all of them shipped, so these assert the CREW side explicitly.
+  (function(){
+    const crew = {_myRole:'crew', _myCollaboratorId:'c2', collaborators:[{id:'c1',role:'owner'},{id:'c2',role:'crew'}]};
+    const owner = {_myRole:'owner', _myCollaboratorId:null, collaborators:[{id:'c1',role:'owner'}]};
+    const local = {collaborators:[{id:'c1',role:'owner'}]}; // never synced · always mine
+    const orphan = {_myRole:'crew', _myCollaboratorId:'gone', collaborators:[{id:'c1',role:'owner'}]};
+
+    assert('hasSeatOnTrip finds my crew row', hasSeatOnTrip(crew)===true);
+    assert('hasSeatOnTrip is false for the owner', hasSeatOnTrip(owner)===false);
+    assert('hasSeatOnTrip is false on an unsynced local trip', hasSeatOnTrip(local)===false);
+    assert('hasSeatOnTrip survives a removed seat', hasSeatOnTrip(orphan)===false);
+    assert('hasSeatOnTrip is null-safe', hasSeatOnTrip(null)===false && hasSeatOnTrip(undefined)===false);
+
+    // The actual regression: the crew footer read a name scoped to members.map().
+    const crewSrc = String(CrewSection);
+    const footer = crewSrc.slice(crewSrc.indexOf("You're viewing this trip as"));
+    assert('crew footer does not reach into the members.map closure', !/\bisMe\b/.test(footer));
+    assert('crew footer uses the component-scope membership check', /iAmAMember/.test(footer));
+    assert('crew can still edit their own RSVP', /canEditRsvp\s*=\s*isOwner\s*\|\|\s*isMe/.test(crewSrc));
+
+    // Owner-only surfaces must return null for crew, not render a headline with no
+    // control under it · that is what "Near today's plan" did on Jeremy's screen.
+    assert('DayTips renders nothing for crew', /if\(!isOwner\)\s*return null/.test(String(DayTips)));
+
+    // Error reports have to reach the organiser, not an empty mail draft.
+    const ebSrc = String(ErrorBoundary.prototype.sendReport) + String(ErrorBoundary.prototype.reportPayload);
+    assert('error report posts to usage_events', /usage_events/.test(ebSrc) && /error_report/.test(ebSrc));
+    assert('error report carries the message and stack', /stack/.test(ebSrc) && /message/.test(ebSrc));
+    assert('error boundary no longer opens a recipientless mailto', !/mailto:\?/.test(String(ErrorBoundary.prototype.render)));
   })();
 
   // Summary

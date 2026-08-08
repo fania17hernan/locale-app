@@ -90,6 +90,43 @@ jobs:
           [ "$FOUND" = "1" ] && exit 1
           echo "✅ No secrets found"
 
+      # A crew member's whole Crew tab died on "Can't find variable: isMe" — a name
+      # declared inside a .map() closure and read from the sibling branch below it.
+      # Syntactically valid, so the parse gate passed; a hard ReferenceError for
+      # every non-owner, and invisible to the owner because owners never render
+      # that branch. This step catches the entire class before it reaches anyone.
+      - name: Undefined-variable scan (no-undef)
+        run: |
+          python3 - <<'PY'
+          import re
+          src = open('locale-v2.html', encoding='utf-8').read()
+          blocks = re.findall(r'<script type="text/babel"[^>]*>(.*?)</script>', src, flags=re.S)
+          open('app.jsx', 'w').write(blocks[0])
+          PY
+          cat > .eslintrc.json <<'JSON'
+          {
+            "root": true,
+            "parser": "@babel/eslint-parser",
+            "parserOptions": {
+              "ecmaVersion": 2022, "sourceType": "script", "requireConfigFile": false,
+              "babelOptions": { "presets": ["@babel/preset-react"] },
+              "ecmaFeatures": { "jsx": true }
+            },
+            "env": { "browser": true, "es2022": true },
+            "globals": { "React": "readonly", "ReactDOM": "readonly", "supabase": "readonly", "Babel": "readonly", "XLSX": "readonly", "Papa": "readonly" },
+            "rules": { "no-undef": "error" }
+          }
+          JSON
+          npm i --no-audit --no-fund --legacy-peer-deps --silent \
+            eslint@8.57.0 @babel/eslint-parser @babel/preset-react @babel/core
+          UNDEF=$(npx eslint app.jsx -f unix 2>/dev/null | grep "no-undef" || true)
+          if [ -n "$UNDEF" ]; then
+            echo "$UNDEF"
+            echo "🚨 Undefined variable in locale-v2.html — this is a runtime crash for whoever hits that branch."
+            exit 1
+          fi
+          echo "✅ Every identifier resolves"
+
   # ── Production: main → site root ──────────────────────────
   deploy-production:
     name: Deploy to Production
