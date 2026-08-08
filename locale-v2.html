@@ -8341,10 +8341,27 @@ function getSharedTripFromHash() {
   return m ? decodeTrip(m[1]) : null;
 }
 
-function SharedTripBanner({ trip, signedInEmail, busy, onJoin, onCopy, onSignIn, onDismiss }) {
+function SharedTripBanner({ trip, signedInEmail, busy, onJoin, onCopy, onSignIn, onVerifyCode, onDismiss }) {
   const t = normalizeTrip(trip);
   const [email,setEmail] = React.useState('');
+  // The invite used to send a code and then tell the invitee to go find "☁ Sync"
+  // somewhere else in an app they had never seen — this dialog never changed state,
+  // so Jeremy sat on "You're invited!" holding a code with nowhere to type it.
+  // The code is now entered right here, in the same box that asked for the email.
+  const [stage,setStage] = React.useState('email'); // 'email' | 'code'
+  const [code,setCode] = React.useState('');
+  const [err,setErr] = React.useState('');
   const dest = (t.destinations||[]).map(d=>d.city).join(' → ') || 'Unknown destination';
+  const sendCode = async () => {
+    setErr('');
+    const ok = await onSignIn(email.trim(), t);
+    if(ok!==false) setStage('code');
+  };
+  const submitCode = async () => {
+    setErr('');
+    const res = await onVerifyCode(email.trim(), code, t);
+    if(res && res.error) setErr(res.error);
+  };
   return (
     <div style={{
       position:'fixed',top:0,left:0,right:0,bottom:0,
@@ -8385,16 +8402,37 @@ function SharedTripBanner({ trip, signedInEmail, busy, onJoin, onCopy, onSignIn,
           </div>
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
-            <p style={{fontSize:'.82rem',color:'var(--color-ink-light)',textAlign:'center',lineHeight:1.5,marginBottom:2}}>
-              Sign in to join, so the organiser can see your RSVP and your flights.
-              Use the address the invite was sent to.
-            </p>
-            <input className="input" type="email" autoComplete="email" placeholder="you@email.com"
-              value={email} onChange={e=>setEmail(e.target.value)} style={{width:'100%'}}/>
-            <button className="btn btn-primary" style={{width:'100%',padding:'14px'}} disabled={busy||!email.trim()}
-              onClick={()=>onSignIn(email.trim(), t)}>
-              {busy?'Sending…':'Email me a sign-in link'}
-            </button>
+            {stage==='email' ? (<>
+              <p style={{fontSize:'.82rem',color:'var(--color-ink-light)',textAlign:'center',lineHeight:1.5,marginBottom:2}}>
+                Sign in to join, so the organiser can see your RSVP and your flights.
+                Use the address the invite was sent to.
+              </p>
+              <input className="input" type="email" autoComplete="email" placeholder="you@email.com"
+                value={email} onChange={e=>setEmail(e.target.value)} style={{width:'100%'}}
+                onKeyDown={e=>{ if(e.key==='Enter'&&email.trim()&&!busy) sendCode(); }}/>
+              <button className="btn btn-primary" style={{width:'100%',padding:'14px'}} disabled={busy||!email.trim()}
+                onClick={sendCode}>
+                {busy?'Sending…':'Email me a sign-in code'}
+              </button>
+            </>) : (<>
+              <p style={{fontSize:'.82rem',color:'var(--color-ink-light)',textAlign:'center',lineHeight:1.5,marginBottom:2}}>
+                We sent a code to <strong style={{color:'var(--color-ink)'}}>{email.trim()}</strong>. Enter it below to join the trip.
+              </p>
+              <input className="input" inputMode="numeric" autoComplete="one-time-code" autoFocus
+                maxLength={OTP_MAX_LEN} placeholder="123456" aria-label="Sign-in code from your email"
+                value={code} onChange={e=>{ setErr(''); setCode(e.target.value.replace(/\D/g,'').slice(0,OTP_MAX_LEN)); }}
+                onKeyDown={e=>{ if(e.key==='Enter'&&code.length>=OTP_MIN_LEN&&!busy) submitCode(); }}
+                style={{width:'100%',fontFamily:'var(--font-mono)',fontSize:'1.15rem',letterSpacing:'.22em',textAlign:'center'}}/>
+              {err && <p style={{fontSize:'.78rem',color:'var(--color-flag)',textAlign:'center',lineHeight:1.45}}>{err}</p>}
+              <button className="btn btn-primary" style={{width:'100%',padding:'14px'}} disabled={busy||code.length<OTP_MIN_LEN}
+                onClick={submitCode}>
+                {busy?'Joining…':'Join this trip'}
+              </button>
+              <button className="btn btn-ghost" style={{width:'100%',padding:'10px'}} disabled={busy}
+                onClick={()=>{ setCode(''); setErr(''); setStage('email'); }}>
+                Use a different email
+              </button>
+            </>)}
             <button className="btn btn-ghost" style={{width:'100%',padding:'12px'}} onClick={()=>onCopy(t)}>
               Just save a read-only copy
             </button>
@@ -8671,16 +8709,40 @@ function App() {
 
   // Stash the invite so the join resumes after sign-in. Still needed with codes:
   // a code entered in a fresh tab (or an old-style link redirect) drops the hash.
+  // Returns true when the code is on its way, so the invite dialog can advance to its
+  // code-entry step. It used to just fire a toast pointing at "☁ Sync" — an invitee
+  // holding a valid code had nowhere in this dialog to type it and simply got stuck.
   const handleInviteSignIn = async (email, trip) => {
     setInviteBusy(true);
     try{
       try{ localStorage.setItem('locale_pending_invite', JSON.stringify({tripId:trip.id, t:Date.now()})); }catch(e){}
       await cloudSignIn(email);
-      showToast('Check your email for the sign-in code, then sign in with ☁ Sync to land right here.','info',8000);
+      showToast('Code sent · enter it below to join.','info',5000);
+      return true;
     }catch(e){
       showToast('Could not send the code · try again.','error');
+      return false;
     }
     finally{ setInviteBusy(false); }
+  };
+
+  // Verify the emailed code and go straight into joining · one continuous flow, so the
+  // invitee never has to find another screen. Returns {error} for inline display.
+  // cloudVerifyCode THROWS a human-readable message rather than returning {error},
+  // so the message has to come off the exception · swallowing it here would put the
+  // invitee back where they started, staring at a dialog that says nothing.
+  const handleInviteVerify = async (email, code, trip) => {
+    setInviteBusy(true);
+    try{
+      await cloudVerifyCode(email, code);
+    }catch(e){
+      setInviteBusy(false);
+      return { error: (e&&e.message) || 'Could not verify that code · try again.' };
+    }
+    setInviteBusy(false);
+    // Session is live now · join claims the invite tied to this address.
+    await handleJoinSharedTrip(trip);
+    return {};
   };
 
   const handleInstall = async () => {
@@ -8709,6 +8771,7 @@ function App() {
           onJoin={handleJoinSharedTrip}
           onCopy={handleCopySharedTrip}
           onSignIn={handleInviteSignIn}
+          onVerifyCode={handleInviteVerify}
           onDismiss={()=>{ setSharedTrip(null); window.location.hash=''; }}
         />
       )}
@@ -9743,6 +9806,20 @@ class ErrorBoundary extends React.Component {
     assert('layoverForLeg ignores a different traveler', layoverForLeg(l1,[l1,{...l2,travelerIds:['t9']}])===null);
     assert('layoverForLeg falls back to an explicit via', (()=>{const v=layoverForLeg({id:'c',departureAirport:'AUS',arrivalAirport:'LHR',arrivalTime:'2026-09-16T20:00:00',via:'jfk'},[]);return v&&v.airport==='JFK'&&v.label===null;})());
     assert('sameTravelers: whole-group legs connect to anyone', sameTravelers({travelerIds:[]},{travelerIds:['t1']}) && sameTravelers({travelerIds:['t1']},{travelerIds:['t1','t2']}) && !sameTravelers({travelerIds:['t1']},{travelerIds:['t9']}));
+  })();
+
+  // Invite sign-in · the dead end Jeremy hit. The banner sent a code and then went
+  // right on rendering "You're invited!", so a valid code had nowhere to be typed.
+  // These guard the two halves of the fix: the banner has a code stage, and the app
+  // hands it a verify handler. Cheap string checks, but they fail loudly if either
+  // half is dropped in a future edit.
+  (function(){
+    const src = String(SharedTripBanner);
+    assert('invite banner has a code stage', /stage\s*===\s*'code'|setStage\('code'\)/.test(src));
+    assert('invite banner renders a one-time-code input', /one-time-code/.test(src) && /OTP_MAX_LEN/.test(src));
+    assert('invite banner calls a verify handler', /onVerifyCode\(/.test(src));
+    assert('invite banner shows verify errors inline', /setErr\(/.test(src));
+    assert('invite banner no longer points people at Sync to finish', !/☁\s*Sync/.test(src));
   })();
 
   // Summary
