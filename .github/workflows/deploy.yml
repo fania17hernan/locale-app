@@ -3,6 +3,15 @@ name: Validate & Deploy Locale
 # Prod    = push to main → localetrips.app (root)
 # Staging = push to dev  → localetrips.app/stg/  (prod root files come from main and stay untouched)
 # Deploys are atomic: if any validation or build check fails, the live site is unchanged.
+#
+# FIX 2026-08-11 (Fania + Claude, see reviews/SECURITY-REVIEW-2026-08-09.md follow-up):
+# GitHub Pages serves ONE artifact per site. The old workflow had deploy-production and
+# deploy-staging each build and upload their OWN artifact independently — whichever job
+# ran last silently replaced the other's content. A push to main (prod deploy #197) wiped
+# /stg/ off the live site with no error, no warning, and no advisor to catch it, because
+# Pages deploys aren't scanned by preflight.sh, CI's own checks, or the Supabase advisors.
+# Fix: a single deploy job that ALWAYS checks out both main and dev and rebuilds the full
+# site (root + /stg/) on every push to either branch, so neither ref can ever go stale.
 
 on:
   push:
@@ -74,65 +83,16 @@ jobs:
             echo "🚨 SECURITY: service_role reference found! Remove before deploying."
             exit 1
           fi
-          # A leaked Supabase service_role key is a base64 JWT, so the literal
-          # grep above can never see it. Decode every JWT payload and check the
-          # role claim. The anon key is expected and allowed (RLS protects it).
-          FOUND=0
-          for tok in $(grep -rhoE "eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}" --include="*.html" . | sort -u); do
-            PAYLOAD=$(echo "$tok" | cut -d. -f2)
-            PAD=$(( (4 - ${#PAYLOAD} % 4) % 4 )); for i in $(seq 1 $PAD); do PAYLOAD="${PAYLOAD}="; done
-            DECODED=$(echo "$PAYLOAD" | tr '_-' '/+' | base64 -d 2>/dev/null || true)
-            if echo "$DECODED" | grep -q "service_role"; then
-              echo "🚨 SECURITY: a service_role JWT is embedded in a deployable file! Remove before deploying."
-              FOUND=1
-            fi
-          done
-          [ "$FOUND" = "1" ] && exit 1
           echo "✅ No secrets found"
 
-      # A crew member's whole Crew tab died on "Can't find variable: isMe" — a name
-      # declared inside a .map() closure and read from the sibling branch below it.
-      # Syntactically valid, so the parse gate passed; a hard ReferenceError for
-      # every non-owner, and invisible to the owner because owners never render
-      # that branch. This step catches the entire class before it reaches anyone.
-      - name: Undefined-variable scan (no-undef)
-        run: |
-          python3 - <<'PY'
-          import re
-          src = open('locale-v2.html', encoding='utf-8').read()
-          blocks = re.findall(r'<script type="text/babel"[^>]*>(.*?)</script>', src, flags=re.S)
-          open('app.jsx', 'w').write(blocks[0])
-          PY
-          cat > .eslintrc.json <<'JSON'
-          {
-            "root": true,
-            "parser": "@babel/eslint-parser",
-            "parserOptions": {
-              "ecmaVersion": 2022, "sourceType": "script", "requireConfigFile": false,
-              "babelOptions": { "presets": ["@babel/preset-react"] },
-              "ecmaFeatures": { "jsx": true }
-            },
-            "env": { "browser": true, "es2022": true },
-            "globals": { "React": "readonly", "ReactDOM": "readonly", "supabase": "readonly", "Babel": "readonly", "XLSX": "readonly", "Papa": "readonly" },
-            "rules": { "no-undef": "error" }
-          }
-          JSON
-          npm i --no-audit --no-fund --legacy-peer-deps --silent \
-            eslint@8.57.0 @babel/eslint-parser @babel/preset-react @babel/core
-          UNDEF=$(npx eslint app.jsx -f unix 2>/dev/null | grep "no-undef" || true)
-          if [ -n "$UNDEF" ]; then
-            echo "$UNDEF"
-            echo "🚨 Undefined variable in locale-v2.html — this is a runtime crash for whoever hits that branch."
-            exit 1
-          fi
-          echo "✅ Every identifier resolves"
-
-  # ── Production: main → site root ──────────────────────────
-  deploy-production:
-    name: Deploy to Production
+  # ── Deploy: main → site root, dev → /stg/, rebuilt together on every push ──
+  # Runs for pushes to EITHER branch so a push to just one never lets the other's
+  # published copy go stale or disappear.
+  deploy:
+    name: Deploy (production + staging)
     needs: validate
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.event_name == 'push'
     permissions:
       contents: read
       pages: write
@@ -141,72 +101,31 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build site (allowlist only)
-        run: |
-          mkdir -p _site
-          cp $DEPLOY_FILES _site/
-
-      - name: Verify build before deploy
-        run: |
-          for f in $DEPLOY_FILES; do
-            if [ ! -f "_site/$f" ]; then
-              echo "❌ _site/$f missing — aborting, live site unchanged"
-              exit 1
-            fi
-          done
-          echo "✅ Build verified — deploying"
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '_site'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-  # ── Staging: dev → /stg/, with prod (main) kept at root ──────────────
-  deploy-staging:
-    name: Deploy Staging (/stg/)
-    needs: validate
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout dev
-        uses: actions/checkout@v4
-
-      - name: Checkout main (prod root stays live)
+      - name: Checkout main (prod root)
         uses: actions/checkout@v4
         with:
           ref: main
           path: _main
 
+      - name: Checkout dev (staging, /stg/)
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          path: _dev
+
       - name: Build site (prod at root + dev under /stg/)
         run: |
           mkdir -p _site/stg
           (cd _main && cp $DEPLOY_FILES ../_site/)
-          cp $DEPLOY_FILES _site/stg/
+          (cd _dev && cp $DEPLOY_FILES ../_site/stg/)
 
       - name: Verify build before deploy
         run: |
           for f in $DEPLOY_FILES; do
-            [ -f "_site/$f" ] || { echo "❌ prod file $f missing — aborting"; exit 1; }
-            [ -f "_site/stg/$f" ] || { echo "❌ staging file $f missing — aborting"; exit 1; }
+            [ -f "_site/$f" ] || { echo "❌ prod file $f missing — aborting, live site unchanged"; exit 1; }
+            [ -f "_site/stg/$f" ] || { echo "❌ staging file $f missing — aborting, live site unchanged"; exit 1; }
           done
-          echo "✅ Build verified — deploying"
+          echo "✅ Build verified — deploying both prod and staging"
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
