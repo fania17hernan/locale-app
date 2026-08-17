@@ -21,6 +21,7 @@ on:
   pull_request:
     branches:
       - main
+      - dev
 
 env:
   # The ONLY files that get published. Update this list when adding a page.
