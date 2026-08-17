@@ -7265,6 +7265,75 @@ function CrewSection({trip, onUpdateTrip}){
 
 
 
+// ── SETTLEMENT · integer cents, and it refuses to guess ──────────────────
+// Two bugs lived here while this ran on floats and skipped payerless expenses:
+//  1. $100 split three ways lost a cent. Balances stopped summing to zero and the
+//     drift compounded silently across a trip.
+//  2. An expense with no payer was dropped in silence. Budget computed a settlement
+//     from $3,360 of a $6,460 total and said nothing, so two people could shake
+//     hands on a figure that was 48 percent short.
+function toCents(n){ return Math.round(((Number(n)||0) + Number.EPSILON) * 100); }
+// Largest remainder: everyone gets the floor, the leftover cents go to the first
+// sharers in a stable order, so shares always sum back to the original amount.
+function splitCents(amountCents, n){
+  if(!n) return [];
+  const sign = amountCents<0 ? -1 : 1;
+  const abs = Math.abs(amountCents);
+  const base = Math.floor(abs/n);
+  const rem = abs - base*n;
+  const out=[];
+  for(let i=0;i<n;i++) out.push(sign*(base + (i<rem?1:0)));
+  return out;
+}
+// Pure. Returns balances in dollars plus everything the UI needs to say why a
+// settlement is provisional. An expense is PENDING when it has no payer, or names
+// a payer who is no longer on the trip. Both are cases where we cannot know who
+// fronted the money, so neither is folded into the balances and neither is hidden.
+function budgetSettlement(items, members, payments){
+  const list = Array.isArray(items)?items:[];
+  const mem  = Array.isArray(members)?members:[];
+  const pays = Array.isArray(payments)?payments:[];
+  const known = id => !!id && mem.some(m=>m.id===id);
+  const counted = list.filter(it=>known(it.paidBy));
+  const pending = list.filter(it=>!known(it.paidBy));
+  const cents={}; mem.forEach(m=>cents[m.id]=0);
+  counted.forEach(it=>{
+    const amt=toCents(it.amount);
+    const included = mem.filter(m=>!(it.excluded||[]).includes(m.id));
+    const shares = splitCents(amt, included.length||1);
+    included.forEach((m,i)=>{
+      if(m.id===it.paidBy) return;                    // payer covers their own share
+      if((it.settledIds||[]).includes(m.id)) return;  // already paid the payer back
+      cents[m.id]-=shares[i]; cents[it.paidBy]+=shares[i];
+    });
+  });
+  pays.forEach(pm=>{
+    const amt=toCents(pm.amount);
+    if(cents[pm.from]!==undefined) cents[pm.from]+=amt;
+    if(cents[pm.to]  !==undefined) cents[pm.to]  -=amt;
+  });
+  const bal={}; Object.keys(cents).forEach(id=>bal[id]=cents[id]/100);
+  const countedCents = counted.reduce((s,it)=>s+toCents(it.amount),0);
+  const pendingCents = pending.reduce((s,it)=>s+toCents(it.amount),0);
+  return {
+    bal, pending, pendingCount:pending.length,
+    countedTotal: countedCents/100,
+    pendingTotal: pendingCents/100,
+    grandTotal:  (countedCents+pendingCents)/100,
+    canSettle: pending.length===0,
+  };
+}
+// Exact copy, approved 2026-08-14. Pluralisation matters · "1 expense needs".
+function settlementCopy(s, fmt){
+  if(s.canSettle) return null;
+  const n=s.pendingCount;
+  return {
+    title:'Settlement is provisional',
+    body:`${n} ${n===1?'expense needs':'expenses need'} a payer. ${fmt(s.pendingTotal)} is not yet counted.`,
+    basis:`Based on ${fmt(s.countedTotal)} of ${fmt(s.grandTotal)}. Assign the last ${n} ${n===1?'payer':'payers'} to settle up.`,
+    totalSub:`${fmt(s.countedTotal)} counted · ${fmt(s.pendingTotal)} pending`,
+  };
+}
 function computeSettlements(balMap){
   const creditors=[],debtors=[];
   Object.entries(balMap).forEach(([id,v])=>{ const c=Math.round(v*100); if(c>0)creditors.push({id,c}); else if(c<0)debtors.push({id,c:-c}); });
@@ -7402,21 +7471,11 @@ function BudgetSection({trip, onUpdateTrip}){
   const recordPayment=(from,to,amt)=> savePayments([...payments,{id:uuid(),from,to,amount:amt,ts:Date.now()}]);
   const undoPayment=(id)=> savePayments(payments.filter(p=>p.id!==id));
 
-  // Per-person balances (positive = owed to them; negative = they owe)
-  const bal={}; members.forEach(m=>bal[m.id]=0);
-  items.forEach(it=>{
-    if(!it.paidBy || bal[it.paidBy]===undefined) return; // unassigned expenses stay out of balances until a payer is set
-    const amt=Number(it.amount)||0;
-    const included = members.filter(m=>!(it.excluded||[]).includes(m.id));
-    const n = included.length || 1;
-    const share = amt/n;
-    included.forEach(m=>{
-      if(m.id===it.paidBy) return;                       // payer covers their own share
-      if((it.settledIds||[]).includes(m.id)) return;     // already paid the payer back · settled
-      bal[m.id]-=share; bal[it.paidBy]+=share;
-    });
-  });
-  payments.forEach(p=>{ if(bal[p.from]!==undefined)bal[p.from]+=Number(p.amount)||0; if(bal[p.to]!==undefined)bal[p.to]-=Number(p.amount)||0; });
+  // Per-person balances (positive = owed to them; negative = they owe).
+  // Integer cents, and expenses with no payer are reported rather than dropped.
+  const settle = budgetSettlement(items, members, payments);
+  const bal = settle.bal;
+  const provisional = settlementCopy(settle, fmt); // null once every expense has a payer
   const settlements = members.length>=2 ? computeSettlements(bal) : [];
   const splitInfo=(it)=>{
     const inc=members.filter(m=>!(it.excluded||[]).includes(m.id));
@@ -7446,6 +7505,10 @@ function BudgetSection({trip, onUpdateTrip}){
             <span style={{fontWeight:600,color:'var(--color-ink)'}}>Total</span>
             <span style={{fontFamily:'var(--font-mono)',fontWeight:700,color:'var(--color-ink)'}}>{fmt(total)}</span>
           </div>
+          {/* The total is real. What the settlement is built from may not be · say which. */}
+          {provisional && (
+            <div style={{textAlign:'right',fontFamily:'var(--font-mono)',fontSize:'.7rem',color:'var(--color-ink-muted)',marginTop:3}}>{provisional.totalSub}</div>
+          )}
         </div>
       )}
 
@@ -7492,6 +7555,15 @@ function BudgetSection({trip, onUpdateTrip}){
       {/* Balances + settle up */}
       {members.length>=2 && items.length>0 && (
         <div style={{marginTop:16,paddingTop:14,borderTop:'1px solid var(--color-border)'}}>
+          {/* Fail loudly. A settlement built on part of the money says so, above the
+              numbers, not in a footnote under them. */}
+          {provisional && (
+            <div role="status" style={{background:'var(--color-flag-bg)',border:'1px solid var(--color-flag-border)',borderRadius:'var(--radius-ctl)',padding:'10px 12px',marginBottom:12}}>
+              <p style={{fontSize:'.8rem',fontWeight:700,color:'var(--color-ink)',marginBottom:4}}>{provisional.title}</p>
+              <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',lineHeight:1.45}}>{provisional.body}</p>
+              <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',lineHeight:1.45,marginTop:4}}>{provisional.basis}</p>
+            </div>
+          )}
           <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',fontWeight:600,marginBottom:10}}>Who owes what</p>
           {members.map(m=>{
             const v=bal[m.id]||0; const owed=v>0.004, owes=v<-0.004;
@@ -7507,18 +7579,32 @@ function BudgetSection({trip, onUpdateTrip}){
           })}
           {settlements.length>0 ? (
             <div style={{marginTop:12}}>
-              <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',fontWeight:600,marginBottom:8}}>Settle up</p>
+              <p style={{fontSize:'.72rem',color:'var(--color-ink-muted)',letterSpacing:'.06em',textTransform:'uppercase',fontWeight:600,marginBottom:8}}>
+                Settle up{provisional && <span style={{marginLeft:8,textTransform:'none',letterSpacing:0,color:'var(--color-flag)',fontWeight:600}}>Not final yet</span>}
+              </p>
               {settlements.map((s,idx)=>{
                 return (
                   <div key={idx} style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',padding:'7px 0',borderTop:idx?'1px solid var(--color-border)':'none'}}>
                     <span style={{flex:'1 1 auto',fontSize:'.85rem',color:'var(--color-ink)'}}>
                       <strong>{nameOf(s.from)}</strong> → <strong>{nameOf(s.to)}</strong> <span style={{fontFamily:'var(--font-mono)',color:'var(--color-flag)'}}>{fmt(s.amount)}</span>
                     </span>
-                    {isOwner && <button className="btn btn-ghost btn-sm" onClick={()=>recordPayment(s.from,s.to,s.amount)}>Mark paid</button>}
+                    {/* Hard block, not a warning (DECISIONS 2026-08-14). While any expense
+                        lacks a payer this row is provably incomplete, so recording a payment
+                        against it would bank a wrong figure and look authoritative doing it. */}
+                    {isOwner && (
+                      <button className="btn btn-ghost btn-sm" disabled={!settle.canSettle}
+                        title={settle.canSettle ? undefined : 'Assign a payer to every expense first'}
+                        style={settle.canSettle ? undefined : {opacity:.45, cursor:'not-allowed'}}
+                        onClick={()=>{ if(settle.canSettle) recordPayment(s.from,s.to,s.amount); }}>Mark paid</button>
+                    )}
                   </div>
                 );
               })}
             </div>
+          ) : provisional ? (
+            // Without this branch a trip where every expense lacks a payer renders a
+            // green tick that means the opposite of the truth.
+            <p style={{marginTop:10,fontSize:'.82rem',color:'var(--color-ink-light)'}}>Nothing to settle from the counted expenses yet.</p>
           ) : (
             <p style={{marginTop:10,fontSize:'.82rem',color:'var(--color-success)'}}>✓ All settled up.</p>
           )}
@@ -9934,6 +10020,78 @@ class ErrorBoundary extends React.Component {
     assert('error report posts to usage_events', /usage_events/.test(ebSrc) && /error_report/.test(ebSrc));
     assert('error report carries the message and stack', /stack/.test(ebSrc) && /message/.test(ebSrc));
     assert('error boundary no longer opens a recipientless mailto', !/mailto:\?/.test(String(ErrorBoundary.prototype.render)));
+  })();
+
+  // ── NEW: settlement provisional · integer cents + hard block on missing payers ─
+  (()=>{
+    const money = n => '$' + (Math.round((Number(n)||0)*100)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const M=[{id:'A',name:'Stephanie'},{id:'B',name:'Jeremy'},{id:'C',name:'Emily'}];
+
+    // splitCents · the $100-across-three cent-loss bug
+    const sh = splitCents(10000,3);
+    assert('splitCents shares sum back to the original', sh.reduce((a,b)=>a+b,0)===10000);
+    assert('splitCents spreads the remainder rather than dropping it', sh[0]===3334 && sh[1]===3333 && sh[2]===3333);
+    assert('splitCents keeps the sign on a negative amount', splitCents(-10000,3).reduce((a,b)=>a+b,0)===-10000);
+    assert('splitCents is safe with no sharers', splitCents(1000,0).length===0);
+
+    // Balances must sum to zero for ANY split. This is what float math broke, and
+    // the failure was invisible until the drift got big enough to notice.
+    (()=>{
+      let worst=0;
+      for(let i=0;i<300;i++){
+        const amt=Math.round(Math.random()*100000)/100;
+        const n=2+Math.floor(Math.random()*4);
+        const mem=Array.from({length:n},(_,k)=>({id:'m'+k,name:'M'+k}));
+        const s=budgetSettlement([{amount:amt,paidBy:'m0',excluded:[]}],mem,[]);
+        worst=Math.max(worst, Math.abs(Object.keys(s.bal).reduce((t,k)=>t+s.bal[k],0)));
+      }
+      assert('balances sum to zero across 300 randomised splits', worst<1e-9);
+    })();
+
+    // The reported bug: $3,100 of a $6,460 total had no payer and was dropped silently.
+    const provItems=[
+      {id:'1',label:'Flights',amount:3360,paidBy:'B',excluded:[]},
+      {id:'2',label:'Hotel',  amount:2400,paidBy:null,excluded:[]},
+      {id:'3',label:'Rail',   amount:700, paidBy:null,excluded:[]},
+    ];
+    const prov=budgetSettlement(provItems,M,[]);
+    assert('an expense with no payer is pending, not dropped', prov.pendingCount===2);
+    assert('provisional totals report their own basis', prov.countedTotal===3360 && prov.pendingTotal===3100 && prov.grandTotal===6460);
+    assert('canSettle is false while any payer is missing', prov.canSettle===false);
+    const pc=settlementCopy(prov,money);
+    assert('provisional copy names the count and the uncounted amount', pc.body==='2 expenses need a payer. $3,100.00 is not yet counted.');
+    assert('provisional copy states the basis', pc.basis==='Based on $3,360.00 of $6,460.00. Assign the last 2 payers to settle up.');
+    assert('provisional copy splits the total line', pc.totalSub==='$3,360.00 counted · $3,100.00 pending');
+    assert('provisional copy carries no em dash', !/—/.test(pc.title+pc.body+pc.basis+pc.totalSub));
+
+    // Pluralisation · "1 expense needs" has to read correctly.
+    const one=settlementCopy(budgetSettlement([{amount:100,paidBy:'A',excluded:[]},{amount:50,paidBy:null,excluded:[]}],M,[]),money);
+    assert('provisional copy is singular for one missing payer', one.body.indexOf('1 expense needs a payer.')===0);
+    assert('provisional copy asks for one payer, singular', /Assign the last 1 payer to settle up\.$/.test(one.basis));
+
+    // A payer who left the trip is the same class of unknown as no payer at all.
+    const gone=budgetSettlement([{amount:90,paidBy:'ZZ',excluded:[]}],M,[]);
+    assert('an expense whose payer left the trip is pending too', gone.pendingCount===1 && gone.canSettle===false);
+
+    // Fully assigned · the block lifts and the copy disappears.
+    const clean=budgetSettlement([{amount:90,paidBy:'A',excluded:[]}],M,[]);
+    assert('canSettle is true once every expense has a payer', clean.canSettle===true);
+    assert('no provisional copy when nothing is pending', settlementCopy(clean,money)===null);
+    assert('the payer is owed the other shares back', Math.abs(clean.bal.A-60)<1e-9 && Math.abs(clean.bal.B+30)<1e-9);
+
+    // Semantics that existed before the rewrite and must survive it.
+    const exc=budgetSettlement([{amount:30,paidBy:'A',excluded:['C']}],M,[]);
+    assert('excluded members stay out of the split', Math.abs(exc.bal.A-15)<1e-9 && Math.abs(exc.bal.B+15)<1e-9 && exc.bal.C===0);
+    const sett=budgetSettlement([{amount:30,paidBy:'A',excluded:[],settledIds:['B']}],M,[]);
+    assert('a member already marked settled is not charged again', sett.bal.B===0 && Math.abs(sett.bal.A-10)<1e-9);
+    const rec=budgetSettlement([{amount:30,paidBy:'A',excluded:[]}],M,[{from:'B',to:'A',amount:10}]);
+    assert('a recorded payment clears that debt', Math.abs(rec.bal.B)<1e-9 && Math.abs(rec.bal.A-10)<1e-9);
+
+    // The UI half of the decision · disabled, not warned.
+    const bsSrc=String(BudgetSection);
+    assert('Budget hard-blocks Mark paid on a provisional settlement', /disabled/.test(bsSrc) && /!settle\.canSettle/.test(bsSrc) && /Assign a payer to every expense first/.test(bsSrc));
+    assert('Budget surfaces the provisional basis above the balances', /provisional\.basis/.test(bsSrc));
+    assert('Budget never claims all settled while expenses are pending', /Nothing to settle from the counted expenses yet/.test(bsSrc));
   })();
 
   // Summary
