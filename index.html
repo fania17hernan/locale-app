@@ -1,6 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+/* D2 · Supabase sends confirmation, recovery and email-change redirects to the project
+   Site URL, which is this marketing page. index.html carries no Supabase client, so an
+   auth fragment that lands here is read by nobody: the session evaporates on arrival and
+   the single-use token is spent for nothing. Round 19 watched a real invitee lose an
+   account this way.
+
+   Forward it, unread, to the app sitting in this same directory. Same-directory matters:
+   a flow that started on /stg/ stays on /stg/ instead of being thrown to production.
+   location.replace, not assign, so Back does not bounce the user into a spent token.
+   This runs before anything else in the document precisely so nothing can strip the hash
+   first. */
+(function () {
+  try {
+    var h = String(window.location.hash || '');
+    if (!/[#&](access_token|refresh_token|error|error_code)=/.test(h)) return;
+    var dir = window.location.pathname.replace(/[^/]*$/, '');   // "/" or "/stg/"
+    window.location.replace(
+      window.location.origin + dir + 'locale-v2.html' + (window.location.search || '') + h
+    );
+  } catch (e) { /* never let this break the landing page */ }
+})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Locale · Your trips, beautifully kept.</title>
