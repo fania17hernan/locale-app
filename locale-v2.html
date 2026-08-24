@@ -1130,7 +1130,7 @@ async function cloudVerifyCode(email, token){
   // was truncated by the input and always rejected. Accept any plausible length and
   // let the server be the authority on correctness.
   const code=String(token||'').replace(/\D/g,'');
-  if(code.length<OTP_MIN_LEN) throw new Error(`Enter the ${OTP_MIN_LEN}-digit code from your email.`);
+  if(code.length<OTP_MIN_LEN) throw new Error('Enter the full code from your email.');
   const { data, error } = await c.auth.verifyOtp({ email, token:code, type:'email' });
   if(error){
     const m=(error.message||'').toLowerCase();
@@ -1138,6 +1138,22 @@ async function cloudVerifyCode(email, token){
     throw error;
   }
   return data?.session||null;
+}
+// D2 · An auth redirect can arrive carrying a failure instead of a session, e.g.
+// "#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid".
+// supabase-js consumes SUCCESS fragments and ignores these entirely, so without this the
+// user lands on a normal looking app with no session and nothing said out loud. Returns a
+// human sentence, or null when the fragment is not an auth failure.
+function authErrorFromHash(hash){
+  const h = String(hash||'');
+  if(!/[#&](error|error_code)=/.test(h)) return null;
+  let q;
+  try{ q = new URLSearchParams(h.replace(/^#/,'')); }catch(e){ return 'Sign-in failed \u00b7 request a new code.'; }
+  const code = String(q.get('error_code') || q.get('error') || '').toLowerCase();
+  const desc = String(q.get('error_description') || '').replace(/\+/g,' ').trim();
+  if(/expired/.test(code)) return 'That sign-in link has expired \u00b7 request a new code.';
+  if(/access_denied|otp/.test(code)) return desc || 'That sign-in link is no longer valid \u00b7 request a new code.';
+  return desc || 'Sign-in failed \u00b7 request a new code.';
 }
 async function cloudSignOut(){ try{ const c=sb(); if(c) await c.auth.signOut(); }catch(e){} }
 // The guarded member RPCs raise SEAT_REMOVED when a membership outlives the
@@ -8250,7 +8266,7 @@ function SyncButton({user, onChange}){
                 {/* inputMode numeric + one-time-code autocomplete lets iOS offer the
                     code straight from the notification. 16px font avoids iOS zoom. */}
                 <input className="input" type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus
-                  maxLength={OTP_MAX_LEN} placeholder="123456" aria-label="Sign-in code from your email" value={code}
+                  maxLength={OTP_MAX_LEN} aria-label="Sign-in code from your email" value={code}
                   onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,OTP_MAX_LEN))}
                   onKeyDown={e=>{ if(e.key==='Enter' && code.length>=OTP_MIN_LEN) verify(); }}
                   style={{marginBottom:12,fontSize:'1.4rem',letterSpacing:'.35em',textAlign:'center',fontFamily:'var(--font-mono)'}}/>
@@ -8528,7 +8544,7 @@ function SharedTripBanner({ trip, signedInEmail, busy, onJoin, onCopy, onSignIn,
                 We sent a code to <strong style={{color:'var(--color-ink)'}}>{email.trim()}</strong>. Enter it below to join the trip.
               </p>
               <input className="input" inputMode="numeric" autoComplete="one-time-code" autoFocus
-                maxLength={OTP_MAX_LEN} placeholder="123456" aria-label="Sign-in code from your email"
+                maxLength={OTP_MAX_LEN} aria-label="Sign-in code from your email"
                 value={code} onChange={e=>{ setErr(''); setCode(e.target.value.replace(/\D/g,'').slice(0,OTP_MAX_LEN)); }}
                 onKeyDown={e=>{ if(e.key==='Enter'&&code.length>=OTP_MIN_LEN&&!busy) submitCode(); }}
                 style={{width:'100%',fontFamily:'var(--font-mono)',fontSize:'1.15rem',letterSpacing:'.22em',textAlign:'center'}}/>
@@ -8718,6 +8734,15 @@ function App() {
         } else if(pend){ localStorage.removeItem('locale_pending_invite'); }
       }catch(e){}
     }
+    // D2 · say it out loud if the redirect brought a failure rather than a session,
+    // then clear the fragment so a refresh does not replay the same dead token.
+    try{
+      const authErr = authErrorFromHash(window.location.hash);
+      if(authErr){
+        showToast(authErr,'warn',9000);
+        history.replaceState(null,'',location.pathname+location.search);
+      }
+    }catch(e){}
     track('app_open', { version: APP_VERSION, standalone: (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||false, width: window.innerWidth });
     // Global error telemetry (capped at 5/session)
     if(window.__errTracked===undefined){
@@ -9478,6 +9503,25 @@ class ErrorBoundary extends React.Component {
     assert('OTP field rejects letters', norm('abc123')==='123');
     assert('OTP field is null-safe', norm(null)==='' && norm(undefined)==='');
     assert('OTP submit gate accepts >=6 digits', ('33444353'.length>=OTP_MIN_LEN) && !('12345'.length>=OTP_MIN_LEN));
+  })();
+  // D2 · the auth redirect can deliver a failure instead of a session. supabase-js
+  // ignores those fragments, so the app has to read them itself or say nothing at all.
+  (function(){
+    const F = authErrorFromHash;
+    assert('auth error: plain page has none', F('')===null && F('#')===null);
+    assert('auth error: a share link is not an auth failure', F('#s=mnydom0x')===null);
+    assert('auth error: a success fragment is not a failure',
+      F('#access_token=abc&refresh_token=def&type=recovery')===null);
+    assert('auth error: expired token reads as expired',
+      /expired/.test(F('#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired')));
+    assert('auth error: plus signs decode to spaces',
+      F('#error=server_error&error_description=Database+error+saving+new+user')==='Database error saving new user');
+    assert('auth error: unknown code still says something',
+      typeof F('#error_code=something_new')==='string' && F('#error_code=something_new').length>0);
+    assert('auth error: reads a mid-fragment param',
+      /expired/.test(F('#access_token=&error_code=otp_expired')));
+    assert('auth error: never returns an em dash',
+      !/\u2014/.test(F('#error_code=otp_expired')));
   })();
   // Attaching a booking must ADD, never wipe (a train upload once erased a whole week)
   (function(){
