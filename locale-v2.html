@@ -1144,15 +1144,24 @@ async function cloudVerifyCode(email, token){
 // supabase-js consumes SUCCESS fragments and ignores these entirely, so without this the
 // user lands on a normal looking app with no session and nothing said out loud. Returns a
 // human sentence, or null when the fragment is not an auth failure.
+//
+// showToast is white-space:nowrap, so a long line does not wrap on a phone, it is clipped
+// at BOTH edges and the user reads the middle of a sentence. Measured in a 390px frame on
+// staging: the usable width is 370px, which is about 46 characters at 14px in the body
+// face. Supabase's error_description has no length bound, so it is only passed through
+// when it fits, and our own sentences are kept under the same bound. There are tests below
+// that fail if either rule is broken.
+const AUTH_ERR_MAX_CHARS = 46;
 function authErrorFromHash(hash){
   const h = String(hash||'');
   if(!/[#&](error|error_code)=/.test(h)) return null;
   let q;
   try{ q = new URLSearchParams(h.replace(/^#/,'')); }catch(e){ return 'Sign-in failed \u00b7 request a new code.'; }
   const code = String(q.get('error_code') || q.get('error') || '').toLowerCase();
-  const desc = String(q.get('error_description') || '').replace(/\+/g,' ').trim();
-  if(/expired/.test(code)) return 'That sign-in link has expired \u00b7 request a new code.';
-  if(/access_denied|otp/.test(code)) return desc || 'That sign-in link is no longer valid \u00b7 request a new code.';
+  const raw  = String(q.get('error_description') || '').replace(/\+/g,' ').trim();
+  const desc = (raw.length && raw.length <= AUTH_ERR_MAX_CHARS) ? raw : '';
+  if(/expired/.test(code)) return 'That sign-in link expired \u00b7 request a new code.';
+  if(/access_denied|otp/.test(code)) return desc || 'That sign-in link is no longer valid \u00b7 try again.';
   return desc || 'Sign-in failed \u00b7 request a new code.';
 }
 async function cloudSignOut(){ try{ const c=sb(); if(c) await c.auth.signOut(); }catch(e){} }
@@ -9522,6 +9531,20 @@ class ErrorBoundary extends React.Component {
       /expired/.test(F('#access_token=&error_code=otp_expired')));
     assert('auth error: never returns an em dash',
       !/\u2014/.test(F('#error_code=otp_expired')));
+    // A phone clips a nowrap toast at BOTH edges rather than wrapping it, so an
+    // unbounded server description is unreadable. Measured budget is 46 characters.
+    assert('auth error: a long server description is not passed through',
+      F('#error=access_denied&error_description=Email+link+is+invalid+or+has+expired+because+the+token+was+consumed+by+a+scanner')
+        === 'That sign-in link is no longer valid \u00b7 try again.');
+    assert('auth error: a short server description still wins',
+      F('#error=server_error&error_description=Database+error+saving+new+user')==='Database error saving new user');
+    assert('auth error: every message fits the toast', [
+      '#error_code=otp_expired',
+      '#error=access_denied',
+      '#error_code=something_new',
+      '#error=access_denied&error_description=' + 'x'.repeat(200),
+      '#error=weird&error_description=' + 'y'.repeat(47)
+    ].every(h => F(h).length <= 50));   // 50 chars measured at 365px, inside the 370px budget
   })();
   // Attaching a booking must ADD, never wipe (a train upload once erased a whole week)
   (function(){
