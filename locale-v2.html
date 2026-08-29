@@ -1776,7 +1776,12 @@ function validateIdeation(o){
 
 // ── DAY ROUTE · Google Maps waypoint link (no API key, no cost) ───────────────
 function buildDayRouteUrl(trip, day, mode){
-  const lodging=(trip.lodging||[])[0];
+  // Was (trip.lodging||[])[0], the FIRST stay on the trip, whatever day this is. On a
+  // Paris day with no Paris hotel booked yet that anchored the route on the LONDON
+  // hotel, as both origin and destination, so every Paris day claimed to start and end
+  // in another country. Same rule as the day card: only the stay that actually covers
+  // this night counts, and no stay means no anchor. See lodgingForDay.
+  const lodging=lodgingForDay(trip, day);
   const cityFallback=(trip.destinations||[]).find(d=>d.id===day.destinationId)?.city||(trip.destinations||[])[0]?.city||'';
   const stopAddr=(s)=>(s.address&&s.address.trim())?s.address:(s.name?s.name+(cityFallback?', '+cityFallback:''):'');
   const stops=[...(day.activities||[]),...(day.restaurants||[])]
@@ -3965,7 +3970,9 @@ function geoCache(){try{return JSON.parse(localStorage.getItem(GEO_SK))||{};}cat
 function geoCacheSet(k,v){try{const c=geoCache();c[k]=v;localStorage.setItem(GEO_SK,JSON.stringify(c));}catch(e){}}
 // Leaflet loader removed 2026-08-02 · Google Maps Embed needs no JS library.
 function dayStopsForRoute(trip,day){
-  const lodging=(trip.lodging||[])[0];
+  // Same bug as buildDayRouteUrl, same fix. These two must agree, and both must agree
+  // with the day card, so all three ask lodgingForDay rather than grabbing stay zero.
+  const lodging=lodgingForDay(trip, day);
   const city=(trip.destinations||[]).find(d=>d.id===day.destinationId)?.city||(trip.destinations||[])[0]?.city||'';
   const addr=(s)=>(s.address&&s.address.trim())?s.address:(s.name?s.name+(city?', '+city:''):'');
   const stops=[...(day.activities||[]),...(day.restaurants||[])]
@@ -9820,8 +9827,9 @@ class ErrorBoundary extends React.Component {
   })());
 
   // ── NEW v0.9: day route URL ─
-  const routeTrip = {lodging:[{name:'The Standard',address:'848 Washington St, New York, NY'}],destinations:[{id:'d1',city:'New York'}]};
-  const routeDay = {destinationId:'d1',activities:[{name:'Cafe Cluny',address:'284 W 12th St, New York, NY',sortOrder:0}],restaurants:[{name:'Dante',address:'',sortOrder:1}]};
+  // Dated, because an undated stay cannot be placed on a day. See lodgingForDay.
+  const routeTrip = {lodging:[{name:'The Standard',address:'848 Washington St, New York, NY',checkIn:'2026-09-16',checkOut:'2026-09-20'}],destinations:[{id:'d1',city:'New York'}]};
+  const routeDay = {date:'2026-09-17',destinationId:'d1',activities:[{name:'Cafe Cluny',address:'284 W 12th St, New York, NY',sortOrder:0}],restaurants:[{name:'Dante',address:'',sortOrder:1}]};
   const url = buildDayRouteUrl(routeTrip, routeDay);
   assert('day route URL is a Google Maps dir link', url && url.startsWith('https://www.google.com/maps/dir/'));
   // Emily: Maps used to open in driving mode on city days.
@@ -9830,6 +9838,44 @@ class ErrorBoundary extends React.Component {
   // default for a city day; walking stays available for genuinely clustered stops.
   assert('day route defaults to transit, not walking or driving', /[?&]travelmode=transit\b/.test(url) && !/travelmode=driving/.test(url) && !/travelmode=walking/.test(url));
   assert('day route still offers walking on request', /[?&]travelmode=walking\b/.test(buildDayRouteUrl(routeTrip, routeDay, 'walking')));
+  // Stephanie, 2026-08-24: viewing a Paris day, with no Paris hotel booked yet, the map
+  // started and ended at the LONDON hotel, and did it again for every Paris day after.
+  // Both map surfaces took (trip.lodging||[])[0], the first stay on the trip, regardless
+  // of date. The day card already used lodgingForDay and was right; the maps disagreed
+  // with the card. Now all three agree.
+  (function(){
+    const twoCity = {
+      destinations:[{id:'lon',city:'London'},{id:'par',city:'Paris'}],
+      lodging:[{name:'The Hoxton Shoreditch',address:'81 Great Eastern St, London',checkIn:'2026-09-17',checkOut:'2026-09-21',destinationId:'lon'}]
+    };
+    const londonDay = {date:'2026-09-18',destinationId:'lon',activities:[{name:'Tate Modern',address:'Bankside, London',sortOrder:0}],restaurants:[]};
+    const parisDay  = {date:'2026-09-23',destinationId:'par',activities:[{name:'Musee Rodin',address:'77 Rue de Varenne, Paris',sortOrder:0}],restaurants:[{name:'Chez Janou',address:'2 Rue Roger Verlomme, Paris',sortOrder:1}]};
+
+    const lonUrl = buildDayRouteUrl(twoCity, londonDay);
+    const parUrl = buildDayRouteUrl(twoCity, parisDay);
+    assert('map route anchors a London day on the London hotel', /Hoxton|Great\+Eastern/.test(lonUrl));
+    assert('map route does NOT anchor a Paris day on the London hotel', !/Hoxton|Great\+Eastern/.test(parUrl));
+    // stopAddr prefers the address over the name, so match on the street, not the venue.
+    assert('map route on an unlodged day still routes the real stops',
+      /Varenne/.test(parUrl) && /Verlomme/.test(parUrl));
+    // The bug put the wrong hotel at BOTH ends, so the day claimed to start and finish
+    // in another country. Origin must be a real Paris stop.
+    assert('map route origin on an unlodged day is a stop, not another city',
+      /[?&]origin=[^&]*Varenne/.test(parUrl));
+
+    const lonStops = dayStopsForRoute(twoCity, londonDay);
+    const parStops = dayStopsForRoute(twoCity, parisDay);
+    assert('embedded map shows the hotel on a London day',
+      lonStops.some(s=>/Hoxton/.test(s.label||'') || /Great Eastern/.test(s.query||'')));
+    assert('embedded map hides the London hotel on a Paris day',
+      !parStops.some(s=>/Hoxton/.test(s.label||'') || /Great Eastern/.test(s.query||'')));
+    assert('embedded map keeps the Paris stops', parStops.length===2 && /Varenne/.test(parStops[0].query));
+    // A stay with no dates cannot be placed on any day, so it must not anchor either map.
+    const undated = {destinations:[{id:'par',city:'Paris'}],lodging:[{name:'Mystery Hotel',address:'Somewhere'}]};
+    assert('an undated stay never anchors the map',
+      !/Mystery/.test(buildDayRouteUrl(undated, parisDay)||'') &&
+      !dayStopsForRoute(undated, parisDay).some(s=>/Mystery/.test(s.query||'')));
+  })();
   // Changing hotels · a new booking covering the same nights REPLACES the old stay and
   // its timeline stops, instead of leaving two hotels and two check-ins on the trip.
   (function(){
