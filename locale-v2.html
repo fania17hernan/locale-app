@@ -8468,8 +8468,60 @@ async function resolveShortShareLink(){
     return payload?decodeTrip(payload):null;
   }catch(e){ return null; }
 }
+// SEC · A share link is public by URL. No sign in, no expiry, and base64 is an
+// encoding, not encryption, so anyone holding the link reads the whole payload.
+// encodeTrip used to serialise the ENTIRE trip object with no field filtering. Across
+// the 39 links on record that exposed 15 distinct real email addresses, 27 phone
+// numbers and 25 booking confirmation numbers, one of the addresses belonging to a
+// minor. A confirmation number plus a surname is frequently enough to view or change
+// a reservation on an airline or hotel site, which makes it the sharpest item here.
+//
+// Redacting here rather than at the call sites is deliberate: encodeTrip is the single
+// choke point for BOTH the short #s= link and the long #trip= fallback, so a share
+// surface added later is safe by default instead of safe by remembering.
+//
+// Nothing is lost by this. handleJoinSharedTrip uses only trip.id, and a real member's
+// data comes back from cloudPull() after claim_pending_trip_invites, with that member's
+// own permissions applied. The payload only feeds the preview banner and the read-only
+// copy, so the right shape for it is an itinerary, not a booking file.
+const SHARE_DROP_KEYS = new Set([
+  'confirmationNumber','seatNumber','seat',   // reservation control
+  'email','phone','venmo','zelle',            // contact and payment handles
+  'comments',                                 // free text plus author attribution
+]);
+// The app writes confirmation numbers into free-text notes itself, e.g.
+// "Conf: ABC123 · Seat 12A", and that is the BIGGER channel: 27 of 39 stored links
+// leak this way against 25 through the confirmationNumber field. Note segments are
+// joined with " · ", so drop whole segments that announce a booking reference.
+// This cannot catch a reference someone typed mid-sentence. The field-level drop above
+// is the guarantee; this is defence in depth.
+function scrubShareNote(v){
+  if(typeof v!=='string' || !v) return v;
+  // 1. Whole segments the app writes itself, joined with " · ".
+  let out = v.split(' · ').filter(seg =>
+    !/^\s*(conf(irmation)?|booking\s*ref(erence)?|seat|record\s*locator|pnr)\b/i.test(seg)).join(' · ');
+  // 2. References written mid sentence, by a person or by the itinerary generator:
+  //    "Flight DL83 departing 15:50 (Conf: JQ7T2M). Arrive 2 hours early."
+  //    Seven of the 39 stored links leaked only this way, so the segment filter above
+  //    is not enough on its own. The reference must contain a digit, which is what
+  //    keeps the generated string "Confirmation: check your email" readable.
+  out = out.replace(/\(?\s*\b(?:conf(?:irmation)?|booking\s*ref(?:erence)?|record\s*locator|pnr)\b\s*(?:number)?\s*[:#]?\s*(?=[A-Za-z0-9-]*\d)[A-Za-z0-9][A-Za-z0-9-]{3,}\s*\)?[.,]?/gi, '');
+  return out.replace(/\s{2,}/g, ' ').replace(/\s+([.,;])/g, '$1').trim();
+}
+function shareRedact(v){
+  if(Array.isArray(v)) return v.map(shareRedact);
+  if(v && typeof v === 'object'){
+    const out = {};
+    for(const k of Object.keys(v)){
+      if(SHARE_DROP_KEYS.has(k)) continue;
+      out[k] = (k === 'notes') ? scrubShareNote(v[k]) : shareRedact(v[k]);
+    }
+    return out;
+  }
+  return v;
+}
 function encodeTrip(trip) {
-  try { return btoa(unescape(encodeURIComponent(JSON.stringify(trip)))); } catch(e) { return null; }
+  try { return btoa(unescape(encodeURIComponent(JSON.stringify(shareRedact(trip))))); } catch(e) { return null; }
 }
 function decodeTrip(str) {
   try { return JSON.parse(decodeURIComponent(escape(atob(str)))); } catch(e) { return null; }
@@ -9825,6 +9877,63 @@ class ErrorBoundary extends React.Component {
     return r && /London bit\./.test(r.destination_summary) && /Paris bit\./.test(r.destination_summary)
       && r.neighborhoods.length===2 && r.neighborhoods.some(n=>n.name==='Notting Hill (London)') && r.neighborhoods.some(n=>n.name==='Le Marais (Paris)');
   })());
+
+  // ── SEC: a share link is public by URL, so the payload must be an itinerary,
+  // not a booking file. See the comment above encodeTrip.
+  (function(){
+    const trip = {
+      id:'t1', title:'Euro Trip',
+      collaborators:[{id:'c1',name:'Ana',email:'ana@example.com',phone:'+1 602 555 0134',venmo:'@ana',zelle:'ana@example.com',rsvp:'going',avatarColor:'#abc'}],
+      flights:[{id:'f1',airline:'Delta',flightNumber:'DL83',confirmationNumber:'JQ7T2M',seatNumber:'12A',notes:'Terminal 3 \u00b7 Conf: JQ7T2M \u00b7 bags checked through'}],
+      lodging:[{id:'l1',name:'The Hoxton',address:'81 Great Eastern St',confirmationNumber:'IHG-884219',notes:'Late check-in ok'}],
+      days:[{date:'2026-09-18',activities:[{name:'Tate Modern',notes:'Confirmation: TM-9931 \u00b7 doors at 10',comments:[{author:'Ana',text:'cannot wait'}]}],restaurants:[],comments:[{author:'Ana',text:'hi'}]}]
+    };
+    const out = decodeTrip(encodeTrip(trip));
+    const blob = JSON.stringify(out);
+    assert('share payload keeps the itinerary', out.title==='Euro Trip' && out.flights[0].flightNumber==='DL83'
+      && out.lodging[0].address==='81 Great Eastern St' && out.days[0].activities[0].name==='Tate Modern');
+    assert('share payload keeps names, which the itinerary needs', out.collaborators[0].name==='Ana');
+    assert('share payload drops every email', !/ana@example\.com/.test(blob) && !/"email"/.test(blob));
+    assert('share payload drops phone numbers', !/602 555 0134/.test(blob) && !/"phone"/.test(blob));
+    assert('share payload drops payment handles', !/"venmo"|"zelle"|@ana/.test(blob));
+    assert('share payload drops confirmation numbers', !/JQ7T2M|IHG-884219|TM-9931/.test(blob) && !/"confirmationNumber"/.test(blob));
+    assert('share payload drops seat numbers', !/"seatNumber"|"seat"/.test(blob) && !/12A/.test(blob));
+    assert('share payload drops comment threads', !/"comments"/.test(blob) && !/cannot wait/.test(blob));
+    // The bigger leak channel: the app writes "Conf: X" into free-text notes itself.
+    assert('share payload strips a booking ref out of notes but keeps the rest',
+      out.flights[0].notes==='Terminal 3 \u00b7 bags checked through');
+    assert('share payload strips a Confirmation: segment from a stop note',
+      out.days[0].activities[0].notes==='doors at 10');
+    assert('share payload leaves an ordinary note alone', out.lodging[0].notes==='Late check-in ok');
+    // The seven links that leaked only through prose: a reference written mid sentence,
+    // in parentheses, which the segment filter alone cannot see.
+    (function(){
+      const prose = {days:[{date:'2026-09-18',activities:[
+        {name:'A',notes:'Flight DL83 departing 15:50 (Conf: JQ7T2M). Arrive 2 hours early.'},
+        {name:'B',notes:'Arrive at AUS airport 3 hours early. Confirmation: K4RB2D.'},
+        {name:'C',notes:'DL83 departure 09:25 from Paris CDG (conf: IHG-884219). Arrive Atlanta 12:30.'},
+        {name:'D',notes:'Doors at 10:00 and the show starts at 20:30.'},
+        {name:'E',notes:'Booked online. Confirmation: check your email'}
+      ],restaurants:[]}]};
+      const o = decodeTrip(encodeTrip(prose));
+      const n = o.days[0].activities.map(a=>a.notes);
+      const b = JSON.stringify(o);
+      assert('prose: a parenthesised reference is removed', !/JQ7T2M/.test(b) && /Arrive 2 hours early/.test(n[0]));
+      assert('prose: an end-of-sentence reference is removed', !/K4RB2D/.test(b) && /3 hours early/.test(n[1]));
+      assert('prose: lowercase conf with a hyphenated ref is removed', !/IHG-884219/.test(b) && /Arrive Atlanta/.test(n[2]));
+      assert('prose: clock times are never mistaken for a reference', n[3]==='Doors at 10:00 and the show starts at 20:30.');
+      // The digit guard: a reference always has a digit, so the generated fallback
+      // "Confirmation: check your email" is left readable rather than half eaten.
+      assert('prose: the no-reference fallback string survives', /check your email/.test(n[4]));
+      assert('prose: no reference survives anywhere in the payload', !/Conf(irmation)?:\s*[A-Za-z0-9-]*\d/i.test(b));
+    })();
+    // Redaction must not break the round trip the recipient depends on.
+    assert('a redacted payload still decodes to a usable trip', out && out.id==='t1' && Array.isArray(out.days));
+    assert('the join path only needs the id, which survives', out.id===trip.id);
+    // Redaction must not mutate the caller's own trip.
+    assert('encodeTrip does not mutate the trip it was given',
+      trip.collaborators[0].email==='ana@example.com' && trip.flights[0].confirmationNumber==='JQ7T2M');
+  })();
 
   // ── NEW v0.9: day route URL ─
   // Dated, because an undated stay cannot be placed on a day. See lodgingForDay.
