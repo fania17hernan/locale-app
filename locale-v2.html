@@ -8458,12 +8458,27 @@ async function makeTripShareUrl(trip){
     return (id && /^[a-z0-9]{6,12}$/.test(id)) ? window.location.origin+window.location.pathname+'#s='+id : longUrl;
   }catch(e){ return longUrl; }
 }
+// SEC · share-link now answers 410 with a reason when a link has been revoked by the
+// organiser or has passed its expiry. Returning null for that case would drop someone on
+// an ordinary looking dashboard with no idea why the trip they were sent is not there,
+// which is the same silent failure D2 was about. Say which of the two it was.
+// The row is never deleted: revoked and expired links still exist, they just stop serving.
+function shareLinkProblem(status, reason){
+  if(reason==='revoked' || status===410 && reason!=='expired') return 'That share link was turned off by the organiser.';
+  if(reason==='expired') return 'That share link has expired \u00b7 ask the organiser for a new one.';
+  if(status===404) return 'That share link no longer exists.';
+  return 'That share link could not be opened \u00b7 ask the organiser to resend it.';
+}
 async function resolveShortShareLink(){
   const m=window.location.hash.match(/[#&]s=([a-z0-9]{6,12})/);
   if(!m) return null;
   try{
     const res=await fetch(SHARE_LINK_URL+'?id='+m[1],{headers:{'apikey':SUPABASE_ANON_KEY}});
-    if(!res.ok) return null;
+    if(!res.ok){
+      let reason=''; try{ reason=(await res.json()).reason||''; }catch(e){}
+      try{ showToast(shareLinkProblem(res.status, reason),'warn',8000); }catch(e){}
+      return null;
+    }
     const {payload}=await res.json();
     return payload?decodeTrip(payload):null;
   }catch(e){ return null; }
@@ -9933,6 +9948,19 @@ class ErrorBoundary extends React.Component {
     // Redaction must not mutate the caller's own trip.
     assert('encodeTrip does not mutate the trip it was given',
       trip.collaborators[0].email==='ana@example.com' && trip.flights[0].confirmationNumber==='JQ7T2M');
+  })();
+
+  // SEC · a revoked or expired link must say which it was, not fail silently.
+  (function(){
+    const P = shareLinkProblem;
+    assert('revoked link names the organiser turning it off', /turned off by the organiser/.test(P(410,'revoked')));
+    assert('expired link says expired and what to do', /expired/.test(P(410,'expired')) && /new one/.test(P(410,'expired')));
+    assert('missing link says it no longer exists', /no longer exists/.test(P(404,'')));
+    assert('an unexplained failure still says something', P(500,'').length>0 && !/undefined/.test(P(500,'')));
+    assert('a 410 with no reason is treated as revoked, not silent', /turned off/.test(P(410,'')));
+    // Every message must fit the nowrap toast at 390px. See AUTH_ERR_MAX_CHARS.
+    assert('share link messages fit the toast',
+      [P(410,'revoked'),P(410,'expired'),P(404,''),P(500,'')].every(m=>m.length<=72));
   })();
 
   // ── NEW v0.9: day route URL ─
