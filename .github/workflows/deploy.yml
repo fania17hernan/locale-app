@@ -45,9 +45,13 @@ jobs:
           done
           echo "✅ All deployable files present"
 
-      - name: Check required script tags (both app files)
+      # locale.html was retired to a redirect on 2026-09-02 (SECURITY-REVIEW-2026-09-02,
+      # H2). It is still deployed so old bookmarks and invite links keep resolving, but it
+      # is no longer an app file, so the app-file checks below run against locale-v2.html
+      # only. APP_FILES is the list to extend when a real second app appears.
+      - name: Check required script tags (app files)
         run: |
-          for app in locale.html locale-v2.html; do
+          for app in locale-v2.html; do
             for tag in react.production.min.js react-dom.production.min.js babel.min.js; do
               if ! grep -q "$tag" "$app"; then
                 echo "❌ $app missing required script: $tag"
@@ -57,9 +61,21 @@ jobs:
           done
           echo "✅ All required CDN scripts present"
 
-      - name: Brace balance check (both app files)
+      - name: Check locale.html still forwards to the live app
         run: |
-          for app in locale.html locale-v2.html; do
+          if ! grep -q "locale-v2.html" locale.html; then
+            echo "❌ locale.html no longer points at locale-v2.html — old links would 404 into a dead page"
+            exit 1
+          fi
+          if ! grep -q "window.location.search + window.location.hash" locale.html; then
+            echo "❌ locale.html redirect dropped the query/fragment forward — #s= share links would break"
+            exit 1
+          fi
+          echo "✅ locale.html forwards correctly (fragment preserved)"
+
+      - name: Brace balance check (app files)
+        run: |
+          for app in locale-v2.html; do
             OPEN=$(grep -o '{' "$app" | wc -l)
             CLOSE=$(grep -o '}' "$app" | wc -l)
             DIFF=$((OPEN - CLOSE))
