@@ -1613,12 +1613,25 @@ async function callAIProxy({feature, system, messages, max_tokens, trip_id, onDe
 // Validates + sanitizes AI-generated days before they touch trip state (Debt-007).
 function validateAIDays(days){
   if(!Array.isArray(days)) return [];
-  const str=(v,max=300)=>typeof v==='string'?v.slice(0,max):'';
+  const str=(v,max=300)=>{
+    // Was a hard v.slice(0,max), which cut mid-word with no ellipsis — the Wembley
+    // card read "...Depart Harro" and nothing told the reader it had been cut.
+    if(typeof v!=='string') return '';
+    if(v.length<=max) return v;
+    const cut=v.slice(0,max);
+    const sp=cut.lastIndexOf(' ');
+    // One very long token: fall back to the hard cut rather than gutting the string.
+    const body=sp>max*0.6?cut.slice(0,sp):cut;
+    return body.replace(/[\s,;:.–—-]+$/,'')+'…';
+  };
   const bool=v=>v===true;
   const tips=v=>Array.isArray(v)?v.slice(0,6).map(x=>str(x,160)).filter(Boolean):[];
   const BUCKETS=['must-do','nice-to-have','if-time'];
   return days.slice(0,31).map(d=>({
-    label:str(d?.label,80), date:str(d?.date,10), notes:str(d?.notes,500),
+    label:str(d?.label,80),
+    // NOT str(): str() appends an ellipsis when it truncates, so a full ISO timestamp
+    // would come back as "2026-09-16…" and corrupt the date. Plain slice, no ellipsis.
+    date:(typeof d?.date==='string'?d.date.slice(0,10):''), notes:str(d?.notes,500),
     destinationId:str(d?.destinationId,64),
     activities:(Array.isArray(d?.activities)?d.activities:[]).slice(0,8).map(a=>({
       name:str(a?.name,120), emoji:str(a?.emoji,8), address:str(a?.address,200),
@@ -5932,117 +5945,340 @@ function NewTripSheet({onClose, onSave}) {
   );
 }
 
-function generateTripPDF(trip) {
-  track('pdf_export');
-  const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const gradMap = {
-    'gradient-generic':  'linear-gradient(135deg,#1C4A56,#2B5F6E,#3D5A7A)',
-    'gradient-london':   'linear-gradient(135deg,#1C4A56,#2B5F6E,#1E3D4A)',
-    'gradient-paris':    'linear-gradient(135deg,#2A3F5F,#3D5A7A,#253352)',
-    'gradient-miami':    'linear-gradient(135deg,#2E5C4A,#4A7268,#1F4035)',
-    'gradient-sunset':   'linear-gradient(135deg,#5C3020,#7A5240,#9A6B50)',
-    'gradient-forest':   'linear-gradient(135deg,#243D2E,#3A5C48,#2E4A3A)',
-    'gradient-desert':   'linear-gradient(135deg,#5C4A20,#7A6840,#6B5530)',
-    'gradient-lavender': 'linear-gradient(135deg,#3D2E5C,#5A4A78,#4A3868)',
-    'gradient-rose':     'linear-gradient(135deg,#5C2E3A,#7A4A58,#6B3848)',
-    'gradient-slate':    'linear-gradient(135deg,#2E3A4A,#3D4D5C,#2A3848)',
-  };
-  const firstDest = trip.destinations?.[0];
-  const autoGrad = firstDest?.countryCode==='GB'?'gradient-london':firstDest?.countryCode==='FR'?'gradient-paris':'gradient-generic';
-  const grad = gradMap[trip.coverGradient||autoGrad] || gradMap['gradient-generic'];
+// ── OFFLINE ITINERARY EXPORT ──────────────────────────────────────────────
+// Replaced generateTripPDF on 2026-09-03. That opened a print window; nobody was
+// printing it, and the artefact went stale the moment the trip changed. This writes
+// a self-contained HTML file instead: one external reference (the Google Fonts
+// stylesheet, which degrades to the system stack), no scripts, no images, no
+// iframes — so it opens with no signal. Clustering comes from `neighborhood`
+// strings, never coordinates: v2 removed the Nominatim round-trip deliberately.
+// Spec + verification: locale-docs/reviews/ and locale-docs/patches/offline-export.js
+/* ──────────────────────────────────────────────────────────────────────────────
+   Locale · offline itinerary export                        SHIPPED 2026-09-03
 
-  const checklist = trip.checklist || [];
-  const cats = [...new Set(checklist.map(i=>i.category))];
+   Design brief (Stephanie, 2026-09-02):
+     · A saved page read on a phone, not a printed document.
+     · Blend palette + Bricolage/Inter, with darker text variants wherever a
+       brand colour would otherwise be small text below 4.5:1.
+     · No coordinates. v2 removed the Nominatim round-trip on purpose, so
+       clustering is inferred from `neighborhood` strings instead.
+   ────────────────────────────────────────────────────────────────────────────── */
 
-  const checklistHTML = checklist.length === 0 ? '' : `
-    <section class="section">
-      <h2 class="section-title">Checklist</h2>
-      <p class="meta">${checklist.filter(i=>i.completed).length} of ${checklist.length} items complete</p>
-      ${cats.map(cat=>`
-        <div class="cat-label">${esc(cat)}</div>
-        ${checklist.filter(i=>i.category===cat).map(item=>`
-          <div class="checklist-row ${item.completed?'done':''}">
-            <span class="cb">${item.completed?'✓':''}</span>
-            <span>${esc(item.label)}</span>
-          </div>
-        `).join('')}
-      `).join('')}
+function _esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function _slug(s){return String(s||'trip').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').toLowerCase().slice(0,60)||'trip';}
+function _shortAddr(a){return String(a||'').replace(/,\s*(United Kingdom|United States|France|England|UK|USA)\s*$/i,'').trim();}
+function _hood(h){const s=String(h||'').trim();return s.length>28?s.slice(0,27).replace(/[\s,]+$/,'')+'…':s;}
+
+const _TRANSIT=/\b(airport|station|terminal|check[\s-]?in|check[\s-]?out|depart|arrive|arrival|connect|connection|flight|train|eurostar|transfer|transit|taxi|shuttle|travel to|ground transport)\b/i;
+function _isTransit(a){
+  if(!a) return false;
+  if((a.category||'').toLowerCase()==='other') return true;
+  return _TRANSIT.test(a.name||'');
+}
+const _BUCKET={'must-do':{label:'Must do',cls:'must'},
+               'nice-to-have':{label:'Nice to have',cls:'nice'},
+               'if-time':{label:'If time',cls:'iftime'}};
+
+function buildItineraryHTML(trip){
+  const days=trip.days||[];
+  const destOf=d=>(trip.destinations||[]).find(x=>x.id===d.destinationId)||(trip.destinations||[])[0]||null;
+  const fmtLong=d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});}catch(_){return d||'';}};
+  const fmtShort=d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',day:'numeric',month:'short'});}catch(_){return d||'';}};
+  const clean=(l,d)=>String(l||'').replace(/^\s*day\s*\d+\s*[-–—:·]\s*/i,'').trim()||fmtLong(d);
+
+  const perDay=days.map(day=>{
+    const stops=[...(day.activities||[]),...(day.restaurants||[])].sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0));
+    // Cluster signal from neighbourhoods. A stop is "isolated" only if it is
+    // optional, not transit, its neighbourhood appears once, AND at least two
+    // other stops that day share one. Anything without a neighbourhood is never
+    // flagged — no location data means no opinion.
+    const counts={};
+    stops.forEach(s=>{const h=(s.neighborhood||'').trim(); if(h) counts[h]=(counts[h]||0)+1;});
+    const hasCluster=Object.values(counts).some(n=>n>=2);
+    return {day,stops,counts,hasCluster};
+  });
+
+  const nav=days.map((d,i)=>`<a class="navchip" href="#day-${i+1}"><b>${i+1}</b> ${_esc(fmtShort(d.date))}</a>`).join('');
+
+  const glance=perDay.map(({day,stops},i)=>{
+    const hoods=[...new Set(stops.map(s=>(s.neighborhood||'').trim()).filter(Boolean))];
+    return `<li class="g-row">
+      <a href="#day-${i+1}"><span class="g-n">${i+1}</span>
+      <span class="g-body"><span class="g-title">${_esc(clean(day.label,day.date))}</span>
+      <span class="g-meta">${_esc(fmtShort(day.date))} · ${stops.length} ${stops.length===1?'stop':'stops'}${hoods.length?' · '+_esc(hoods.slice(0,2).map(_hood).join(' · ')):''}</span></span></a></li>`;
+  }).join('');
+
+  const sections=perDay.map(({day,stops,counts,hasCluster},i)=>{
+    const dest=destOf(day);
+    const mixed=new Set(stops.map(s=>s.bucket||'nice-to-have')).size>1;
+    let prevHood=null;
+    const items=stops.map((a,j)=>{
+      const bk=_BUCKET[a.bucket]||_BUCKET['nice-to-have'];
+      const hood=(a.neighborhood||'').trim();
+      const isolated=hasCluster&&hood&&counts[hood]===1&&a.bucket!=='must-do'&&!_isTransit(a);
+      const noLoc=!hood&&!(a.address||'').trim();
+      const tips=(a.thingsToConsider||[]).filter(Boolean);
+      let move='';
+      if(hood&&prevHood&&hood!==prevHood){
+        move=`<li class="move"><span class="move-t">${_esc(_hood(prevHood))} <span aria-hidden="true">&rarr;</span> ${_esc(_hood(hood))}</span></li>`;
+      }
+      if(hood) prevHood=hood;
+      return `${move}
+      <li class="stop${isolated?' stop-far':''}">
+        <span class="stop-n" aria-hidden="true">${j+1}</span>
+        <div class="stop-b">
+          <p class="stop-h">
+            <span class="stop-name">${a.emoji?`<span class="em" aria-hidden="true">${_esc(a.emoji)}</span> `:''}${_esc(a.name)}</span>
+            ${mixed?`<span class="badge b-${bk.cls}">${bk.label}</span>`:''}
+            ${a.bookingRequired?'<span class="badge b-book">Book ahead</span>':''}
+          </p>
+          <p class="stop-s"><span class="sr">Stop ${j+1} of ${stops.length}. </span>${
+            hood?`<span class="hood">${_esc(_hood(hood))}</span>`:''}${hood&&a.address?' · ':''}${a.address?_esc(_shortAddr(a.address)):''}</p>
+          ${isolated?`<p class="warnline"><strong>Optional, and on its own.</strong> Every other stop today shares an area with something else; this one doesn't.</p>`:''}
+          ${noLoc?`<p class="warnline soft"><strong>No location recorded.</strong> Add an address in Locale so this can be mapped.</p>`:''}
+          ${a.notes?`<p class="stop-notes">${_esc(a.notes)}</p>`:''}
+          ${tips.length?`<ul class="tips">${tips.map(t=>`<li>${_esc(t)}</li>`).join('')}</ul>`:''}
+          ${a.bookingUrl?`<p class="stop-link"><a href="${_esc(a.bookingUrl)}" rel="noopener">${_esc(a.bookingUrl)}</a></p>`:''}
+        </div>
+      </li>`;
+    }).join('');
+
+    return `<section class="day" id="day-${i+1}" aria-labelledby="h-${i+1}" tabindex="-1">
+      <p class="day-k">Day ${i+1} of ${days.length}${dest?` &middot; ${_esc(dest.city)}`:''}</p>
+      <h2 class="day-t" id="h-${i+1}">${_esc(clean(day.label,day.date))}</h2>
+      <p class="day-m">${_esc(fmtLong(day.date))} &middot; ${stops.length} ${stops.length===1?'stop':'stops'}</p>
+      ${day.notes?`<aside class="dnote"><h3>About this day</h3><p>${_esc(day.notes)}</p></aside>`:''}
+      ${stops.length?`<ol class="route">${items}</ol>`:'<p class="empty">Nothing planned — a free day.</p>'}
     </section>`;
+  }).join('');
 
-  const daysHTML = (trip.days||[]).map(day=>`
-    <div class="day-block">
-      <div class="day-header">${esc(day.label||formatDate(day.date))}</div>
-      ${(day.activities||[]).map(a=>`
-        <div class="card">
-          <div class="card-title">${a.emoji||'📍'} ${esc(a.name)}</div>
-          ${a.address?`<div class="card-meta">${esc(a.address)}</div>`:''}
-          ${a.notes?`<div class="card-notes">${esc(a.notes)}</div>`:''}
-          ${a.bookingRequired&&a.bookingUrl?`<div class="book-badge">Book in advance</div>`:''}
-        </div>
-      `).join('')}
-      ${(day.restaurants||[]).map(r=>`
-        <div class="card">
-          <div class="card-title">${r.emoji||'🍽️'} ${esc(r.name)}</div>
-          ${r.cuisine?`<div class="card-meta">${esc(r.cuisine)}${r.neighborhood?' · '+esc(r.neighborhood):''}</div>`:''}
-          ${r.notes?`<div class="card-notes">${esc(r.notes)}</div>`:''}
-          ${r.reservationRequired?`<div class="book-badge">Reservation recommended</div>`:''}
-        </div>
-      `).join('')}
-      ${day.notes?`<div class="day-notes">📝 ${esc(day.notes)}</div>`:''}
-    </div>
-  `).join('');
+  const stays=(trip.lodging||[]).map(l=>`<tr><th scope="row">${_esc(l.name)}</th><td>${_esc(l.address||'—')}</td>
+    <td class="nw">${_esc(l.checkIn||'?')} &rarr; ${_esc(l.checkOut||'?')}</td><td>${_esc(l.confirmationNumber||'—')}</td></tr>`).join('');
+  const legs=(trip.flights||[]).map(f=>`<tr><th scope="row">${_esc(f.airline||'Travel')}</th><td>${_esc(f.flightNumber||'—')}</td>
+    <td class="nw">${_esc(f.departureAirport||'')} &rarr; ${_esc(f.arrivalAirport||'')}</td>
+    <td class="nw">${_esc((f.departureTime||'').slice(0,10))} ${_esc((f.departureTime||'').slice(11,16))}</td>
+    <td>${_esc(f.confirmationNumber||'—')}</td></tr>`).join('');
+  const cl=trip.checklist||[];
+  const cats=[...new Set(cl.map(i=>i.category))];
+  const checks=cl.length?cats.map(c=>`<h3 class="cat">${_esc(c)}</h3><ul class="check">${
+    cl.filter(i=>i.category===c).map(i=>`<li class="${i.completed?'done':''}"><span class="box" aria-hidden="true">${i.completed?'✓':''}</span><span>${_esc(i.label)}${i.completed?' <span class="sr">(done)</span>':''}</span></li>`).join('')}</ul>`).join(''):'';
 
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'DM Sans',sans-serif;background:#F5F2EC;color:#1A1714;font-size:13px;line-height:1.5}
-    .cover{background:${grad};color:#fff;padding:36px 32px 28px;border-radius:0 0 20px 20px;margin-bottom:24px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .cover-wordmark{font-family:'Cormorant Garamond',serif;font-size:13px;opacity:.7;margin-bottom:12px;letter-spacing:.1em}
-    .cover-title{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;margin-bottom:6px}
-    .cover-meta{opacity:.8;font-size:12px;margin-bottom:4px}
-    .cover-dest{opacity:.7;font-size:11px}
-    .section{padding:0 24px;margin-bottom:20px}
-    .section-title{font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;color:#2B5F6E;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #DDD9D1}
-    .meta{font-size:11px;color:#8A8784;margin-bottom:10px}
-    .cat-label{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#8A8784;margin:10px 0 4px}
-    .checklist-row{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid #EDE9E1;font-size:12px}
-    .checklist-row.done{color:#8A8784;text-decoration:line-through}
-    .cb{width:16px;height:16px;border-radius:4px;border:1.5px solid #C8C5C0;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#2B5F6E;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .checklist-row.done .cb{background:#2B5F6E;border-color:#2B5F6E;color:#fff}
-    .day-block{padding:0 24px;margin-bottom:16px;page-break-inside:avoid}
-    .day-header{font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:600;color:#fff;background:${grad};padding:8px 14px;border-radius:10px;margin-bottom:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .card{background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:8px;border:1px solid #EDE9E1;page-break-inside:avoid}
-    .card-title{font-weight:500;font-size:13px;margin-bottom:3px}
-    .card-meta{font-size:11px;color:#8A8784;margin-bottom:3px}
-    .card-notes{font-size:11px;color:#5A5755;line-height:1.5}
-    .book-badge{display:inline-block;margin-top:6px;background:#EAF3F5;color:#2B5F6E;font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .day-notes{font-size:11px;font-style:italic;color:#8A8784;padding:8px 12px;background:#FAF8F4;border-radius:8px;margin-top:4px}
-    .footer{text-align:center;font-size:10px;color:#B0ADA8;padding:20px;margin-top:8px}
-    @media print{
-      body{background:#F5F2EC}
-      .cover,.day-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      .no-print{display:none}
-      @page{margin:12mm}
-    }
-  </style>
-  </head><body>
-  <div class="cover">
-    <div class="cover-wordmark">Locale</div>
-    <div class="cover-title">${esc(trip.title||'My Trip')}</div>
-    <div class="cover-meta">${formatDate(trip.startDate)} – ${formatDate(trip.endDate)}</div>
-    <div class="cover-dest">${(trip.destinations||[]).map(d=>esc(d.city)).join(' → ')}</div>
+  const saved=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>${_esc(trip.title||'My trip')} &middot; Locale</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Locale Blend palette. Light mode adds darker "-tx" variants wherever a brand
+   colour would otherwise be small text: coral is 2.90:1 on cream and cannot
+   carry body copy. The dark palette is v2's own and already passes AA. */
+:root{
+  color-scheme:light;
+  --cream:#FAF8F4; --cream-dk:#F1EEE8; --surface:#FFFFFF;
+  --ink:#1A1714;        /* 16.83:1 */
+  --ink-light:#5C564E;  /*  6.84:1 */
+  --ink-muted:#6F6960;  /*  5.12:1 · brand #8C857A is 3.44:1 */
+  --accent:#FF5A4D;     /* fills, rules, large display only */
+  --accent-tx:#C93C22;  /*  4.77:1 · small text + links */
+  --accent-soft:#FCE9E6;
+  --border:#E9E4DB; --border-solid:#CFC7BA;
+  --flag-tx:#B3271B; --flag-bg:#FCE7E4; --flag-br:#F3C5BF;
+  --warn-tx:#7D5410; --warn-br:#DCC49A;
+  --ok-tx:#12796C;
+  --grad:linear-gradient(135deg,#C2410C,#D01E63);  /* darker signature: white clears 5.18:1 */
+  --display:'Bricolage Grotesque','Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --body:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --r:14px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --cream:#0E1117; --cream-dk:#1F2530; --surface:#171B24;
+  --ink:#F4F1EC; --ink-light:#A8B0BD; --ink-muted:#7C8696;
+  --accent:#FF6F63; --accent-tx:#FF6F63; --accent-soft:#2A1B1C;
+  --border:#2A313D; --border-solid:#3A424F;
+  --flag-tx:#FF7A6E; --flag-bg:#2E1A1B; --flag-br:#5A3328;
+  --warn-tx:#E8A13A; --warn-br:#5A4526; --ok-tx:#2FD6C4;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --cream:#0E1117; --cream-dk:#1F2530; --surface:#171B24;
+  --ink:#F4F1EC; --ink-light:#A8B0BD; --ink-muted:#7C8696;
+  --accent:#FF6F63; --accent-tx:#FF6F63; --accent-soft:#2A1B1C;
+  --border:#2A313D; --border-solid:#3A424F;
+  --flag-tx:#FF7A6E; --flag-bg:#2E1A1B; --flag-br:#5A3328;
+  --warn-tx:#E8A13A; --warn-br:#5A4526; --ok-tx:#2FD6C4;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:17px;scroll-behavior:smooth}
+body{background:var(--cream);color:var(--ink);font-family:var(--body);line-height:1.55;
+  -webkit-font-smoothing:antialiased;padding-bottom:4rem}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+a{color:var(--accent-tx)}
+:focus-visible{outline:2px solid var(--accent-tx);outline-offset:3px;border-radius:4px}
+.wrap{max-width:44rem;margin:0 auto;padding:0 1.15rem}
+
+.cover{background:var(--grad);color:#fff;padding:2.4rem 1.15rem 2rem}
+.cover-in{max-width:44rem;margin:0 auto}
+.mark{font-size:.8rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;opacity:.9;margin-bottom:.7rem}
+.cover h1{font-family:var(--display);font-size:2.1rem;font-weight:800;line-height:1.06;letter-spacing:-.02em}
+.cover p{margin-top:.5rem;font-size:.95rem;opacity:.95}
+.cover .sub{font-size:.85rem;opacity:.85;margin-top:.15rem}
+
+.nav{position:sticky;top:0;z-index:9;background:var(--cream);border-bottom:1px solid var(--border);
+  padding:.5rem 0;margin-bottom:1.4rem}
+.navscroll{display:flex;gap:.4rem;overflow-x:auto;padding:0 1.15rem;max-width:44rem;margin:0 auto;scrollbar-width:none}
+.navscroll::-webkit-scrollbar{display:none}
+.navchip{flex:0 0 auto;font-size:.8rem;font-weight:500;color:var(--ink-light);text-decoration:none;
+  border:1px solid var(--border-solid);border-radius:999px;padding:.3rem .7rem;white-space:nowrap;
+  min-height:2rem;display:flex;align-items:center;gap:.35rem}
+.navchip b{color:var(--accent-tx);font-weight:700}
+.navchip:hover{background:var(--cream-dk)}
+
+h2,h3{font-family:var(--display)}
+.legend{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.1rem;margin-bottom:1.4rem}
+.legend h2{font-size:1.15rem;font-weight:700;margin-bottom:.4rem}
+.legend p{font-size:.9rem;color:var(--ink-light);margin-bottom:.7rem}
+.legend ul{list-style:none;display:flex;flex-wrap:wrap;gap:.45rem .9rem}
+.legend li{font-size:.85rem;color:var(--ink-light);display:flex;align-items:center;gap:.35rem}
+
+.badge{display:inline-block;font-size:.72rem;font-weight:600;padding:.12rem .45rem;border-radius:.4rem;
+  border:1px solid;white-space:nowrap;vertical-align:.06em}
+.b-must{background:var(--flag-bg);color:var(--flag-tx);border-color:var(--flag-br)}
+.b-nice{background:var(--accent-soft);color:var(--accent-tx);border-color:var(--flag-br)}
+.b-iftime{background:var(--cream-dk);color:var(--ink-muted);border-color:var(--border-solid)}
+.b-book{background:transparent;color:var(--warn-tx);border-color:var(--warn-br)}
+
+.glance{list-style:none;margin-bottom:2rem}
+.g-row a{display:flex;gap:.7rem;align-items:flex-start;padding:.6rem .2rem;border-bottom:1px solid var(--border);
+  text-decoration:none;color:inherit;min-height:2.75rem}
+.g-row a:hover{background:var(--cream-dk)}
+.g-n{flex:0 0 1.6rem;height:1.6rem;border-radius:50%;background:var(--accent);color:#fff;font-size:.8rem;
+  font-weight:700;display:flex;align-items:center;justify-content:center}
+.g-body{display:flex;flex-direction:column}
+.g-title{font-weight:600;font-size:.95rem}
+.g-meta{font-size:.8rem;color:var(--ink-muted)}
+
+.day{scroll-margin-top:3.6rem;padding-top:1.6rem;margin-bottom:1.6rem;border-top:2px solid var(--accent)}
+.day:focus{outline:none}
+.day-k{font-size:.75rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--accent-tx);margin:.6rem 0 .15rem}
+.day-t{font-size:1.6rem;font-weight:800;line-height:1.12;letter-spacing:-.015em;text-wrap:balance}
+.day-m{font-size:.88rem;color:var(--ink-light);margin-top:.25rem}
+.dnote{background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:0 var(--r) var(--r) 0;
+  padding:.8rem 1rem;margin:1rem 0 1.1rem}
+.dnote h3{font-size:.75rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--accent-tx);margin-bottom:.25rem}
+.dnote p{font-size:.92rem;color:var(--ink-light)}
+
+.route{list-style:none;display:flex;flex-direction:column;gap:.5rem}
+.stop{display:flex;gap:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:.85rem .95rem}
+.stop-n{flex:0 0 1.7rem;height:1.7rem;border-radius:50%;background:var(--accent);color:#fff;font-size:.85rem;
+  font-weight:700;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.stop-b{flex:1;min-width:0}
+.stop-h{display:flex;flex-wrap:wrap;gap:.3rem .45rem;align-items:baseline}
+.stop-name{font-weight:700;font-size:1rem;line-height:1.3}
+.em{font-style:normal}
+.stop-s{font-size:.82rem;color:var(--ink-muted);margin-top:.2rem}
+.hood{font-weight:600;color:var(--ink-light)}
+.stop-notes{font-size:.9rem;color:var(--ink-light);margin-top:.45rem}
+.tips{margin:.45rem 0 0 1rem}
+.tips li{font-size:.83rem;color:var(--ink-muted);line-height:1.45;margin-bottom:.1rem}
+.stop-link{font-size:.8rem;margin-top:.4rem;word-break:break-word}
+.stop-far{border:2px solid var(--flag-tx);background:var(--flag-bg)}
+.stop-far .stop-n{background:var(--flag-tx)}
+.warnline{font-size:.85rem;color:var(--flag-tx);margin-top:.35rem}
+.warnline.soft{color:var(--warn-tx)}
+.move{display:flex;align-items:center;gap:.5rem;padding:.15rem 0 .15rem 2.45rem}
+.move-t{font-size:.75rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-muted)}
+.empty{font-size:.9rem;color:var(--ink-muted);font-style:italic}
+
+.ref{margin-top:2.2rem;padding-top:1.6rem;border-top:2px solid var(--accent)}
+.ref h2{font-size:1.4rem;font-weight:800;margin-bottom:.3rem}
+.ref .sub2{font-size:.85rem;font-weight:700;color:var(--ink-light);margin:1.2rem 0 .35rem;letter-spacing:.06em;text-transform:uppercase}
+.tscroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.86rem;min-width:30rem}
+th,td{text-align:left;padding:.5rem .55rem;border-bottom:1px solid var(--border);vertical-align:top}
+thead th{font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-light);border-bottom:2px solid var(--ink)}
+tbody th{font-weight:600}
+.nw{white-space:nowrap}
+.cat{font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-light);margin:.9rem 0 .3rem}
+.check{list-style:none}
+.check li{display:flex;gap:.5rem;align-items:flex-start;font-size:.88rem;padding:.3rem 0;border-bottom:1px solid var(--border)}
+.check li.done{color:var(--ink-muted);text-decoration:line-through}
+.box{flex:0 0 1rem;height:1rem;margin-top:.2rem;border:1.5px solid var(--ink-muted);border-radius:.25rem;
+  background:var(--surface);font-size:.7rem;line-height:.9rem;text-align:center;color:var(--ok-tx)}
+.foot{margin-top:2.4rem;padding-top:1.2rem;border-top:1px solid var(--border);font-size:.82rem;color:var(--ink-muted)}
+.foot button{font:inherit;font-size:.82rem;background:transparent;border:1px solid var(--border-solid);
+  color:var(--ink-light);border-radius:.5rem;padding:.4rem .8rem;margin-top:.6rem;cursor:pointer;min-height:2.4rem}
+
+@media print{
+  .nav,.foot button{display:none}
+  html{font-size:11.5pt}
+  body{background:#fff;padding:0}
+  .day{break-before:page;border-top:none}
+  .day:first-of-type{break-before:auto}
+  .stop,.dnote,tr{break-inside:avoid}
+  a[href^="http"]::after{content:" (" attr(href) ")";font-size:.78em;color:#5C564E;word-break:break-all}
+  .stop-link{display:none}
+  @page{margin:14mm 13mm}
+}
+</style></head><body>
+
+<header class="cover"><div class="cover-in">
+  <p class="mark">Locale</p>
+  <h1>${_esc(trip.title||'My trip')}</h1>
+  <p>${_esc(fmtLong(trip.startDate))} &ndash; ${_esc(fmtLong(trip.endDate))}</p>
+  <p class="sub">${(trip.destinations||[]).map(d=>_esc(d.city)).join(' &rarr; ')}${trip.travelerCount?` &middot; ${trip.travelerCount} travellers`:''}</p>
+</div></header>
+
+<nav class="nav" aria-label="Jump to a day"><div class="navscroll">${nav}</div></nav>
+
+<div class="wrap">
+  <div class="legend">
+    <h2>How to read this</h2>
+    <p>Stops are numbered in the order you'll do them. When the area changes between two stops you'll see it marked &mdash; that's your cue you're crossing town rather than turning a corner.</p>
+    <ul>
+      <li><span class="badge b-must">Must do</span> the reason the day exists</li>
+      <li><span class="badge b-nice">Nice to have</span> if the day allows</li>
+      <li><span class="badge b-iftime">If time</span> only if things went quickly</li>
+      <li><span class="badge b-book">Book ahead</span> needs a ticket first</li>
+    </ul>
   </div>
-  ${checklistHTML}
-  <section class="section"><h2 class="section-title">Itinerary</h2></section>
-  ${daysHTML}
-  <div class="footer">Generated by Locale · ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>
-  <script>window.onload=()=>{window.print();}<\/script>
-  </body></html>`;
 
-  const w = window.open('','_blank');
-  w.document.write(html);
-  w.document.close();
+  <h2 style="font-size:1.15rem;font-weight:700;margin-bottom:.5rem">Every day at a glance</h2>
+  <ul class="glance">${glance}</ul>
+
+  ${sections}
+
+  <section class="ref" aria-labelledby="refh">
+    <h2 id="refh">Stays, travel &amp; checklist</h2>
+    ${stays?`<p class="sub2">Stays</p><div class="tscroll"><table><thead><tr><th scope="col">Property</th><th scope="col">Address</th><th scope="col">Dates</th><th scope="col">Confirmation</th></tr></thead><tbody>${stays}</tbody></table></div>`:''}
+    ${legs?`<p class="sub2">Flights &amp; trains</p><div class="tscroll"><table><thead><tr><th scope="col">Carrier</th><th scope="col">Number</th><th scope="col">Route</th><th scope="col">Departs</th><th scope="col">Confirmation</th></tr></thead><tbody>${legs}</tbody></table></div>`:''}
+    ${checks?`<p class="sub2">Before you go</p>${checks}`:''}
+  </section>
+
+  <p class="foot">Saved from Locale on ${saved}. This page works with no signal &mdash; nothing here needs a connection.
+  Reopen Locale for the current version.<br>
+  <button type="button" onclick="window.print()">Print this</button></p>
+</div>
+</body></html>`;
+}
+
+function downloadOfflineItinerary(trip){
+  try{ track('offline_export'); }catch(_){}
+  try{
+    const html=buildItineraryHTML(trip);
+    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=_slug(trip.title)+'-itinerary.html';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+    showToast('Saved · opens with no signal','success',5000);
+  }catch(e){
+    console.error('offline export failed',e);
+    showToast("Couldn't save that file · try again",'warn',5000);
+  }
 }
 
 // ── TASTE PROFILE QUIZ · one-time, flavors every AI call ──────────────────────
@@ -7912,7 +8148,7 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
             </div>
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
               <button onClick={doShare} aria-label="Share trip" title="Share trip" style={iconBtn(false)}>🔗</button>
-              <button onClick={()=>generateTripPDF(trip)} aria-label="Download trip as PDF" title="Download PDF" style={iconBtn(false)}>⬇️</button>
+              <button onClick={()=>downloadOfflineItinerary(trip)} aria-label="Save an offline copy of this trip" title="Save offline copy" style={iconBtn(false)}>⬇️</button>
               {isOwner && <button aria-label="Delete trip" title="Delete trip" onClick={()=>{ if(window.confirm(`Delete "${trip.title}"? This can't be undone.`)) onDelete(trip.id); }} style={iconBtn(true)}>🗑️</button>}
             </div>
           </div>
