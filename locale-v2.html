@@ -8253,7 +8253,11 @@ function SyncButton({user, onChange}){
   }
   return (
     <span style={{display:'contents'}}>
-      <button className="btn btn-ghost btn-sm" onClick={()=>{ setOpen(true); setSent(false); }}>☁ Sync</button>
+      {/* Labelled "Sign in", not "Sync": this is the ONLY way into the account, and a
+          crew member told to "sign in" scanned the header for that word and found a cloud
+          icon that read like a settings toggle. The signed-in state stays "Synced" because
+          there it really is describing status. See reviews/CREW-STALE-VIEW-2026-09-03.md. */}
+      <button className="btn btn-ghost btn-sm" onClick={()=>{ setOpen(true); setSent(false); }}>☁ Sign in</button>
       {open && (
         <div className="overlay" ref={dlgRef} role="dialog" aria-modal="true" aria-label="Sync across devices" onClick={e=>{ if(e.target===e.currentTarget) setOpen(false); }}>
           <div className="sheet" style={{maxWidth:420}}>
