@@ -4783,11 +4783,20 @@ function DayView({trip,day,onUpdateTrip,onGoTab}){
     let alive=true;
     if(!dest || !dest.city || !day.date){ setWxByDate(null); return; }
     const ahead=(new Date(day.date+'T00:00:00') - new Date(new Date().toDateString()))/86400000;
-    if(!(ahead>=0 && ahead<WX_WINDOW_DAYS)){ setWxByDate(null); return; } // outside the forecast horizon
+    if(!(ahead>=0 && ahead<WX_WINDOW_DAYS)){ setWxByDate(null); return; } // outside the forecast horizon · see wxTooFarOut below
     fetchCityForecast(dest.city, dest.countryCode).then(v=>{ if(alive) setWxByDate(v); });
     return ()=>{ alive=false; };
   },[dest&&dest.city, dest&&dest.countryCode, day.date]);
   const wx = wxByDate ? (wxByDate[day.date]||null) : null;
+  // Open-Meteo publishes ~16 days. Beyond that this component rendered NOTHING, so on a
+  // trip booked further out the Forecast row appeared on the first few days and silently
+  // vanished on the rest — which reads as broken rather than "not published yet".
+  // Say which it is. Past days stay silent: a forecast for a day already gone is noise.
+  const wxTooFarOut = React.useMemo(()=>{
+    if(wx || !day.date || !dest || !dest.city) return false;
+    const ahead=(new Date(day.date+'T00:00:00') - new Date(new Date().toDateString()))/86400000;
+    return ahead>=WX_WINDOW_DAYS;
+  },[wx, day.date, dest&&dest.city]);
   const wxSwap = React.useMemo(
     ()=> wxByDate ? weatherSwapSuggestion(day, trip.days||[], wxByDate) : null,
     [wxByDate, day, trip.days]
@@ -4879,6 +4888,13 @@ function DayView({trip,day,onUpdateTrip,onGoTab}){
           </div>
         );
       })()}
+      {wxTooFarOut&&(
+        <div style={{display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap',
+          padding:'10px 0 11px',borderTop:'1px solid var(--color-border)',borderBottom:'1px solid var(--color-border)',marginBottom:16}}>
+          <span className="section-label" style={{margin:0}}>Forecast</span>
+          <span style={{fontSize:'.85rem',color:'var(--color-ink-light)'}}>Published about two weeks ahead</span>
+        </div>
+      )}
       {wx&&(
         <div style={{display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap',
           padding:'10px 0 11px',borderTop:'1px solid var(--color-border)',borderBottom:'1px solid var(--color-border)',marginBottom:16}}>
