@@ -13,15 +13,19 @@ mkdir -p "$WORK" 2>/dev/null || true
 echo "1. deployable files exist"
 for f in $DEPLOY_FILES; do [ -f "$f" ] || { echo "   MISSING $f"; fail=1; }; done
 
-echo "2. required script tags"
-for app in locale.html locale-v2.html; do
+echo "2. required script tags (app files only · locale.html is a redirect since 2026-09-02)"
+for app in locale-v2.html; do
   for tag in react.production.min.js react-dom.production.min.js babel.min.js; do
     grep -q "$tag" "$app" || { echo "   MISSING $tag in $app"; fail=1; }
   done
 done
 
+echo "2b. locale.html still forwards to the live app (query + fragment preserved)"
+grep -q "locale-v2.html" locale.html || { echo "   FAIL locale.html no longer points at locale-v2.html"; fail=1; }
+grep -q "window.location.search + window.location.hash" locale.html || { echo "   FAIL locale.html redirect dropped the query/fragment forward"; fail=1; }
+
 echo "3. brace balance (tolerance 50)"
-for app in locale.html locale-v2.html; do
+for app in locale-v2.html; do
   O=$(grep -o '{' "$app" | wc -l); C=$(grep -o '}' "$app" | wc -l)
   D=$((O - C)); A=${D#-}
   echo "   $app diff=$D"

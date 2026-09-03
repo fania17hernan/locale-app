@@ -8734,6 +8734,10 @@ function App() {
   },[]);
 
   const [cloudUser, setCloudUser] = React.useState(null);
+  // A device that has synced before holds trips tagged _ownerId. Holding those with
+  // no session means the session lapsed, and every trip on screen is a frozen local
+  // copy that will never update again. See reviews/CREW-STALE-VIEW-2026-09-03.md.
+  const [staleSession, setStaleSession] = React.useState(false);
   React.useEffect(()=>{
     let active=true;
     const c=sb();
@@ -8783,7 +8787,21 @@ function App() {
     async function syncIn(){
       const u=await cloudGetUser(); if(!active) return;
       setCloudUser(u);
-      if(!u) return;
+      if(!u){
+        // THE CREW-STALE-VIEW BUG. This used to be a bare `return`. A member whose
+        // session had lapsed got no pull, no realtime subscription, and no hint that
+        // either had stopped — the app just rendered the copy saved to localStorage on
+        // the day they joined, indefinitely, looking exactly like the live trip. One
+        // crew member sat on a month-old itinerary that still named the wrong team and
+        // was missing a hotel, with nothing on screen to suggest it was stale.
+        // Signing out on purpose is different: no previously-synced trips, no banner.
+        try{
+          const synced = loadTrips().filter(t => t && t._ownerId && !t.isDemo);
+          if(active) setStaleSession(synced.length > 0);
+        }catch(e){}
+        return;
+      }
+      setStaleSession(false);
       syncTasteProfile(); // reconcile taste-profile quiz answers too; independent of trip sync below
       // NOTE: supabase-js v2 query/rpc builders are thenable but do NOT implement
       // .catch()/.finally() until awaited · calling .catch() directly throws
@@ -9011,6 +9029,13 @@ function App() {
       )}
       {offline && (
         <div className="offline-banner">📡 Offline · your trips are saved and fully accessible</div>
+      )}
+      {staleSession && !offline && (
+        <div className="offline-banner" role="status"
+             style={{cursor:'pointer'}}
+             onClick={()=>{ setView('dashboard'); window.scrollTo({top:0}); }}>
+          ⚠️ Signed out · showing a saved copy. Tap to sign in and get the latest.
+        </div>
       )}
       {showInstall && (
         <div className="install-banner">
