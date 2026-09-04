@@ -6014,7 +6014,7 @@ function buildItineraryHTML(trip){
     return {day,stops,counts,hasCluster};
   });
 
-  const nav=days.map((d,i)=>`<a class="navchip" href="#day-${i+1}"><b>${i+1}</b> ${_esc(fmtShort(d.date))}</a>`).join('');
+  const nav=days.map((d,i)=>`<a class="navchip" href="#day-${i+1}"><b>${i+1}</b> <span class="navchip-d">${_esc(fmtShort(d.date))}</span></a>`).join('');
 
   const glance=perDay.map(({day,stops},i)=>{
     const hoods=[...new Set(stops.map(s=>(s.neighborhood||'').trim()).filter(Boolean))];
@@ -6068,12 +6068,12 @@ function buildItineraryHTML(trip){
     </section>`;
   }).join('');
 
-  const stays=(trip.lodging||[]).map(l=>`<tr><th scope="row">${_esc(l.name)}</th><td>${_esc(l.address||'—')}</td>
-    <td class="nw">${_esc(l.checkIn||'?')} &rarr; ${_esc(l.checkOut||'?')}</td><td>${_esc(l.confirmationNumber||'—')}</td></tr>`).join('');
-  const legs=(trip.flights||[]).map(f=>`<tr><th scope="row">${_esc(f.airline||'Travel')}</th><td>${_esc(f.flightNumber||'—')}</td>
-    <td class="nw">${_esc(f.departureAirport||'')} &rarr; ${_esc(f.arrivalAirport||'')}</td>
-    <td class="nw">${_esc((f.departureTime||'').slice(0,10))} ${_esc((f.departureTime||'').slice(11,16))}</td>
-    <td>${_esc(f.confirmationNumber||'—')}</td></tr>`).join('');
+  const stays=(trip.lodging||[]).map(l=>`<tr><th scope="row">${_esc(l.name)}</th><td data-l="Address">${_esc(l.address||'—')}</td>
+    <td class="nw" data-l="Dates">${_esc(l.checkIn||'?')} &rarr; ${_esc(l.checkOut||'?')}</td><td data-l="Confirmation">${_esc(l.confirmationNumber||'—')}</td></tr>`).join('');
+  const legs=(trip.flights||[]).map(f=>`<tr><th scope="row">${_esc(f.airline||'Travel')}</th><td data-l="Number">${_esc(f.flightNumber||'—')}</td>
+    <td class="nw" data-l="Route">${_esc(f.departureAirport||'')} &rarr; ${_esc(f.arrivalAirport||'')}</td>
+    <td class="nw" data-l="Departs">${_esc((f.departureTime||'').slice(0,10))} ${_esc((f.departureTime||'').slice(11,16))}</td>
+    <td data-l="Confirmation">${_esc(f.confirmationNumber||'—')}</td></tr>`).join('');
   const cl=trip.checklist||[];
   const cats=[...new Set(cl.map(i=>i.category))];
   const checks=cl.length?cats.map(c=>`<h3 class="cat">${_esc(c)}</h3><ul class="check">${
@@ -6153,7 +6153,7 @@ a{color:var(--accent-tx)}
 
 .nav{position:sticky;top:0;z-index:9;background:var(--cream);border-bottom:1px solid var(--border);
   padding:.5rem 0;margin-bottom:1.4rem}
-.navscroll{display:flex;gap:.4rem;overflow-x:auto;padding:0 1.15rem;max-width:44rem;margin:0 auto;scrollbar-width:none}
+.navscroll{display:flex;gap:.4rem;flex-wrap:wrap;overflow-x:visible;padding:0 1.15rem;max-width:44rem;margin:0 auto;scrollbar-width:none}
 .navscroll::-webkit-scrollbar{display:none}
 .navchip{flex:0 0 auto;font-size:.8rem;font-weight:500;color:var(--ink-light);text-decoration:none;
   border:1px solid var(--border-solid);border-radius:999px;padding:.3rem .7rem;white-space:nowrap;
@@ -6221,7 +6221,33 @@ h2,h3{font-family:var(--display)}
 .ref h2{font-size:1.4rem;font-weight:800;margin-bottom:.3rem}
 .ref .sub2{font-size:.85rem;font-weight:700;color:var(--ink-light);margin:1.2rem 0 .35rem;letter-spacing:.06em;text-transform:uppercase}
 .tscroll{overflow-x:auto}
+
 table{width:100%;border-collapse:collapse;font-size:.86rem;min-width:30rem}
+/* PHONES · nothing may scroll sideways.
+   Fixing the document width was not enough. table{min-width:30rem} is 510px at this
+   17px root, so on a 390px phone the reference tables could never fit and sat
+   permanently mid-scroll inside .tscroll - the flights table alone was 658px wide and
+   1612px tall, a screen and a half of content that slid under your finger whenever a
+   vertical swipe drifted. The day-chip strip was 1323px in a 390px box and sticky, so
+   it was always there to catch a thumb. Both read as "the export shifts sideways".
+   Below 34rem the tables stop being tables and become stacked cards (each cell keeps
+   its column name via data-l), and the chips drop their dates so ten of them fit
+   across without scrolling. No horizontal scroller survives on a phone. */
+@media (max-width:34rem){
+  .tscroll{overflow-x:visible}
+  table{min-width:0;font-size:.9rem;display:block}
+  table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  table tbody,table tr,table th,table td{display:block;width:auto}
+  table tr{border:1px solid var(--border);border-radius:var(--r);padding:.6rem .75rem;margin-bottom:.55rem;background:var(--surface)}
+  table th[scope=row]{font-size:.95rem;letter-spacing:0;text-transform:none;color:var(--ink);
+    font-weight:700;border-bottom:1px solid var(--border);padding:0 0 .35rem;margin-bottom:.35rem}
+  table td{border-bottom:0;padding:.12rem 0}
+  table td:before{content:attr(data-l) " ";font-weight:600;color:var(--ink-muted);font-size:.78rem}
+  /* Route and dates carry an arrow and must not be broken mid-value, but nowrap is what
+     forced the width in the first place. Allow the wrap now that each cell owns a line. */
+  table td.nw{white-space:normal}
+}
+@media (max-width:30rem){ .navchip-d{display:none} .navchip{padding:.3rem .6rem} }
 th,td{text-align:left;padding:.5rem .55rem;border-bottom:1px solid var(--border);vertical-align:top}
 thead th{font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-light);border-bottom:2px solid var(--ink)}
 tbody th{font-weight:600}
