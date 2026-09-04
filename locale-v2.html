@@ -6133,7 +6133,16 @@ body{background:var(--cream);color:var(--ink);font-family:var(--body);line-heigh
 .sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 a{color:var(--accent-tx)}
 :focus-visible{outline:2px solid var(--accent-tx);outline-offset:3px;border-radius:4px}
-.wrap{max-width:44rem;margin:0 auto;padding:0 1.15rem}
+.wrap{max-width:44rem;margin:0 auto;padding:0 1.15rem;
+  /* Notes are free text and people paste links into them. A pasted Maps URL
+     (https://maps.app.goo.gl/ebevvH4oUMPsvUoT9?g_st=ic) is one 49-character
+     unbreakable token, and .stop is display:flex, so it set the row's min-content
+     width and pushed the whole document 51px wider than the phone — the export
+     opened shifted sideways. Using anywhere rather than break-word is deliberate:
+     only anywhere also shrinks the intrinsic min-content size, which is what the
+     flex row measures. It only ever breaks a word that genuinely cannot fit.
+     (No backticks in this comment - the whole stylesheet is a JS template literal.) */
+  overflow-wrap:anywhere}
 
 .cover{background:var(--grad);color:#fff;padding:2.4rem 1.15rem 2rem}
 .cover-in{max-width:44rem;margin:0 auto}
