@@ -1350,6 +1350,8 @@ function mergeMemberFields(local, server, myCollabId){
 }
 
 async function cloudPush(trips){
+  // Same rule as saveTrips · never push a shape we failed to read locally.
+  if(LOAD_FAILURE){ console.warn('cloudPush blocked · trips failed to load'); return; }
   try{
     const c=sb(); if(!c) return;
     const u=await cloudGetUser(); if(!u) return;
@@ -2811,12 +2813,81 @@ const SK='locale_v4';
 // Bump this whenever the sample trips change so existing users get the new ones.
 const DEMO_SEED_VERSION=3;
 const DEMO_SEED_KEY='locale_demo_seed_v';
+// ── TRIP LOADING · fails loudly, never overwrites ─────────────────────────────
+// HISTORY (fixed 2026-09-07): this function swallowed every error in an empty
+// catch and then fell through to `localStorage.setItem(SK, MOCK_TRIPS)`. So ANY
+// throw inside normalizeTrip silently REPLACED the user's real trips with the
+// three demo trips. Not "failed to load" · overwrote. Most Locale users are
+// anonymous with no cloud copy, so localStorage is the only copy that exists and
+// that path was unrecoverable data loss. Sixth instance of the standing
+// silent-data-loss pattern in this codebase.
+//
+// The rules now:
+//   1. Demos are seeded ONLY when storage was genuinely empty.
+//   2. A parse or shape failure writes NOTHING and raises LOAD_FAILURE.
+//   3. Trips normalize one at a time · one corrupt trip cannot take down the
+//      other nine. Survivors load; casualties are reported in LOAD_SKIPPED.
+//   4. While LOAD_FAILURE is set, saveTrips and cloudPush are no-ops, so the
+//      recovery screen cannot itself destroy what it is trying to rescue.
+let LOAD_FAILURE = null;   // total failure · App renders TripsRecoveryScreen
+let LOAD_SKIPPED = [];     // partial failure · survivors loaded, these did not
+
+function loadFailureRef(){
+  try{ return 'LT-'+Date.now().toString(36).slice(-5).toUpperCase(); }
+  catch(e){ return 'LT-UNKNOWN'; }
+}
+
 function loadTrips(){
-  try{
-    const r=localStorage.getItem(SK);
-    if(r){
-      const parsed=JSON.parse(r);
-      const trips=parsed.map(normalizeTrip);
+  let raw = null;
+  try{ raw = localStorage.getItem(SK); }
+  catch(e){
+    LOAD_FAILURE = {kind:'storage', raw:null, skipped:[], ref:loadFailureRef(),
+      message:'This browser blocked access to local storage, so your trips could not be opened.'};
+    return [];
+  }
+
+  // Genuinely empty · the ONLY path allowed to write demo trips.
+  if(!raw){
+    LOAD_FAILURE = null; LOAD_SKIPPED = [];
+    try{
+      localStorage.setItem(SK, JSON.stringify(MOCK_TRIPS));
+      localStorage.setItem(DEMO_SEED_KEY, String(DEMO_SEED_VERSION));
+    }catch(e){}
+    return MOCK_TRIPS;
+  }
+
+  let parsed = null;
+  try{ parsed = JSON.parse(raw); }
+  catch(e){
+    LOAD_FAILURE = {kind:'parse', raw, skipped:[], ref:loadFailureRef(),
+      message:'Your saved trips could not be read. Nothing has been changed or deleted.'};
+    return [];
+  }
+  if(!Array.isArray(parsed)){
+    LOAD_FAILURE = {kind:'shape', raw, skipped:[], ref:loadFailureRef(),
+      message:'Your saved trips are not in the expected format. Nothing has been changed or deleted.'};
+    return [];
+  }
+
+  // One trip at a time. A single bad record is a casualty, not an extinction.
+  const trips=[]; const skipped=[];
+  parsed.forEach((t,i)=>{
+    try{ trips.push(normalizeTrip(t)); }
+    catch(err){
+      skipped.push({ index:i, id:(t&&t.id)||null, title:(t&&(t.title||t.name))||null,
+        error:String((err&&err.message)||err).slice(0,200) });
+    }
+  });
+
+  if(parsed.length && !trips.length){
+    LOAD_FAILURE = {kind:'all-failed', raw, skipped, ref:loadFailureRef(),
+      message:'Your trips are saved but none of them could be opened. Nothing has been changed or deleted.'};
+    return [];
+  }
+
+  LOAD_FAILURE = null;
+  LOAD_SKIPPED = skipped;
+  {
       // Demo refresh, versioned. This replaced a growing stack of one-off guards, each
       // sniffing for a field the previous seed lacked — none of which fire when the demo
       // CONTENT changes (new names, budgets, an extra traveler). Bump DEMO_SEED_VERSION
@@ -2834,12 +2905,106 @@ function loadTrips(){
         try{ localStorage.setItem(SK, JSON.stringify(trips)); }catch(e){}
       }
       return trips;
-    }
-  }catch(e){}
-  localStorage.setItem(SK,JSON.stringify(MOCK_TRIPS));
-  try{ localStorage.setItem(DEMO_SEED_KEY, String(DEMO_SEED_VERSION)); }catch(e){}
-  return MOCK_TRIPS;
+  }
 }
+// ── RECOVERY SCREEN ───────────────────────────────────────────────────────────
+// Shown only when loadTrips could not open ANY trip. Its whole job is to hand the
+// user's own bytes back to them before anything else happens. Writes nothing.
+function TripsRecoveryScreen({failure}){
+  const [note,setNote] = React.useState('');
+  const skipped = (failure && failure.skipped) || [];
+
+  React.useEffect(()=>{
+    try{ track('trips_load_failed', { kind:failure.kind, ref:failure.ref,
+      bytes:(failure.raw||'').length, skipped:skipped.length }); }catch(e){}
+  },[]);
+
+  const downloadRaw = ()=>{
+    try{
+      const blob=new Blob([failure.raw||''],{type:'application/json'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download='locale-raw-'+new Date().toISOString().slice(0,10)+'.json';
+      a.click(); URL.revokeObjectURL(a.href);
+      setNote('Downloaded. Keep that file · it is your original data, exactly as stored.');
+    }catch(e){ setNote('Could not download. Your data is still in this browser.'); }
+  };
+
+  const restore = (file)=>{
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload = ev=>{
+      try{
+        const imported=JSON.parse(ev.target.result);
+        if(!Array.isArray(imported)) throw new Error('Not an array');
+        const restored=[];
+        imported.forEach(t=>{ try{ restored.push(normalizeTrip({...t, isDemo:false})); }catch(e){} });
+        if(!restored.length) throw new Error('No readable trips in that file');
+        LOAD_FAILURE=null;                       // release the write guard first
+        localStorage.setItem(SK, JSON.stringify(restored));
+        window.location.reload();
+      }catch(err){ setNote('That file could not be restored · '+String((err&&err.message)||err)); }
+    };
+    reader.readAsText(file);
+  };
+
+  const row={display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,
+    border:'1px solid var(--color-border)',borderRadius:'var(--radius-ctl)',
+    padding:'11px 13px',marginBottom:8,fontSize:'.88rem',background:'var(--color-surface)'};
+
+  return (
+    <div style={{minHeight:'100vh',background:'var(--color-cream)',padding:'32px 20px'}}>
+      <div style={{maxWidth:560,margin:'0 auto'}}>
+        <p className="section-label" style={{marginBottom:10}}>Locale</p>
+        <div style={{background:'var(--color-flag-bg)',border:'1px solid var(--color-flag-border)',
+          borderRadius:'var(--radius-card)',padding:'14px 16px',marginBottom:16}}>
+          <p style={{fontWeight:600,marginBottom:4,color:'var(--color-flag)'}}>We could not open your trips.</p>
+          <p style={{fontSize:'.88rem',color:'var(--color-ink-light)',lineHeight:1.55}}>
+            {failure.message} Your data is still in this browser exactly as it was.
+          </p>
+        </div>
+
+        <div style={{background:'var(--color-surface)',border:'1px solid var(--color-border)',
+          borderRadius:'var(--radius-card)',padding:'16px 18px'}}>
+          <p style={{fontWeight:600,fontSize:'.95rem',marginBottom:10}}>What you can do</p>
+
+          <button className="btn btn-primary" style={{width:'100%',marginBottom:8}} onClick={downloadRaw}>
+            Download my raw data
+          </button>
+          <p style={{fontSize:'.76rem',color:'var(--color-ink-light)',marginBottom:14,lineHeight:1.5}}>
+            Do this first. It saves exactly what is stored, readable or not.
+          </p>
+
+          <label style={{...row,cursor:'pointer'}}>
+            <span>Restore from a backup</span>
+            <span style={{fontFamily:'var(--font-mono)',fontSize:'.72rem',color:'var(--color-ink-light)'}}>.json</span>
+            <input type="file" accept=".json" style={{display:'none'}}
+              onChange={e=>{ restore(e.target.files&&e.target.files[0]); e.target.value=''; }}/>
+          </label>
+
+          <button style={{...row,width:'100%',cursor:'pointer',font:'inherit',color:'var(--color-ink)'}}
+            onClick={()=>{ try{ track('error_report',{source:'trips_recovery', kind:failure.kind,
+              ref:failure.ref, skipped:skipped.length}); setNote('Sent. Reference '+failure.ref+'.'); }
+              catch(e){ setNote('Could not send · quote reference '+failure.ref+'.'); } }}>
+            <span>Send this error to Stephanie</span>
+          </button>
+
+          {skipped.length>0 && (
+            <p style={{fontSize:'.78rem',color:'var(--color-ink-light)',marginTop:12,lineHeight:1.5}}>
+              {skipped.length} {skipped.length===1?'trip':'trips'} could not be opened:{' '}
+              {skipped.map(x=>x.title||('#'+(x.index+1))).join(', ')}
+            </p>
+          )}
+          {note && <p style={{fontSize:'.82rem',color:'var(--color-success)',marginTop:12}}>{note}</p>}
+        </div>
+
+        <p style={{textAlign:'center',fontSize:'.74rem',color:'var(--color-ink-muted)',marginTop:14,
+          fontFamily:'var(--font-mono)'}}>Reference {failure.ref} · logged automatically</p>
+      </div>
+    </div>
+  );
+}
+
 // Persistent visually-hidden live region so toast messages reach screen readers (WCAG 4.1.3)
 function ensureLiveRegion(id, politeness){
   let el = document.getElementById(id);
@@ -2903,6 +3068,9 @@ function useModalA11y(ref, onClose, active=true){
 }
 
 function saveTrips(trips){
+  // Refuse to write over data we could not read. Without this the recovery
+  // screen's own render cycle could persist an empty array over real trips.
+  if(LOAD_FAILURE){ console.warn('saveTrips blocked · trips failed to load'); return; }
   try{
     localStorage.setItem(SK,JSON.stringify(trips));
   }catch(e){
@@ -9145,7 +9313,9 @@ function App() {
   const [showDrawer, setShowDrawer] = React.useState(false); // IA Phase 2a: trips drawer
   // First-run welcome: only for fresh users (demo trips only), never over an invite link
   const [showWelcome, setShowWelcome] = React.useState(()=>{
-    try { return !localStorage.getItem('locale_welcome_seen') && !getSharedTripFromHash() && !/[#&]s=/.test(window.location.hash) && loadTrips().every(t=>t.isDemo); } catch(e){ return false; }
+    // `[].every()` is true, so without the LOAD_FAILURE guard a failed load would
+    // read as "brand new user" and show the welcome screen over lost trips.
+    try { const t=loadTrips(); return !LOAD_FAILURE && !localStorage.getItem('locale_welcome_seen') && !getSharedTripFromHash() && !/[#&]s=/.test(window.location.hash) && t.every(x=>x.isDemo); } catch(e){ return false; }
   });
   const dismissWelcome = ()=>{ try{ localStorage.setItem('locale_welcome_seen','1'); }catch(e){} setShowWelcome(false); };
 
@@ -9418,6 +9588,11 @@ function App() {
   };
 
   const activeTrip = trips.find(t=>t.id===activeTripId);
+
+  // Every hook above has already run, so this early return is legal. It must stay
+  // BELOW them and ABOVE the normal tree: rendering the app with zero trips would
+  // look like "all your trips are gone" and invite the user to start over.
+  if(LOAD_FAILURE) return <TripsRecoveryScreen failure={LOAD_FAILURE}/>;
 
   return (
     <div>
@@ -9775,6 +9950,55 @@ class ErrorBoundary extends React.Component {
   const bare = { title: 'Test Trip', startDate: '2026-09-01', endDate: '2026-09-05' };
   const normed = normalizeTrip(bare);
   assert('normalizeTrip sets schemaVersion', normed.schemaVersion === SCHEMA_VERSION);
+
+  // ── loadTrips · the demo-overwrite landmine (fixed 2026-09-07) ──────────────
+  // These run against the REAL localStorage key, so every case saves the user's
+  // actual value first and restores it in a finally. A test that loses her trips
+  // while proving trips cannot be lost would be a poor joke.
+  (function testLoadTripsHardening(){
+    let saved=null, savedSeed=null, had=false;
+    try{ had = localStorage.getItem(SK)!==null; saved=localStorage.getItem(SK); savedSeed=localStorage.getItem(DEMO_SEED_KEY); }catch(e){ return; }
+    const failBefore = LOAD_FAILURE;
+    try{
+      // 1. unparseable storage must NOT be overwritten
+      localStorage.setItem(SK, '{ this is not json');
+      const r1 = loadTrips();
+      assert('loadTrips returns nothing on unparseable storage', Array.isArray(r1) && r1.length===0);
+      assert('loadTrips raises LOAD_FAILURE on unparseable storage', !!LOAD_FAILURE && LOAD_FAILURE.kind==='parse');
+      assert('loadTrips does NOT overwrite unparseable storage', localStorage.getItem(SK)==='{ this is not json');
+      assert('LOAD_FAILURE keeps the raw bytes for recovery', LOAD_FAILURE.raw==='{ this is not json');
+
+      // 2. saveTrips must refuse to write while the failure stands
+      saveTrips([{id:'x'}]);
+      assert('saveTrips is blocked while LOAD_FAILURE is set', localStorage.getItem(SK)==='{ this is not json');
+
+      // 3. a non-array payload is a shape failure, also non-destructive
+      localStorage.setItem(SK, '{"trips":[]}');
+      const r2 = loadTrips();
+      assert('loadTrips rejects a non-array payload', Array.isArray(r2) && r2.length===0 && LOAD_FAILURE.kind==='shape');
+      assert('loadTrips does NOT overwrite a non-array payload', localStorage.getItem(SK)==='{"trips":[]}');
+
+      // 4. one corrupt trip must not take down the others
+      localStorage.setItem(SK, JSON.stringify([{id:'good-1',title:'Real Trip'}, null, {id:'good-2',title:'Other Trip'}]));
+      const r3 = loadTrips();
+      assert('loadTrips loads the survivors around a corrupt trip', r3.length===2);
+      assert('loadTrips clears LOAD_FAILURE on a partial load', LOAD_FAILURE===null);
+      assert('loadTrips records the casualty in LOAD_SKIPPED', LOAD_SKIPPED.length===1 && LOAD_SKIPPED[0].index===1);
+
+      // 5. genuinely empty storage is still allowed to seed demos
+      localStorage.removeItem(SK);
+      const r4 = loadTrips();
+      assert('loadTrips still seeds demos when storage is empty', r4.length===MOCK_TRIPS.length && LOAD_FAILURE===null);
+    } finally {
+      LOAD_FAILURE = failBefore;
+      try{
+        if(had && saved!==null) localStorage.setItem(SK, saved); else localStorage.removeItem(SK);
+        if(savedSeed!==null) localStorage.setItem(DEMO_SEED_KEY, savedSeed); else localStorage.removeItem(DEMO_SEED_KEY);
+      }catch(e){}
+    }
+    LOAD_SKIPPED = [];
+  })();
+  assert('recovery screen exists and writes nothing', typeof TripsRecoveryScreen === 'function');
   assert('normalizeTrip preserves title', normed.title === 'Test Trip');
   assert('normalizeTrip adds empty destinations array', Array.isArray(normed.destinations));
   assert('normalizeTrip adds empty days array', Array.isArray(normed.days));
