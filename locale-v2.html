@@ -398,17 +398,90 @@ const OCCASION_OPTIONS = [
 const AVATAR_COLORS=['#F2645A','#E8A13A','#E85A8E','#8B5CF6','#2BB6A3','#4CAF6E'];
 const SCHENGEN=['FR','DE','IT','ES','NL','BE','AT','PT','GR','CH','SE','DK','NO','FI','PL','CZ','HU','SK','SI','EE','LV','LT','LU','MT','IS'];
 
+// Country to currency. Metadata only · rates live in FX_FALLBACK so there is one
+// place a rate can be wrong.
 const CURRENCY_INFO={
-  GB:{code:'GBP',symbol:'£',name:'British Pound',rate:0.79,flag:'🇬🇧'},
-  FR:{code:'EUR',symbol:'€',name:'Euro',rate:0.92,flag:'🇪🇺'},
-  DE:{code:'EUR',symbol:'€',name:'Euro',rate:0.92,flag:'🇪🇺'},
-  IT:{code:'EUR',symbol:'€',name:'Euro',rate:0.92,flag:'🇪🇺'},
-  ES:{code:'EUR',symbol:'€',name:'Euro',rate:0.92,flag:'🇪🇺'},
-  JP:{code:'JPY',symbol:'¥',name:'Japanese Yen',rate:157,flag:'🇯🇵'},
-  AU:{code:'AUD',symbol:'A$',name:'Australian Dollar',rate:1.54,flag:'🇦🇺'},
-  CA:{code:'CAD',symbol:'C$',name:'Canadian Dollar',rate:1.36,flag:'🇨🇦'},
-  MX:{code:'MXN',symbol:'$',name:'Mexican Peso',rate:17.8,flag:'🇲🇽'},
+  GB:{code:'GBP',symbol:'£',name:'British Pound',flag:'🇬🇧'},
+  FR:{code:'EUR',symbol:'€',name:'Euro',flag:'🇪🇺'},
+  DE:{code:'EUR',symbol:'€',name:'Euro',flag:'🇪🇺'},
+  IT:{code:'EUR',symbol:'€',name:'Euro',flag:'🇪🇺'},
+  ES:{code:'EUR',symbol:'€',name:'Euro',flag:'🇪🇺'},
+  JP:{code:'JPY',symbol:'¥',name:'Japanese Yen',flag:'🇯🇵'},
+  AU:{code:'AUD',symbol:'A$',name:'Australian Dollar',flag:'🇦🇺'},
+  CA:{code:'CAD',symbol:'C$',name:'Canadian Dollar',flag:'🇨🇦'},
+  MX:{code:'MXN',symbol:'$',name:'Mexican Peso',flag:'🇲🇽'},
 };
+
+// ── FX · OFFLINE FALLBACK ─────────────────────────────────────────────────────
+// USD-based rates, the ONLY hardcoded rate table in the app, used when the live
+// fetch fails. The previous table lived on CURRENCY_INFO, was last true in
+// mid-2025, and had drifted 6 to 11 percent by Sep 2026 (EUR read 0.92 against a
+// real 0.860), which made every euro price look about 7 percent cheaper than it
+// was. Refreshed 2026-09-04 from ECB reference rates. If you are editing these by
+// hand, you are doing it wrong · fix fetchFxRates instead.
+const FX_FALLBACK={USD:1,AUD:1.3882,BRL:5.1114,CAD:1.38,CHF:0.80924,CNY:6.7109,CZK:20.813,
+  DKK:6.4315,EUR:0.86044,GBP:0.7391,HKD:7.8403,HUF:312.58,IDR:17636,ILS:3.0076,INR:94.49,
+  ISK:121.15,JPY:156.25,KRW:1350.35,MXN:16.8991,MYR:4.0445,NOK:9.2957,NZD:1.6998,PHP:62.65,
+  PLN:3.7126,RON:4.5199,SEK:9.5513,SGD:1.2669,THB:32.92,TRY:48.443,ZAR:15.9672};
+
+// Base currency the user keeps their budget in. Amounts are stored as plain numbers
+// in this currency · Locale never mixes currencies inside one budget.
+const HOME_CURRENCIES=[
+  {code:'USD',label:'US Dollar'},{code:'EUR',label:'Euro'},{code:'GBP',label:'British Pound'},
+  {code:'CAD',label:'Canadian Dollar'},{code:'AUD',label:'Australian Dollar'},
+  {code:'NZD',label:'New Zealand Dollar'},{code:'CHF',label:'Swiss Franc'},
+  {code:'JPY',label:'Japanese Yen'},{code:'SGD',label:'Singapore Dollar'},
+  {code:'HKD',label:'Hong Kong Dollar'},{code:'INR',label:'Indian Rupee'},
+  {code:'MXN',label:'Mexican Peso'},{code:'BRL',label:'Brazilian Real'},
+  {code:'ZAR',label:'South African Rand'},{code:'SEK',label:'Swedish Krona'},
+  {code:'NOK',label:'Norwegian Krone'},{code:'DKK',label:'Danish Krone'},
+  {code:'PLN',label:'Polish Zloty'},{code:'CZK',label:'Czech Koruna'},
+];
+// Intl gets the symbol placement and the decimal count right per currency, which a
+// hand-rolled "$"+n never will · JPY has no minor unit, and it is not alone.
+function formatMoney(n,code){
+  const v=Math.round((Number(n)||0)*100)/100;
+  try{ return new Intl.NumberFormat(undefined,{style:'currency',currency:code||'USD'}).format(v); }
+  catch(e){ return (code||'USD')+' '+v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+}
+// USD-based rate for a currency code · live first, fallback second, null if unknown.
+function usdRate(code,fx){
+  if(!code) return null;
+  if(code==='USD') return 1;
+  if(fx&&fx.rates&&typeof fx.rates[code]==='number') return fx.rates[code];
+  return typeof FX_FALLBACK[code]==='number' ? FX_FALLBACK[code] : null;
+}
+// Cross rate from one currency to another, via USD. base 'EUR' to 'GBP' is
+// rates.GBP / rates.EUR · this is why the cache is always fetched USD-based.
+function crossRate(from,to,fx){
+  const a=usdRate(from,fx), b=usdRate(to,fx);
+  if(!a||!b) return null;
+  return b/a;
+}
+
+// ── LIVE FX RATES ─────────────────────────────────────────────────────────────
+// Frankfurter (ECB reference rates): keyless, CORS-open, no account · same shape
+// as the Open-Meteo integration. Cached 12h in localStorage. Returns null on any
+// failure so the caller falls back to CURRENCY_INFO[cc].rate rather than showing
+// nothing. Hardcoding rates is how this drifted 7% in the first place; do not
+// re-introduce a static table as the source of truth.
+const FX_SK='locale_fx_v1';
+const FX_TTL=12*60*60*1000;
+async function fetchFxRates(){
+  try{
+    const c=JSON.parse(localStorage.getItem(FX_SK)||'null');
+    if(c&&c.rates&&(Date.now()-c.ts)<FX_TTL) return c;
+  }catch(e){}
+  try{
+    const r=await fetch('https://api.frankfurter.dev/v1/latest?base=USD');
+    if(!r.ok) return null;
+    const d=await r.json();
+    if(!d||!d.rates||typeof d.rates!=='object') return null;
+    const out={ts:Date.now(), date:d.date||'', rates:d.rates};
+    try{ localStorage.setItem(FX_SK,JSON.stringify(out)); }catch(e){}
+    return out;
+  }catch(e){ return null; }
+}
 
 // City → country auto-fill (lowercase key → {countryCode, country, isInternational})
 const CITY_TO_COUNTRY={
@@ -788,13 +861,32 @@ const CITY_DATA={
     emergency:"17 Police · 15 Medical (SAMU) · 18 Fire (Pompiers) · 112 EU Emergency",
     bestAreas:"Le Marais for history and boutiques. Saint-Germain for cafés. Montmartre for views. Canal Saint-Martin for a local feel.",
     phrases:[
-      {phrase:"Bonjour",translation:"Hello / Good morning (bohn-ZHOOR)"},
-      {phrase:"Merci",translation:"Thank you (mair-SEE)"},
+      // Ordered by when you will actually need them: the greeting ritual first,
+      // then shops and restaurants, then getting by, then trouble. Bonjour is not
+      // optional politeness in France · walking into a shop without it reads as rude,
+      // which is why it leads.
+      {phrase:"Bonjour",translation:"Hello, before about 6pm (bohn-ZHOOR)"},
+      {phrase:"Bonsoir",translation:"Hello, after about 6pm (bohn-SWAHR)"},
+      {phrase:"Au revoir",translation:"Goodbye (oh ruh-VWAHR)"},
+      {phrase:"Merci / Merci beaucoup",translation:"Thank you / thank you very much (mair-SEE boh-KOO)"},
       {phrase:"S'il vous plaît",translation:"Please (seel voo PLAY)"},
-      {phrase:"Excusez-moi",translation:"Excuse me (ex-kyoo-ZAY mwah)"},
-      {phrase:"Où est...?",translation:"Where is...? (oo AY)"},
-      {phrase:"L'addition, s'il vous plaît",translation:"The bill, please (lah-dee-SYOHN)"},
+      {phrase:"Pardon",translation:"Sorry, and also excuse me in a crowd (par-DOHN)"},
+      {phrase:"Excusez-moi",translation:"Excuse me, to get attention (ex-kyoo-ZAY mwah)"},
       {phrase:"Parlez-vous anglais?",translation:"Do you speak English? (par-lay voo ahn-GLAY)"},
+      {phrase:"Je ne parle pas français",translation:"I do not speak French (zhuh nuh parl pah frahn-SAY)"},
+      {phrase:"Je voudrais...",translation:"I would like... the polite way to order anything (zhuh voo-DRAY)"},
+      {phrase:"Combien ça coûte?",translation:"How much is it? (kohm-BYEN sah KOOT)"},
+      {phrase:"Sur place ou à emporter?",translation:"Eating in or takeaway? You will be asked this (soor plahs oo ah ahm-por-TAY)"},
+      {phrase:"Une table pour trois, s'il vous plaît",translation:"A table for three, please (oon TAH-bluh poor TRWAH)"},
+      {phrase:"Avez-vous une chaise haute?",translation:"Do you have a high chair? (ah-vay VOO oon shez OHT)"},
+      {phrase:"Je suis allergique à...",translation:"I am allergic to... (zhuh swee ah-lair-ZHEEK ah)"},
+      {phrase:"L'addition, s'il vous plaît",translation:"The bill, please (lah-dee-SYOHN)"},
+      {phrase:"Je peux payer par carte?",translation:"Can I pay by card? (zhuh puh pay-YAY par KART)"},
+      {phrase:"Où sont les toilettes?",translation:"Where are the toilets? (oo sohn lay twah-LET)"},
+      {phrase:"Où est le métro?",translation:"Where is the metro? (oo ay luh may-TROH)"},
+      {phrase:"Je cherche une pharmacie",translation:"I am looking for a pharmacy · the green cross, first stop for minor illness (zhuh shairsh oon far-mah-SEE)"},
+      {phrase:"Aidez-moi, s'il vous plaît",translation:"Help me, please (ay-day MWAH)"},
+      {phrase:"Bonne journée",translation:"Have a good day · the expected reply on the way out (bun zhoor-NAY)"},
     ],
     tips:["Most patisseries close Monday.","Book Eiffel Tower summit tickets 3+ weeks ahead.","The Marché d'Aligre is Paris's best budget market.","Picnic in the Jardins du Palais Royal · a local secret."],
   },
@@ -3078,47 +3170,63 @@ function CountdownChip({departDate}){
 
 
 // ── CURRENCY CONVERTER ────────────────────────────────────────────────────────
-function CurrencyConverter({destinations}){
+function CurrencyConverter({destinations, base='USD'}){
   const seen=new Set();
   const dests=(destinations||[]).filter(d=>{
     if(!d.isInternational||!CURRENCY_INFO[d.countryCode])return false;
+    if(CURRENCY_INFO[d.countryCode].code===base)return false; // same money · nothing to convert
     if(seen.has(d.countryCode))return false;
     seen.add(d.countryCode);return true;
   });
   const [usd,setUsd]=useState('100');
   const [locals,setLocals]=useState({});
-  function fromUSD(v){
-    setUsd(v);
-    const n=parseFloat(v)||0;
-    const nl={};dests.forEach(d=>{nl[d.countryCode]=(n*CURRENCY_INFO[d.countryCode].rate).toFixed(2);});
-    setLocals(nl);
-  }
+  const [fx,setFx]=useState(null);
+  const usdRef=React.useRef('100');
+  // Everything is quoted against the trip's base currency, not a hardcoded USD.
+  const baseInfo=HOME_CURRENCIES.find(c=>c.code===base)||{code:'USD',label:'US Dollar'};
+  // Live rate when we have one, built-in fallback when we do not. One resolver so
+  // the two directions can never disagree about which rate they used.
+  const rateOf=(cc,f)=>{
+    const i=CURRENCY_INFO[cc]; if(!i) return 0;
+    return crossRate(base, i.code, (f===undefined?fx:f)) || 0;
+  };
+  const recalc=(usdVal,f)=>{
+    const n=parseFloat(usdVal)||0;
+    const nl={}; dests.forEach(d=>{ nl[d.countryCode]=(n*rateOf(d.countryCode,f)).toFixed(2); });
+    return nl;
+  };
+  function fromUSD(v){ usdRef.current=v; setUsd(v); setLocals(recalc(v)); }
   function fromLocal(cc,v){
-    const rate=CURRENCY_INFO[cc].rate;
-    const usdVal=((parseFloat(v)||0)/rate).toFixed(2);
-    setUsd(usdVal);
-    const nl={};dests.forEach(d=>{nl[d.countryCode]=((parseFloat(usdVal)||0)*CURRENCY_INFO[d.countryCode].rate).toFixed(2);});
-    nl[cc]=v;setLocals(nl);
+    const r=rateOf(cc)||1;
+    const usdVal=((parseFloat(v)||0)/r).toFixed(2);
+    usdRef.current=usdVal; setUsd(usdVal);
+    const nl=recalc(usdVal); nl[cc]=v; setLocals(nl);
   }
-  useEffect(()=>{fromUSD('100');},[]);
+  useEffect(()=>{
+    let alive=true;
+    setLocals(recalc('100'));
+    fetchFxRates().then(f=>{ if(alive&&f){ setFx(f); setLocals(recalc(usdRef.current,f)); } });
+    return ()=>{ alive=false; };
+  },[]);
   if(!dests.length)return null;
   return(
     <div style={{padding:'18px 4px 8px',borderTop:'1px solid var(--color-border)',marginBottom:12}}>
       <p className="section-label">Currency</p>
       <div className="currency-row">
-        <span style={{fontSize:'1.1rem',flexShrink:0}}>🇺🇸</span>
-        <span style={{width:36,fontSize:'.8rem',fontWeight:600,color:'var(--color-ink-light)',flexShrink:0}}>USD</span>
-        <input className="currency-input" type="number" value={usd} onChange={e=>fromUSD(e.target.value)} placeholder="0"/>
+        <span style={{width:44,fontSize:'.8rem',fontWeight:700,color:'var(--color-ink)',flexShrink:0,fontFamily:'var(--font-mono)'}}>{baseInfo.code}</span>
+        <input className="currency-input" type="number" value={usd} onChange={e=>fromUSD(e.target.value)} placeholder="0" aria-label={'Amount in '+baseInfo.label}/>
       </div>
       {dests.map(d=>{
         const c=CURRENCY_INFO[d.countryCode];
         return(<div key={d.countryCode} className="currency-row">
           <span style={{fontSize:'1.1rem',flexShrink:0}}>{c.flag}</span>
-          <span style={{width:36,fontSize:'.8rem',fontWeight:600,color:'var(--color-ink-light)',flexShrink:0}}>{c.code}</span>
+          <span style={{width:36,fontSize:'.8rem',fontWeight:600,color:'var(--color-ink-light)',flexShrink:0,fontFamily:'var(--font-mono)'}}>{c.code}</span>
           <input className="currency-input" type="number" value={locals[d.countryCode]||''} onChange={e=>fromLocal(d.countryCode,e.target.value)} placeholder="0"/>
         </div>);
       })}
-      <p style={{fontSize:'.7rem',color:'var(--color-ink-light)',marginTop:8,textAlign:'right'}}>Approximate mid-2026 rates · For reference only</p>
+      <p style={{fontSize:'.7rem',color:'var(--color-ink-light)',marginTop:8,textAlign:'right',lineHeight:1.5}}>
+        {fx&&fx.date ? `Mid-market rate · ${fx.date}` : 'Offline estimate · rates may have moved'} · cards and ATMs run 1-3% worse
+      </p>
     </div>
   );
 }
@@ -7763,7 +7871,16 @@ function BudgetSection({trip, onUpdateTrip}){
   const payments = budget.payments || [];
   const members = trip.collaborators || [];
   const days = trip.days || [];
-  const fmt = n => '$' + (Math.round((Number(n)||0)*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  // Amounts are plain numbers in ONE currency · the trip's base. Locale never mixes
+  // currencies inside a budget, so settlement arithmetic stays exact and there is no
+  // rate baked into a stored number. Changing the base relabels, it never converts.
+  const baseCode = budget.currency || 'USD';
+  const fmt = n => formatMoney(n, baseCode);
+  const setBaseCurrency = (code)=>{
+    if(!code || code===baseCode) return;
+    onUpdateTrip({...trip, budget:{currency:code, items, payments}});
+    showToast('Budget now shown in '+code+'. Existing amounts were relabelled, not converted.','info',5000);
+  };
   const total = items.reduce((s,i)=>s+(Number(i.amount)||0),0);
   const nameOf = id => (members.find(m=>m.id===id)?.name)||'—';
   const colorOf = id => (members.find(m=>m.id===id)?.avatarColor)||AVATAR_COLORS[0];
@@ -7945,6 +8062,29 @@ function BudgetSection({trip, onUpdateTrip}){
       {members.length<2 && items.length>0 && (
         <p style={{marginTop:12,fontSize:'.8rem',color:'var(--color-ink-light)'}}>Add 2+ people on the <strong>Crew</strong> tab to split costs and settle up.</p>
       )}
+      {/* Moved off Overview 2026-09-06 · converting belongs next to the money, not
+          beside the trip cover. Renders nothing when there is nothing to convert. */}
+      <div style={{padding:'18px 4px 0',borderTop:'1px solid var(--color-border)',marginTop:14}}>
+        <p className="section-label">Budget currency</p>
+        {isOwner ? (
+          <select
+            className="input"
+            value={baseCode}
+            onChange={e=>setBaseCurrency(e.target.value)}
+            aria-label="Currency this budget is kept in"
+            style={{width:'100%',maxWidth:280}}>
+            {HOME_CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.code} · {c.label}</option>)}
+          </select>
+        ) : (
+          <p style={{fontSize:'.85rem',color:'var(--color-ink-light)',margin:0}}>{baseCode}</p>
+        )}
+        <p style={{fontSize:'.72rem',color:'var(--color-ink-light)',marginTop:6,lineHeight:1.5}}>
+          {items.length>0
+            ? 'Every amount above is in '+baseCode+'. Changing this relabels them, it does not convert them.'
+            : 'The currency you track this trip in. Everyone on the trip sees the same one.'}
+        </p>
+      </div>
+      <CurrencyConverter destinations={trip.destinations} base={baseCode}/>
     </div>
   );
 }
@@ -8341,7 +8481,6 @@ function TripDetail({trip, onBack, onUpdateTrip, onDelete, onOpenDrawer}) {
               ))}
             </div>
             {(trip.days||[]).some(d=>(d.activities||[]).length||(d.restaurants||[]).length) && <AtAGlance trip={trip} onStartPlanning={()=>setActiveTab('days')} onOpenDays={()=>{setActiveTab('days');track('tab_view',{tab:'days',via:'glance'});window.scrollTo({top:0});}}/>}
-            <CurrencyConverter destinations={trip.destinations}/>
           </div>
         )}
         {activeTab==='days' && (
