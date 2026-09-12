@@ -1705,6 +1705,7 @@ async function callAIProxy({feature, system, messages, max_tokens, trip_id, onDe
   return full;
 }
 
+// Model pinned for the bring-your-own-key path. The proxy picks its own model
 // server-side, so this constant governs BYO only.
 const BYO_MODEL = 'claude-haiku-4-5-20251001';
 
