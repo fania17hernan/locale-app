@@ -1704,6 +1704,38 @@ async function callAIProxy({feature, system, messages, max_tokens, trip_id, onDe
   }
   return full;
 }
+
+// server-side, so this constant governs BYO only.
+const BYO_MODEL = 'claude-haiku-4-5-20251001';
+
+// THE entry point for every AI request in the app. Before this existed, each call site
+// carried its own `if (apiKey) { raw fetch } else { callAIProxy }`, and the copies drifted:
+// different error handling, a model pin repeated per site, and no single place to add
+// streaming or swap a model. Every BYO defect traced back to that duplication.
+//
+// Unifying is deliberately behaviour-preserving: BYO still posts direct to Anthropic and
+// still does not stream (onDelta is a no-op on that path). Streaming parity is a separate
+// change so it can be tested on its own.
+async function callAI({feature, system, messages, max_tokens, trip_id, apiKey, onDelta, onUsage}){
+  if(!apiKey) return callAIProxy({feature, system, messages, max_tokens, trip_id, onDelta, onUsage});
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':apiKey,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true',
+    },
+    body: JSON.stringify({model:BYO_MODEL, max_tokens, system, messages}),
+  });
+  if(!res.ok){
+    let err={}; try{ err = await res.json(); }catch(e){}
+    throw new Error(err?.error?.message || `API error ${res.status}`);
+  }
+  const data = await res.json().catch(()=>{ throw new Error('Could not read the API response. Please try again.'); });
+  if(data?.stop_reason==='max_tokens') console.warn('BYO response hit max_tokens \u00b7 JSON may be truncated.');
+  return data?.content?.[0]?.text || '';
+}
 // Validates + sanitizes AI-generated days before they touch trip state (Debt-007).
 function validateAIDays(days){
   if(!Array.isArray(days)) return [];
@@ -6712,18 +6744,8 @@ Rules:
       const messages=[{role:'user',content: prompt.trim() ? 'About this trip: '+prompt : 'Recommend based on my profile and the trip idea above.'},{role:'assistant',content:'{'}];
       let full='';
       let serverLeft = null;
-      if (apiKey) {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method:'POST',
-          headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-          body: JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:8192,system:buildIdeationPrompt(),messages})
-        });
-        if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err?.error?.message||`API error ${res.status}`);}
-        const data=await res.json(); full=data?.content?.[0]?.text||'';
-      } else {
-        full = await callAIProxy({feature:'ideate', trip_id: trip.id, system:buildIdeationPrompt(), messages, max_tokens:8192, onDelta:t=>setStreamText(t), onUsage:(left)=>{ serverLeft = left; }});
-        refreshUsage&&refreshUsage();
-      }
+      full = await callAI({feature:'ideate', trip_id: trip.id, system:buildIdeationPrompt(), messages, max_tokens:8192, apiKey, onDelta:t=>setStreamText(t), onUsage:(left)=>{ serverLeft = left; }});
+      if(!apiKey) refreshUsage&&refreshUsage();
       const _t=(full||'').trim(); full = _t.startsWith('{') ? _t : '{'+_t; // re-attach the prefilled opening brace
       const obj = safeJSONParse(full);
       const parsed = obj && validateIdeation(obj);
@@ -7113,48 +7135,19 @@ with a named venue and a concrete, prescriptive detail.`;
       let serverLeft = null;
 
       const fetchItinerary = async () => {
-      if (apiKey) {
-        // Power-user path: bring-your-own-key, direct to Anthropic (unlimited)
-        const res = await fetch(
-          'https://api.anthropic.com/v1/messages',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'anthropic-dangerous-direct-browser-access': 'true',
-            },
-            body: JSON.stringify({
-              model: 'claude-haiku-4-5-20251001',
-              max_tokens: 16000,
-              system: buildSystemPrompt(),
-              messages: genMessages,
-            }),
-          }
-        );
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err?.error?.message || `API error ${res.status}`);
-        }
-        const data = await res.json().catch(() => { throw new Error('Could not read the API response. Please try again.'); });
-        full = data?.content?.[0]?.text || '';
-        if (data?.stop_reason === 'max_tokens') {
-          console.warn('Response hit max_tokens · JSON may be truncated. Attempting recovery...');
-        }
-      } else {
-        // Default path: Locale's free tier via server-side proxy, streamed live
-        full = await callAIProxy({
+        // BYO key goes direct to Anthropic; no key goes through Locale's proxy and streams ·
+        // callAI picks the path, so this site no longer carries a copy of either one.
+        full = await callAI({
           feature: 'itinerary',
           trip_id: trip.id,
           system: buildSystemPrompt(),
           messages: genMessages,
           max_tokens: 16000,
+          apiKey,
           onDelta: (t) => setStreamText(t),
           onUsage: (left) => { serverLeft = left; },
         });
-        refreshUsage();
-      }
+        if (!apiKey) refreshUsage();
 
         if (!full) throw new Error('Claude returned an empty response. Please try again.');
         const t = full.trim();
@@ -11022,6 +11015,44 @@ class ErrorBoundary extends React.Component {
     assert('Budget hard-blocks Mark paid on a provisional settlement', /disabled/.test(bsSrc) && /!settle\.canSettle/.test(bsSrc) && /Assign a payer to every expense first/.test(bsSrc));
     assert('Budget surfaces the provisional basis above the balances', /provisional\.basis/.test(bsSrc));
     assert('Budget never claims all settled while expenses are pending', /Nothing to settle from the counted expenses yet/.test(bsSrc));
+  })();
+
+  // ── callAI · the BYO/proxy fork lives in exactly one place (2026-09-12) ──────
+  // Before this, both AI call sites carried their own `if (apiKey) { raw fetch } else
+  // { callAIProxy }`. The copies drifted and every BYO defect traced back to that. These
+  // assertions exist to make the duplication impossible to reintroduce quietly.
+  (function(){
+    const aiSrc  = String(callAI);
+    const ideSrc = String(IdeationPlanner);
+    const itiSrc = String(ItineraryAIPlanner);
+
+    assert('callAI falls through to the proxy when no key is set',
+      /!apiKey\)\s*return callAIProxy\(/.test(aiSrc));
+    assert('callAI is the only thing that posts straight to Anthropic',
+      aiSrc.includes('api.anthropic.com/v1/messages')
+      && !ideSrc.includes('api.anthropic.com')
+      && !itiSrc.includes('api.anthropic.com'));
+    assert('neither call site forks on apiKey any more',
+      !/if\s*\(\s*apiKey\s*\)/.test(ideSrc) && !/if\s*\(\s*apiKey\s*\)/.test(itiSrc));
+    assert('the BYO model is pinned once, not per call site',
+      aiSrc.includes('BYO_MODEL') && !ideSrc.includes('claude-haiku') && !itiSrc.includes('claude-haiku'));
+    assert('BYO_MODEL names a real Claude model', /^claude-[a-z0-9.-]+$/.test(BYO_MODEL));
+    assert('callAI sends the three headers Anthropic requires from a browser',
+      aiSrc.includes('x-api-key') && aiSrc.includes('anthropic-version')
+      && aiSrc.includes('anthropic-dangerous-direct-browser-access'));
+    assert('callAI surfaces the API error message rather than a bare status',
+      /err\?\.error\?\.message/.test(aiSrc));
+
+    // Free-tier accounting must not run on the BYO path · no server quota is consumed there.
+    assert('usage is only refreshed when Locale paid for the call',
+      /if\s*\(!apiKey\)\s*refreshUsage/.test(ideSrc) && /if\s*\(!apiKey\)\s*refreshUsage/.test(itiSrc));
+
+    // Both sites still hand callAI everything it needs to reach either path.
+    for (const [name, src] of [['ideation', ideSrc], ['itinerary', itiSrc]]) {
+      const call = src.slice(src.indexOf('callAI({'));
+      assert(name + ' passes apiKey through to callAI', /\bapiKey\b/.test(call.slice(0, 420)));
+      assert(name + ' still asks for a max_tokens budget', /max_tokens/.test(call.slice(0, 420)));
+    }
   })();
 
   // Summary
