@@ -4272,21 +4272,24 @@ function ActivityForm({initial,type,onSave,onCancel}){
 }
 
 // ── DAY VIEW ───────────────────────────────────────────────────────────────────
-// ── MAPS · Google Maps Embed API ─────────────────────────────────────────────
-// This key is PUBLIC BY DESIGN. The Embed API is an iframe, so the key ships in
-// page source and cannot be hidden — that is how Google intends it to work.
-// Safety comes from the restrictions on the key, not from secrecy:
-//   · HTTP referrers: localetrips.app/* and *.localetrips.app/*
-//   · API restriction: Maps Embed API ONLY (1 of 35 — the other 34 are billable)
-//   · No billing account on the project. Embed API is free with unlimited usage.
-// A lifted key therefore buys an attacker nothing: wrong domain, free API, no card.
-// NOT A LEAK — do not "fix" this by moving it to a secret. Rotate in Cloud Console
-// if it ever needs changing. CI's secret scan does not match this key's shape.
-// (Do not name the scanned token patterns here · writing them literally makes the
-//  scanner flag its own documentation. That mistake failed run #155.)
-const GMAPS_EMBED_KEY = 'AIzaSyA0B9xYDqvX9AlK5peLfQNZIOSFS3v-cO0';
-const gmapsEmbed = (mode, params) =>
-  `https://www.google.com/maps/embed/v1/${mode}?key=${GMAPS_EMBED_KEY}&${params}`;
+// ── MAPS · keyless Google Maps embed ─────────────────────────────────────────
+// Uses the public google.com/maps "output=embed" iframe, which needs no API key,
+// no Google Cloud project and no billing account. Replaced the keyed Maps Embed
+// API on 2026-10-25 because the Google Cloud trial holding that key was ending.
+// Trade-off: Google does not version this URL format, so if maps ever stop
+// rendering, this helper is the one place to change.
+// Tested in Chrome 2026-10-27: z=15 is needed or the place pin can be missing;
+// walking routes draw through every stop; Google draws no line for transit with
+// stops in between (it marks the stops), same limit the keyed Embed API had.
+const gmapsPlaceEmbed = (query) =>
+  `https://www.google.com/maps?q=${encodeURIComponent(query)}&z=15&output=embed`;
+// stops: ordered address strings (first = start, last = end). mode: 'transit'|'walking'.
+const gmapsRouteEmbed = (stops, mode) => {
+  const [origin, ...rest] = stops;
+  const daddr = rest.map(encodeURIComponent).join('+to:');
+  const dirflg = mode === 'walking' ? 'w' : 'r';
+  return `https://www.google.com/maps?saddr=${encodeURIComponent(origin)}&daddr=${daddr}&dirflg=${dirflg}&output=embed`;
+};
 // ── DAY ROUTE MAP · Leaflet (lazy CDN) + OSM Nominatim geocoding, all free ────
 const GEO_SK='locale_geo_v1';
 function geoCache(){try{return JSON.parse(localStorage.getItem(GEO_SK))||{};}catch(e){return{};}}
@@ -4320,16 +4323,12 @@ function DayRouteMap({trip,day}){
     return <div style={{marginTop:10,padding:'12px 14px',border:'1px solid var(--color-border)',borderRadius:10,fontSize:'.8rem',color:'var(--color-ink-muted)'}}>Add a stop with an address to map this day.</div>;
   }
   const names=stops.map(s=>s.query||'').filter(Boolean);
-  const origin=names[0], destination=names[names.length-1];
-  const waypoints=names.slice(1,-1).slice(0,8); // Embed API caps waypoints
-  const params=['origin='+encodeURIComponent(origin),
-                'destination='+encodeURIComponent(destination),
-                'mode='+(mode==='walking'?'walking':'transit')];
-  if(waypoints.length) params.push('waypoints='+encodeURIComponent(waypoints.join('|')));
+  // Keep the start, the end and up to 8 stops between them, as before.
+  const routeStops=[names[0], ...names.slice(1,-1).slice(0,8), names[names.length-1]];
   const single = names.length===1;
   const src = single
-    ? gmapsEmbed('place','q='+encodeURIComponent(origin))
-    : gmapsEmbed('directions', params.join('&'));
+    ? gmapsPlaceEmbed(names[0])
+    : gmapsRouteEmbed(routeStops, mode);
   return (
     <div style={{marginTop:10}}>
       {!single && (
@@ -4874,7 +4873,7 @@ function StopMiniMap({query}){
   return (
     <div style={{marginTop:10}}>
       <iframe title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade"
-        src={gmapsEmbed('place', 'q='+encodeURIComponent(query))}
+        src={gmapsPlaceEmbed(query)}
         style={{width:'100%',height:200,border:'1px solid var(--color-border)',borderRadius:10,display:'block'}}/>
       <div style={{display:'flex',justifyContent:'flex-end',marginTop:6}}>
         <a href={gmaps} target="_blank" rel="noopener noreferrer" style={{fontSize:'.75rem',color:'var(--color-accent)'}}>Open full map in Google Maps ↗</a>
